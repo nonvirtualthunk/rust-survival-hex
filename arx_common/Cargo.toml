@@ -1,0 +1,16 @@
+[package]
+name = "arx_common"
+version = "0.1.0"
+authors = ["Sam Bock <nonvirtualthunk@gmail.com>"]
+
+[lib]
+name = "arx_common"
+
+[dependencies]
+find_folder = "*"
+cgmath = "0.15.0"
+lazy_static = "0.2"
+image = "0.17.0"
+
+[dependencies.vecmath]
+git = "https://github.com/PistonDevelopers/vecmath"

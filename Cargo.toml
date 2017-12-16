@@ -1,0 +1,44 @@
+[package]
+name = "spinning_square"
+version = "0.1.0"
+authors = ["Sam Bock <nonvirtualthunk@gmail.com>"]
+
+[[bin]]
+name = "spinning-square"
+
+[dependencies]
+piston = "0.35.0"
+piston_window = "0.73.0"
+find_folder = "*"
+gfx_device_gl = "0.14.0"
+gfx = "0.16.0"
+piston2d-gfx_graphics = "0.23.0"
+cgmath = "0.15.0"
+lazy_static = "0.2"
+image = "0.17.0"
+pathfinding = "0.5.2"
+conrod = { version = "^0.56.0", features = ["piston"] }
+
+[dependencies.vecmath]
+git = "https://github.com/PistonDevelopers/vecmath"
+
+
+[dependencies.arx_game]
+path = "arx_game"
+version = "0.1.0"
+
+[dependencies.arx_graphics]
+path = "arx_graphics"
+version = "0.1.0"
+
+
+[dependencies.arx_control]
+path = "arx_control"
+version = "0.1.0"
+
+[dependencies.arx_common]
+path = "arx_common"
+version = "0.1.0"
+
+[target.x86_64-apple-darwin.freetype]
+rustc-link-lib = "freetype:dylib"
