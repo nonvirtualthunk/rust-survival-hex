@@ -18,6 +18,8 @@ lazy_static = "0.2"
 image = "0.17.0"
 pathfinding = "0.5.2"
 conrod = { version = "^0.56.0", features = ["piston"] }
+interpolation = "0.1.0"
+noisy_float = "0.1.4"
 
 [dependencies.arx_common]
 path = "../arx_common"

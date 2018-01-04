@@ -11,6 +11,11 @@ find_folder = "*"
 cgmath = "0.15.0"
 lazy_static = "0.2"
 image = "0.17.0"
+either = "1.4.0"
+enum-map = "0.2.23"
+rand = "0.3"
+noisy_float = "0.1.4"
+pathfinding = "0.5.2"
 
 [dependencies.arx_common]
 path = "../arx_common"

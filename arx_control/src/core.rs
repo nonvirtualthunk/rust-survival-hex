@@ -32,7 +32,7 @@ pub fn set_key_modifiers(modifiers : Modifiers) {
 pub trait GameMode {
     fn enter (&mut self, world : &mut World);
     fn update (&mut self, world : &mut World, dt : f64);
-    fn update_gui (&mut self, world: &mut World, ui : &mut conrod::UiCell);
+    fn update_gui (&mut self, world: &mut World, ui : &mut conrod::UiCell, frame_id : conrod::widget::Id);
     fn draw (&mut self, world : &mut World, g : &mut GraphicsWrapper);
     fn on_event (&mut self, world : &mut World, event : conrod::event::Widget);
 }
@@ -84,7 +84,7 @@ impl Game {
             self.active_mode.on_event(&mut self.world, evt);
         }
 
-        self.active_mode.update_gui(&mut self.world, ui);
+        self.active_mode.update_gui(&mut self.world, ui, frame_widget);
     }
     pub fn on_draw<'a>(&'a mut self, c: Context, g: &'a mut G2d) {
         if let Some(v) = c.viewport {
@@ -105,4 +105,23 @@ impl Game {
 
         //        self.active_mode.on_event(&mut self.world, event);
     }
+}
+
+
+pub fn normalize_mouse(mouse: [f64; 2], viewport: &Viewport) -> [f64; 2] {
+    let in_x = mouse[0];
+    let in_y = viewport.window_size[1] as f64 - mouse[1] - 1.0;
+
+    let centered_x = in_x - (viewport.window_size[0] / 2) as f64;
+    let centered_y = in_y - (viewport.window_size[1] / 2) as f64;
+
+    let norm_x = centered_x / viewport.window_size[0] as f64;
+    let norm_y = centered_y / viewport.window_size[1] as f64;
+
+    let scale_factor = viewport.draw_size[0] as f64 / viewport.window_size[0] as f64;
+
+    let scaled_x = norm_x * scale_factor;
+    let scaled_y = norm_y * scale_factor;
+
+    [scaled_x, scaled_y]
 }

@@ -1,4 +1,5 @@
 #![allow(unused_imports)]
+#![feature(box_syntax)]
 
 extern crate piston_window;
 extern crate gfx_device_gl;
@@ -15,8 +16,12 @@ extern crate arx_game as game;
 extern crate arx_graphics;
 extern crate pathfinding;
 extern crate conrod;
+extern crate interpolation;
+extern crate noisy_float;
 
 pub mod tactical;
+
+pub mod tactical_gui;
 
 pub mod core;
 

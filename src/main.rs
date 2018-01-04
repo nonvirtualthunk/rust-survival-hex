@@ -81,6 +81,8 @@ fn main() {
     let font_path = assets.join("fonts/NotoSerif-Regular.ttf");
     ui.fonts.insert_from_file(font_path).unwrap();
 
+
+
     let mut text_vertex_data = Vec::new();
     let (mut glyph_cache, mut text_texture_cache) = {
         const SCALE_TOLERANCE: f32 = 0.1;

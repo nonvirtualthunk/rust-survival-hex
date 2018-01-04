@@ -11,6 +11,8 @@ find_folder = "*"
 cgmath = "0.15.0"
 lazy_static = "0.2"
 image = "0.17.0"
+interpolation = "0.1.0"
+noisy_float = "0.1.4"
 
 [dependencies.vecmath]
 git = "https://github.com/PistonDevelopers/vecmath"

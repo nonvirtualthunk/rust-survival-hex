@@ -2,12 +2,16 @@ use std::ops::Add;
 
 use prelude::*;
 
+use noisy_float::prelude::R32;
+
+use datastructures::PerfectHashable;
+
 
 const AXIAL_DELTAS: [AxialCoord; 6] =
     [AxialCoord { q: 1, r: 0 }, AxialCoord { q: 1, r: -1 }, AxialCoord { q: 0, r: -1 },
         AxialCoord { q: -1, r: 0 }, AxialCoord { q: -1, r: 1 }, AxialCoord { q: 0, r: 1 }];
 
-const CUBE_DELTAS: [CubeCoord; 6] =
+const _CUBE_DELTAS: [CubeCoord; 6] =
     [CubeCoord { x: 1, y: -1, z: 0 }, CubeCoord { x: 1, y: 0, z: -1 }, CubeCoord { x: 0, y: 1, z: -1 },
         CubeCoord { x: -1, y: 1, z: 0 }, CubeCoord { x: -1, y: 0, z: 1 }, CubeCoord { x: 0, y: -1, z: 1 }];
 
@@ -32,10 +36,10 @@ impl AxialCoord {
         vec![AxialCoord { q: self.q + 1, r: self.r }, AxialCoord { q: self.q + 1, r: self.r -1 }, AxialCoord { q: self.q, r: self.r-1 },
         AxialCoord { q: self.q -1, r: self.r }, AxialCoord { q: self.q-1, r: self.r+1 }, AxialCoord { q: self.q, r: self.r+1 }]
     }
-    pub fn distance(&self, other: &AxialCoord) -> f32 {
-        ((self.q - other.q).abs()
+    pub fn distance(&self, other: &AxialCoord) -> R32 {
+        R32::from_f32(((self.q - other.q).abs()
             + (self.q + self.r - other.q - other.r).abs()
-            + (self.r - other.r).abs()) as f32 / 2.0
+            + (self.r - other.r).abs()) as f32 / 2.0)
     }
     pub fn new(q: i32, r: i32) -> AxialCoord {
         AxialCoord { q, r }
@@ -66,6 +70,12 @@ impl Add<AxialCoord> for AxialCoord {
 
     fn add(self, rhs: AxialCoord) -> Self::Output {
         AxialCoord::new(self.q + rhs.q, self.r + rhs.r)
+    }
+}
+
+impl PerfectHashable for AxialCoord {
+    fn hash(&self) -> usize {
+        ((self.q+250) * 500 + (self.r+250)) as usize
     }
 }
 

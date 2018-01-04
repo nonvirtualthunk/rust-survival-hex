@@ -1,6 +1,8 @@
 use cgmath::Vector3;
 use cgmath::Vector2;
 
+use interpolation;
+
 pub type Vec3i = Vector3<i32>;
 pub type Vec3f = Vector3<f32>;
 
@@ -15,6 +17,10 @@ pub fn v2<T>(x: T, y: T) -> Vector2<T> {
     Vector2 { x, y }
 }
 
-pub fn as_f64(v : Vec2f) -> [f64; 2] {
+pub fn as_f64(v: Vec2f) -> [f64; 2] {
     [v.x as f64, v.y as f64]
+}
+
+pub fn strf<'a>(raw: &'a str) -> String {
+    String::from(raw)
 }

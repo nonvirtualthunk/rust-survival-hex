@@ -9,9 +9,11 @@ pub struct GameEventWrapper {
     pub data : GameEvent
 }
 
-#[derive(Clone,Copy)]
+#[derive(Clone,Copy, Debug)]
 pub enum GameEvent {
     Move { character : CharacterRef, from : AxialCoord, to : AxialCoord },
-    Attack { attacker : CharacterRef, defender : CharacterRef, damage_done : u32 },
+    Attack { attacker : CharacterRef, defender : CharacterRef, damage_done : u32, hit : bool, hit_chance : f64, killing_blow : bool },
+    Equip { character : CharacterRef, item : ItemRef },
+    TurnStart { turn_number : u32 },
     WorldStart
 }
