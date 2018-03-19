@@ -16,6 +16,10 @@ enum-map = "0.2.23"
 rand = "0.3"
 noisy_float = "0.1.4"
 pathfinding = "0.5.2"
+anymap = "0.12.1"
+spectral = "0.6.0"
+log = "0.4"
+pretty_env_logger = "0.2"
 
 [dependencies.arx_common]
 path = "../arx_common"
