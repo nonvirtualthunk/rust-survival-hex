@@ -1,5 +1,6 @@
 use core::GameEventClock;
 
+use world::Entity;
 use entities::*;
 use common::hex::AxialCoord;
 
@@ -11,9 +12,9 @@ pub struct GameEventWrapper {
 
 #[derive(Clone,Copy, Debug)]
 pub enum GameEvent {
-    Move { character : CharacterRef, from : AxialCoord, to : AxialCoord },
-    Attack { attacker : CharacterRef, defender : CharacterRef, damage_done : u32, hit : bool, hit_chance : f64, killing_blow : bool },
-    Equip { character : CharacterRef, item : ItemRef },
+    Move { character : Entity, from : AxialCoord, to : AxialCoord },
+    Attack { attacker : Entity, defender : Entity, damage_done : u32, hit : bool, hit_chance : f64, killing_blow : bool },
+    Equip { character : Entity, item : Entity },
     TurnStart { turn_number : u32 },
     WorldStart
 }

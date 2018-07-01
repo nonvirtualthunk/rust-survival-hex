@@ -3,6 +3,7 @@
 #![allow(unused_variables)]
 #![feature(get_type_id)]
 #![feature(entry_and_modify)]
+#![feature(core_intrinsics)]
 
 extern crate arx_common as common;
 extern crate either;
@@ -16,7 +17,7 @@ extern crate anymap;
 extern crate pretty_env_logger;
 #[macro_use] extern crate log;
 
-pub mod entity_base;
+pub mod world;
 
 pub mod entities;
 
@@ -24,7 +25,7 @@ pub mod events;
 
 pub mod core;
 
-pub mod world;
+pub mod world_util;
 
 pub mod actions;
 

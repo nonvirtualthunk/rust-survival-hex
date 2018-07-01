@@ -66,8 +66,8 @@ impl Quad {
 
 const DEFAULT_FONT_IDENTIFIER : &'static str = "NotoSerif-Regular.ttf";
 
-pub struct Text {
-    text : String,
+pub struct Text <'a> {
+    text : &'a str,
     font_identifier : String,
     offset : Vec2f,
     size : u32,
@@ -77,8 +77,8 @@ pub struct Text {
     centered_x : bool
 }
 
-impl Text {
-    pub fn new(text : String, size : u32) -> Text {
+impl <'a> Text <'a> {
+    pub fn new(text : &str, size : u32) -> Text {
         Text {
             text,
             size,
@@ -190,7 +190,7 @@ impl <'a, 'b : 'a> GraphicsWrapper<'a,'b> {
 
         let mut raw = text::Text::new_color(text.color, text.size);
         raw.round = text.rounded;
-        raw.draw(text.text.as_str(), glyphs, &self.draw_state, transform, self.graphics).unwrap();
+        raw.draw(text.text, glyphs, &self.draw_state, transform, self.graphics).unwrap();
     }
 
     pub fn quad(&mut self, img : String, transform : math::Matrix2d) {

@@ -1,5 +1,6 @@
 use world::World;
 use world::WorldView;
+use world::Entity;
 use entities::*;
 use entities::Skill;
 use events::*;
@@ -12,11 +13,11 @@ use noisy_float::prelude::*;
 use noisy_float;
 
 
-pub fn handle_attack(world : &mut World, attacker_ref : CharacterRef, defender_ref : CharacterRef, attack : &Attack) {
+pub fn handle_attack(world : &mut World, attacker_ref : Entity, defender_ref : Entity, attack : &Attack) {
     let world_view = world.view();
 
     // reduce the actions available to the attacker by 1, regardless of how the attack goes
-    modify_character(world, attacker_ref, move |c| c.actions.reduce_by(1));
+    world.add_constant_modifier(attacker_ref, ReduceActionsMod(1));
 
     let mut attacker_strikes = (attack.speed as u32).max(1);
     let (defender_counter_attack, mut defender_counters) =
@@ -35,19 +36,21 @@ pub fn handle_attack(world : &mut World, attacker_ref : CharacterRef, defender_r
     }
 }
 
-pub fn handle_strike(world : &mut World, attacker_ref : CharacterRef, defender_ref : CharacterRef, attack : &Attack) {
-    let seed : &[_] = &[world.event_clock as usize,13 as usize];
+pub fn handle_strike(world : &mut World, attacker_ref : Entity, defender_ref : Entity, attack : &Attack) {
+    let seed : &[_] = &[world.current_time as usize,13 as usize];
     let mut rng : StdRng = SeedableRng::from_seed(seed);
 
-    let attacker = world.character(attacker_ref);
-    let defender = world.character(defender_ref);
+    let view = world.view();
+
+    let attacker : &CharacterData = view.data(attacker_ref);
+    let defender : &CharacterData = view.data(defender_ref);
 
     if ! attacker.is_alive() || ! defender.is_alive() {
         return;
     }
 
-    let _attacker_tile = world.tile(&attacker.position);
-    let defender_tile = world.tile(&defender.position);
+    let _attacker_tile : &TileData = view.tile(attacker.position);
+    let defender_tile : &TileData = view.tile(defender.position);
 
     let (attack_skill_type, accuracy_bonus) = match attack.range {
         i if i <= 1 => (Skill::Melee, attacker.melee_accuracy),
@@ -75,11 +78,11 @@ pub fn handle_strike(world : &mut World, attacker_ref : CharacterRef, defender_r
         let attack_result = attack.roll_damage(&mut rng);
         let damage_total = attack_result.damage_total;
 
-        modify_character(world, defender_ref, move |c| c.health.reduce_by(damage_total as i32));
-        modify_character(world, attacker_ref, move |c| c.moves.reduce_to(0.0));
-        modify_character(world, attacker_ref, move |c| c.skill_xp_up(attack_skill_type, 1));
+        modify(world, defender_ref, DamageMod(damage_total as i32));
+        modify(world, attacker_ref, EndMoveMod);
+        modify(world, attacker_ref, SkillXPMod(attack_skill_type, 1));
 
-        let killing_blow = !world.character(defender_ref).is_alive();
+        let killing_blow = !view.data::<CharacterData>(defender_ref).is_alive();
 
         world.add_event(GameEvent::Attack {
             attacker : attacker_ref,
@@ -120,7 +123,7 @@ pub mod combat {
         level_curve(level)
     }
 
-    pub fn counters_for(world_view : &WorldView, defender_ref : CharacterRef, countering_ref : CharacterRef, _countering_attack : &Attack) -> (Attack, u32) {
+    pub fn counters_for(world_view : &WorldView, defender_ref : Entity, countering_ref : Entity, _countering_attack : &Attack) -> (Attack, u32) {
         let defender = world_view.character(defender_ref);
         let countering = world_view.character(countering_ref);
 
@@ -143,7 +146,7 @@ pub mod combat {
         }
     }
 
-    pub fn valid_attacks<'a, 'b>(world_view: &'a WorldView, attacker : CharacterRef, attacks: &'b Vec<Attack>, defender : CharacterRef) -> Vec<&'b Attack> {
+    pub fn valid_attacks<'a, 'b>(world_view: &'a WorldView, attacker : Entity, attacks: &'b Vec<Attack>, defender : Entity) -> Vec<&'b Attack> {
         let attacker = world_view.character(attacker);
         let defender = world_view.character(defender);
         let dist = attacker.position.distance(&defender.position).raw() as u32;
@@ -157,7 +160,7 @@ pub mod combat {
         ret
     }
 
-    pub fn best_attack<'a, 'b>(world_view: &'a WorldView, attacker : CharacterRef, attacks: &'b Vec<&'b Attack>, defender : CharacterRef) -> Option<&'b Attack> {
+    pub fn best_attack<'a, 'b>(world_view: &'a WorldView, attacker : Entity, attacks: &'b Vec<&'b Attack>, defender : Entity) -> Option<&'b Attack> {
         let attacker = world_view.character(attacker);
         let defender = world_view.character(defender);
         attacks.get(0).map(|x| *x)
@@ -184,16 +187,16 @@ pub fn level_curve(level : u32) -> f64 {
     f64::log(x, 4.5) * 0.5 * 0.7 + (x/20.0) * 0.3 - 0.015
 }
 
-pub fn handle_move(world : &mut World, mover : CharacterRef, path : &[AxialCoord]) {
-    let start_pos = world.character(mover).position;
+pub fn handle_move(world : &mut World, mover : Entity, path : &[AxialCoord]) {
+    let start_pos = world.view().character(mover).position;
     let mut prev_hex = start_pos;
     for hex in path {
         let hex = *hex;
         if hex != start_pos {
-            let hex_cost = world.tile(&hex).move_cost as f64;
-            if hex_cost <= world.character(mover).moves.cur_value() {
-                modify_character(world, mover, move |c| c.moves.reduce_by(hex_cost));
-                modify_character(world, mover, move |c| c.position = hex);
+            let hex_cost = world.view().tile(hex).move_cost as f64;
+            if hex_cost <= world.view().character(mover).moves.cur_value() {
+                modify(world, mover, ReduceMoveMod(hex_cost));
+                modify(world, mover, ChangePositionMod(hex));
 
                 // advance the event clock
                 world.add_event(GameEvent::Move { character : mover, from : prev_hex, to : hex });
@@ -207,9 +210,9 @@ pub fn handle_move(world : &mut World, mover : CharacterRef, path : &[AxialCoord
 }
 
 
-pub fn equip_item(world: &mut World, character : CharacterRef, item : ItemRef) {
-    modify_character(world, character, move |c| c.equipped.push(item));
-    modify_item(world, item, move |i| i.held_by = Some(character));
+pub fn equip_item(world: &mut World, character : Entity, item : Entity) {
+    modify(world, character, EquipItemMod(item));
+    modify(world, item, ItemHeldByMod(Some(character)));
 
     world.add_event(GameEvent::Equip { character, item });
 }

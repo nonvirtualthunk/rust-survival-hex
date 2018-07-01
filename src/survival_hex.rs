@@ -26,7 +26,6 @@ use piston::input::keyboard::ModifierKey;
 mod tmp;
 
 use game::World;
-use game::entities::Tile;
 use game::entities::TileData;
 use common::hex::*;
 use arx_graphics::core::GraphicsWrapper;

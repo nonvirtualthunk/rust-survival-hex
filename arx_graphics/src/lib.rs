@@ -18,3 +18,5 @@ pub mod core;
 pub mod camera;
 
 pub mod renderers;
+
+pub mod animation;

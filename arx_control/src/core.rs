@@ -2,7 +2,6 @@ use game::World;
 use arx_graphics::core::GraphicsWrapper;
 use conrod;
 use piston_window::*;
-use game::entities::Tile;
 use game::entities::TileData;
 use common::hex::*;
 use gfx_device_gl;

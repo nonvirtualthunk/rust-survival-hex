@@ -8,11 +8,13 @@ name = "arx_common"
 
 [dependencies]
 find_folder = "*"
-cgmath = "0.15.0"
-lazy_static = "0.2"
-image = "0.17.0"
+cgmath = "0.16.1"
+lazy_static = "1.0.1"
+image = "0.19.0"
 interpolation = "0.1.0"
 noisy_float = "0.1.4"
+dimensioned = "0.6.0"
+num-traits = { path = "/Users/nvt/Code/third-party-libs/num-traits" }
 
 [dependencies.vecmath]
 git = "https://github.com/PistonDevelopers/vecmath"

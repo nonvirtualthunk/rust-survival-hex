@@ -1,6 +1,7 @@
 use tactical::TacticalMode;
 use conrod::*;
 use game::World;
+use game::world::Entity;
 use conrod::widget::Id as Wid;
 use conrod::widget::id::List as Wids;
 use std::sync::Mutex;
@@ -92,7 +93,7 @@ impl CharacterStat {
 
 pub struct GameState {
     pub display_event_clock: GameEventClock,
-    pub selected_character: Option<CharacterRef>,
+    pub selected_character: Option<Entity>,
     pub victory: Option<bool>
 }
 
@@ -118,12 +119,14 @@ impl TacticalGui {
         //            max_value_func : Some(box |cdata : &CharacterData|  box cdata.health.max_value())
         //        };
 
+        let world_view = world.view_at_time(game_state.display_event_clock);
+
         let mut widgets = WIDGETS.lock().unwrap();
         widgets.init(&mut ui.widget_id_generator());
 
 
         if let Some(character_ref) = game_state.selected_character {
-            let character = world.character_at_time(character_ref, game_state.display_event_clock);
+            let character = world_view.character(character_ref);
             let main_widget = widget::Canvas::new()
                 .pad(10.0)
                 .scroll_kids_vertically()

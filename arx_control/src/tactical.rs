@@ -1,6 +1,7 @@
 use game::World;
 use game::world::WorldView;
 use game::entities::*;
+use game::world::EntityBuilder;
 
 use noisy_float::prelude::*;
 
@@ -11,6 +12,7 @@ use core::GameMode;
 use core::normalize_mouse;
 
 use arx_graphics::core::GraphicsWrapper;
+use arx_graphics::animation::AnimationElement;
 use common::hex::*;
 use arx_graphics::core::Quad;
 use arx_graphics::core::Text;
@@ -20,8 +22,11 @@ use vecmath;
 use game::core::*;
 use game::events::*;
 use game::actions;
+use game::world::Entity;
+use game::world_util::*;
+use game::world::ConstantModifier;
 
-use pathfinding::astar;
+use pathfinding::prelude::astar;
 use std::cmp::*;
 use cgmath::num_traits::Zero;
 use std::ops::Add;
@@ -76,9 +81,13 @@ impl Cost {
     }
 }
 
+pub struct AnimationElementWrapper {
+    pub animation : Box<AnimationElement>,
+    pub start_time : f64
+}
 
 pub struct TacticalMode {
-    pub selected_character: Option<CharacterRef>,
+    pub selected_character: Option<Entity>,
     pub tile_radius: f32,
     pub mouse_pos: [f64; 2],
     pub camera: Camera2d,
@@ -91,11 +100,12 @@ pub struct TacticalMode {
     pub fract_within_event: f64,
     pub event_clock_last_advanced: f64,
     pub last_time: Instant,
-    pub player_faction: FactionRef,
+    pub player_faction: Entity,
     pub minimum_active_event_clock: GameEventClock,
     event_start_times: Vec<f64>,
     pub victory: Option<bool>,
-    gui : TacticalGui
+    animation_elements: Vec<AnimationElementWrapper>,
+    gui: TacticalGui
 }
 
 impl TacticalMode {
@@ -126,15 +136,16 @@ impl TacticalMode {
             fract_within_event: 0.0,
             event_clock_last_advanced: 0.0,
             last_time: Instant::now(),
-            player_faction: FactionRef::sentinel(),
+            player_faction: Entity::sentinel(),
             minimum_active_event_clock: 0,
             event_start_times: vec![0.0],
             victory: None,
-            gui : TacticalGui::new()
+            animation_elements: vec![],
+            gui: TacticalGui::new()
         }
     }
 
-    pub fn selected_player_character(&self, world: &World) -> Option<CharacterRef> {
+    pub fn selected_player_character(&self, world: &WorldView) -> Option<Entity> {
         if let Some(sel_ref) = self.selected_character {
             if world.character(sel_ref).faction == self.player_faction {
                 Some(sel_ref)
@@ -218,7 +229,7 @@ impl TacticalMode {
     }
 
     pub fn animating(&self, world: &World) -> bool {
-        self.display_event_clock < world.event_clock - 1
+        self.display_event_clock < world.current_time - 1
     }
 
     fn event_started_at(&self, gec: GameEventClock) -> f64 {
@@ -261,20 +272,20 @@ impl TacticalMode {
         ret
     }
 
-    fn ai_action(&mut self, ai_ref: &CharacterRef, cdata: &CharacterData, world: &mut World, world_view: &WorldView, _all_characters: &Vec<CharacterRef>) {
+    fn ai_action(&mut self, ai_ref: &Entity, cdata: &CharacterData, world: &mut World, world_view: &WorldView, _all_characters: &Vec<Entity>) {
         let ai = world_view.character(*ai_ref);
 
-        let closest_enemy = world_view.characters.iter()
+        let closest_enemy = world_view.entities_with_data::<CharacterData>().iter()
             .filter(|&(_, c)| c.is_alive())
             .filter(|&(_, c)| c.faction != ai.faction)
             .min_by_key(|t| t.1.position.distance(&ai.position));
 
         if let Some(closest) = closest_enemy {
-            let enemy_ref: &CharacterRef = closest.0;
+            let enemy_ref: &Entity = closest.0;
             let enemy_data: &CharacterData = closest.1;
 
             if enemy_data.position.distance(&ai.position) >= r32(1.5) {
-                if let Some(path) = world_view.path_any_v(ai.position, &enemy_data.position.neighbors(), enemy_data.position) {
+                if let Some(path) = path_any_v(world_view, ai.position, &enemy_data.position.neighbors(), enemy_data.position) {
                     actions::handle_move(world, *ai_ref, path.0.as_slice())
                 } else {
                     println!("No move towards closest enemy, stalling");
@@ -295,10 +306,10 @@ impl TacticalMode {
     }
 
     fn end_turn(&mut self, world: &mut World) {
-        let character_refs = world.characters.entities.keys.iter().cloned().collect::<Vec<CharacterRef>>();
+        let character_refs: Vec<Entity> = world.view().entities_with_data::<CharacterData>().keys().cloned().collect::<Vec<Entity>>();
         let world_view = world.view();
 
-        for (cref, cur_data) in world_view.characters.iter() {
+        for (cref, cur_data) in world_view.entities_with_data::<CharacterData>() {
             if cur_data.faction != self.player_faction && cur_data.is_alive() {
                 // these are enemies, now we get to decide what they want to do
                 self.ai_action(&cref, &cur_data, world, world_view, &character_refs);
@@ -306,25 +317,21 @@ impl TacticalMode {
         }
 
         // recompute the character set, some may have been created, hypothetically
-        let character_refs = world.characters.entities.keys.iter().cloned().collect::<Vec<CharacterRef>>();
+        let character_refs = world_view.entities_with_data::<CharacterData>().keys();
 
-        for cref in &character_refs {
-            modify_character(world, *cref, |cdata| {
-                cdata.moves.reset();
-                cdata.actions.reset();
-                cdata.counters.reset();
-            });
+        for cref in character_refs.clone() {
+            modify(world, *cref, ResetCharacterTurnMod);
         }
 
-        let turn_number = world.data().turn_number + 1;
-        world.modify(move |world_data| world_data.turn_number = turn_number);
+        let turn_number = world_view.world_data::<TimeData>().turn_number + 1;
+        SetTurnNumberMod(turn_number).apply_to_world(world);
 
         world.add_event(GameEvent::TurnStart { turn_number });
 
         let mut living_enemy = false;
         let mut living_ally = false;
-        for cref in &character_refs {
-            let char_data = world.character(*cref);
+        for cref in character_refs.clone() {
+            let char_data = world_view.data::<CharacterData>(*cref);
             if char_data.is_alive() {
                 if char_data.faction != self.player_faction {
                     living_enemy = true;
@@ -346,7 +353,7 @@ impl GameMode for TacticalMode {
 
     fn draw(&mut self, world_in: &mut World, g: &mut GraphicsWrapper) {
         let next_event = world_in.event_at(self.display_event_clock + 1);
-        self.advance_event_clock(next_event, world_in.event_clock);
+        self.advance_event_clock(next_event, world_in.current_time);
         let active_events = self.active_events(world_in);
 
         let mut world_view = world_in.view_at_time(self.display_event_clock);
@@ -366,7 +373,7 @@ impl GameMode for TacticalMode {
                     let to_pos = to.as_cartesian(self.tile_radius);
                     let pos = from_pos + (to_pos - from_pos) * fract as f32;
                     if fract > 1.0 { println!("Past 1"); }
-                    let mover = world_view.characters.get_mut(&character);
+                    let mut mover = world_view.data_mut::<CharacterData>(character);
                     mover.graphical_position = Some(pos);
                 }
                 GameEvent::Attack { defender, damage_done, attacker, .. } => {
@@ -379,7 +386,7 @@ impl GameMode for TacticalMode {
                         };
 
                         {
-                            let defender = world_view.characters.get_mut(&defender);
+                            let defender = world_view.data_mut::<CharacterData>(defender);
                             //                    let end_alpha = if killing_blow { 0.0 } else { defender.graphical_color[3] };
 
                             if damage_done > 0 {
@@ -399,12 +406,12 @@ impl GameMode for TacticalMode {
 
                             let defender_pos = defender.position.as_cartesian(self.tile_radius);
                             let attacker_pos = attacker.position.as_cartesian(self.tile_radius);
-                            let delta : Vec2f = (defender_pos - attacker_pos).normalize() * self.tile_radius;
+                            let delta: Vec2f = (defender_pos - attacker_pos).normalize() * self.tile_radius;
 
                             attacker_pos + delta * circ_fract * 0.5
                         };
                         {
-                            let attacker = world_view.character_mut(attacker);
+                            let attacker = world_view.data_mut::<CharacterData>(attacker);
                             attacker.graphical_position = Some(new_attacker_pos);
                         }
 
@@ -428,7 +435,7 @@ impl GameMode for TacticalMode {
 
 
         if let Some(selected) = self.selected_character {
-            let sel_c = world_in.character(selected);
+            let sel_c = world_in.view().data::<CharacterData>(selected);
             if let Some(path_result) = self.path(sel_c.position, hovered_hex) {
                 if !is_animating {
                     let path = path_result.0;
@@ -441,6 +448,8 @@ impl GameMode for TacticalMode {
 
         self.unit_renderer.render_units(&world_view, g, self.display_event_clock, self.selected_character);
 
+
+
         // perform any explicit drawing due to the events we're animating, if any
         for &(event, fract, _blocking_fract) in &active_events {
             match event {
@@ -452,7 +461,7 @@ impl GameMode for TacticalMode {
                     };
                     let defender = world_view.character(defender);
                     let pos = defender.position.as_cartesian(self.tile_radius);
-                    g.draw_text(Text::new(msg, 20)
+                    g.draw_text(Text::new(msg.as_str(), 20)
                         .offset(v2(pos.x, pos.y + self.tile_radius * 0.75 + fract as f32 * 15.0f32))
                         .colord(color));
                 }
@@ -478,12 +487,12 @@ impl GameMode for TacticalMode {
 
                     let world_view = world.view_at_time(self.display_event_clock);
 
-                    let found = world_view.character_at(clicked_coord);
+                    let found = character_at(&world_view, clicked_coord);
                     if let Some((found_ref, target_data)) = found {
                         match self.selected_character {
                             Some(prev_sel) if prev_sel == found_ref => self.selected_character = None,
                             Some(cur_sel) => {
-                                let sel_data = world.character(cur_sel);
+                                let sel_data = world.view().data::<CharacterData>(cur_sel);
                                 if target_data.faction != self.player_faction &&
                                     sel_data.faction == self.player_faction {
                                     if sel_data.can_act() {
@@ -506,9 +515,9 @@ impl GameMode for TacticalMode {
                         }
                     } else {
                         if let Some(sel_c) = self.selected_character {
-                            let cur_sel_data = world.character(sel_c);
+                            let cur_sel_data = world_view.character(sel_c);
                             if cur_sel_data.faction == self.player_faction {
-                                let start_pos = world.character(sel_c).position;
+                                let start_pos = world_view.character(sel_c).position;
                                 if let Some(path_result) = self.path(start_pos, clicked_coord) {
                                     let path = path_result.0;
                                     actions::handle_move(world, sel_c, path.as_slice());
@@ -557,61 +566,88 @@ impl GameMode for TacticalMode {
     }
 
     fn enter(&mut self, world: &mut World) {
+        // -------- entity data --------------
+        world.register::<TileData>();
+        world.register::<CharacterData>();
+        world.register::<ItemData>();
+        world.register::<FactionData>();
+        // -------- world data ---------------
+        world.register::<MapData>();
+        world.register::<TimeData>();
+
+        world.register_index::<AxialCoord>();
+
+        world.attach_world_data(&MapData {
+            min_tile_bound : AxialCoord::new(-10,-10),
+            max_tile_bound : AxialCoord::new(10,10)
+        });
+        world.attach_world_data(&TimeData {
+            turn_number : 0
+        });
+
         for x in -10..10 {
             for y in -10..10 {
-                world.add_tile(TileData {
-                    position: AxialCoord::new(x, y),
-                    name: "grass",
-                    move_cost: 1,
-                    cover: 0.0
-                });
+                let coord = AxialCoord::new(x, y);
+                let tile = EntityBuilder::new()
+                    .with(TileData {
+                        position: coord,
+                        name: "grass",
+                        move_cost: 1,
+                        cover: 0.0
+                    }).create(world);
+                world.index_entity(tile, coord);
             }
         }
 
-        let player_faction = world.add_faction(FactionData {
-            name: String::from("Player"),
-            color: [1.1, 0.3, 0.3, 1.0]
-        });
+        let player_faction = EntityBuilder::new()
+            .with(FactionData {
+                name: String::from("Player"),
+                color: [1.1, 0.3, 0.3, 1.0]
+            }).create(world);
         self.player_faction = player_faction;
 
-        let enemy_faction = world.add_faction(FactionData {
-            name: String::from("Enemy"),
-            color: [0.3, 0.3, 0.9, 1.0],
+        let enemy_faction = EntityBuilder::new()
+            .with(FactionData {
+                name: String::from("Enemy"),
+                color: [0.3, 0.3, 0.9, 1.0],
 
-        });
+            }).create(world);
 
 
-        let bow = world.add_item(ItemData {
-            primary_attack: Some(Attack {
-                speed: 2.0,
-                damage_dice: DicePool {
-                    die: 8,
-                    count: 2
-                },
-                damage_bonus: 1,
-                relative_accuracy: 0.5,
-                primary_damage_type: DamageType::Piercing,
-                secondary_damage_type: None,
-                range: 10,
-                min_range: 2
-            }),
-            ..Default::default()
-        });
+        let bow = EntityBuilder::new()
+            .with(ItemData {
+                primary_attack: Some(Attack {
+                    speed: 2.0,
+                    damage_dice: DicePool {
+                        die: 8,
+                        count: 2
+                    },
+                    damage_bonus: 1,
+                    relative_accuracy: 0.5,
+                    primary_damage_type: DamageType::Piercing,
+                    secondary_damage_type: None,
+                    range: 10,
+                    min_range: 2
+                }),
+                ..Default::default()
+            }).create(world);
 
-        let archer = world.add_character(CharacterData {
-            faction: player_faction,
-            position: AxialCoord::new(0, 0),
-            sprite: String::from("elf/archer"),
-            name: String::from("Archer"),
-            moves: Reduceable::new(10.0),
-            health: Reduceable::new(25),
-            ..Default::default()
-        });
+        let archer = EntityBuilder::new()
+            .with(CharacterData {
+                faction: player_faction,
+                position: AxialCoord::new(0, 0),
+                sprite: String::from("elf/archer"),
+                name: String::from("Archer"),
+                moves: Reduceable::new(10.0),
+                health: Reduceable::new(25),
+                ..Default::default()
+            }).create(world);
 
         actions::equip_item(world, archer, bow);
 
         let create_monster_at = |world_in: &mut World, pos: AxialCoord| {
-            world_in.add_character(CharacterData {
+            EntityBuilder::new()
+                .with(CharacterData {
                 faction: enemy_faction,
                 position: pos,
                 sprite: String::from("void/monster"),
@@ -626,7 +662,7 @@ impl GameMode for TacticalMode {
                     ..Default::default()
                 }],
                 ..Default::default()
-            })
+            }).create(world_in);
         };
 
         create_monster_at(world, AxialCoord::new(4, 0));
@@ -635,9 +671,9 @@ impl GameMode for TacticalMode {
 
     fn update_gui(&mut self, world: &mut World, ui: &mut conrod::UiCell, frame_id: conrod::widget::Id) {
         self.gui.draw_gui(world, ui, frame_id, tactical_gui::GameState {
-            display_event_clock : self.display_event_clock,
-            selected_character : self.selected_character,
-            victory : self.victory
+            display_event_clock: self.display_event_clock,
+            selected_character: self.selected_character,
+            victory: self.victory
         });
     }
 }

@@ -2,6 +2,7 @@ use common::prelude::*;
 
 use core::*;
 use game::world::WorldView;
+use game::world::Entity;
 use game::entities::*;
 
 use game::core::GameEventClock;
@@ -15,10 +16,12 @@ pub struct TerrainRenderer {
 
 impl TerrainRenderer {
     pub fn render_tiles(&mut self, world: &WorldView, g: &mut GraphicsWrapper, _time: GameEventClock) {
-        for q in world.min_tile.q..world.max_tile.q + 1 {
-            for r in world.min_tile.r..world.max_tile.r + 1 {
+        let map_data = world.world_data::<MapData>();
+
+        for q in map_data.min_tile_bound.q..map_data.max_tile_bound.q + 1 {
+            for r in map_data.min_tile_bound.r..map_data.max_tile_bound.r + 1 {
                 let pos = AxialCoord::new(q, r);
-                if let Some(t) = world.tiles.get_if_present(&pos) {
+                if let Some(t) = world.tile_opt(pos) {
                     let cartesian_pos = t.position.as_cartesian(self.tile_radius);
                     let quad = Quad::new(format!("terrain/{}", t.name), cartesian_pos).centered();
                     g.draw_quad(quad);
@@ -38,9 +41,9 @@ impl UnitRenderer {
     pub fn render_units(&mut self, world: &WorldView,
                         g: &mut GraphicsWrapper,
                         _time: GameEventClock,
-                        selected_character: Option<CharacterRef>) {
-        let selected_character = selected_character.unwrap_or(CharacterRef::sentinel());
-        for (id, c) in &world.characters {
+                        selected_character: Option<Entity>) {
+        let selected_character = selected_character.unwrap_or(Entity::sentinel());
+        for (id, c) in world.entities_with_data::<CharacterData>() {
             if !c.is_alive() {
                 continue;
             }
