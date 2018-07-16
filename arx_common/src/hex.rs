@@ -1,4 +1,7 @@
 use std::ops::Add;
+use std::ops::Sub;
+use std::ops::Mul;
+use std::ops::Deref;
 
 use prelude::*;
 
@@ -25,6 +28,32 @@ pub struct AxialCoord {
     pub r: i32
 }
 
+#[derive(Copy,Clone,PartialEq,Debug,Add,Sub,Mul)]
+pub struct CartVec(pub Vec2f);
+impl Deref for CartVec {
+    type Target = Vec2f;
+
+    fn deref(&self) -> &<Self as Deref>::Target {
+        &self.0
+    }
+}
+
+impl CartVec {
+    pub fn new(x:f32, y:f32) -> CartVec {
+        CartVec(v2(x,y))
+    }
+
+    pub fn normalize(&self) -> CartVec {
+        let magnitude_squared = self.0.x * self.0.x + self.0.y * self.0.y;
+        if magnitude_squared != 0.0 {
+            let magnitude = magnitude_squared.sqrt();
+            CartVec(v2(self.0.x / magnitude, self.0.y / magnitude))
+        } else {
+            CartVec(v2(0.0,0.0))
+        }
+    }
+}
+
 impl AxialCoord {
     pub fn as_cube_coord(&self) -> CubeCoord {
         CubeCoord { x: self.q, y: -self.q - self.r, z: self.r }
@@ -47,6 +76,9 @@ impl AxialCoord {
     pub fn as_cartesian(&self, size : f32) -> Vec2f {
         v2(self.q as f32 * 1.5 * size, (self.r as f32 + self.q as f32/2.0) as f32 * 1.73205080757 * size)
     }
+    pub fn as_cart_vec(&self) -> CartVec {
+        CartVec(self.as_cartesian(1.0))
+    }
     pub fn rounded(&self) -> AxialCoord {
         CubeCoord::rounded(self.q as f32, self.r as f32).as_axial_coord()
     }
@@ -54,6 +86,9 @@ impl AxialCoord {
         let q = (pixel.x * 0.666666666667) / size;
         let r = ((-pixel.x / 3.0) + (3.0f64.sqrt() as f32/3.0) * pixel.y) / size;
         return CubeCoord::rounded(q, r).as_axial_coord()
+    }
+    pub fn from_cart_coord(coord : CartVec) -> AxialCoord {
+        AxialCoord::from_cartesian(coord.deref(), 1.0)
     }
 }
 

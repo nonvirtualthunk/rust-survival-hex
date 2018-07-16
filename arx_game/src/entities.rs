@@ -21,11 +21,12 @@ use rand::StdRng;
 
 use common::prelude::*;
 use common::datastructures::PerfectHashable;
+use common::color::Color;
 
 #[derive(Clone, Default, Debug)]
 pub struct FactionData {
     pub name : String,
-    pub color : [f32;4]
+    pub color : Color
 }
 
 impl EntityData for FactionData {}
@@ -49,7 +50,7 @@ pub enum DamageType {
     Ice
 }
 
-#[derive(EnumMap, Debug, Clone, Copy)]
+#[derive(Enum, Debug, Clone, Copy)]
 pub enum Skill {
     Dodge = 0,
     Melee = 1,
@@ -103,7 +104,7 @@ pub fn skill_info(for_skill : Skill) -> &'static SkillInfo {
 
 #[derive(Clone, Debug)]
 pub struct Attack {
-    pub speed : f64, // represents how many attacks can be made per round for baseline user (never effectively < 1)
+    pub ap_cost : u32, // represents how many ap it costs to perform this attack
     pub damage_dice : DicePool,
     pub damage_bonus : u32,
     pub relative_accuracy: f64,
@@ -116,7 +117,7 @@ pub struct Attack {
 impl Default for Attack {
     fn default() -> Self {
         Attack {
-            speed : 0.75,
+            ap_cost : 1,
             damage_dice : DicePool::default(),
             damage_bonus : 0,
             relative_accuracy : 0.0,
@@ -154,29 +155,29 @@ pub struct ItemData {
     pub position : Option<AxialCoord>
 }
 impl EntityData for ItemData {}
+pub trait ItemDataStore {
+    fn item(&self, ent : Entity) -> &ItemData;
+}
+impl ItemDataStore for WorldView {
+    fn item(&self, ent: Entity) -> &ItemData {
+        self.data::<ItemData>(ent)
+    }
+}
 
 
 #[derive(Clone, Debug)]
 pub struct CharacterData {
     pub faction : Entity,
     pub position: AxialCoord,
-    pub graphical_position: Option<Vec2f>,
-    pub graphical_color: [f32; 4],
+    pub graphical_position: Option<CartVec>,
+    pub graphical_color: Color,
     pub health: Reduceable<i32>,
-    pub moves: Reduceable<f64>,
+    pub action_points: Reduceable<i32>,
+    pub move_speed: Oct, // represented in octs
+    pub moves: Oct,
     pub stamina: Reduceable<i32>,
-    pub actions: Reduceable<i32>,
-    pub counters: Reduceable<i32>,
-    pub melee_accuracy: f64,
-    pub ranged_accuracy: f64,
-    pub dodge_chance: f64,
     pub sprite : String,
-    pub name : String,
-    pub natural_attacks : Vec<Attack>,
-    pub equipped : Vec<Entity>,
-    pub inventory : Vec<Entity>,
-    pub skills : EnumMap<Skill, u32>,
-    pub skill_xp : EnumMap<Skill, u32>
+    pub name : String
 }
 impl EntityData for CharacterData {}
 
@@ -189,33 +190,104 @@ impl CharacterStore for WorldView {
     }
 }
 
+
+#[derive(Clone, Debug, Default)]
+pub struct InventoryData {
+    pub equipped : Vec<Entity>,
+    pub inventory : Vec<Entity>,
+}
+impl EntityData for InventoryData {}
+
+pub trait InventoryDataStore {
+    fn inventory(&self, ent : Entity) -> &InventoryData;
+}
+impl InventoryDataStore for WorldView {
+    fn inventory(&self, ent: Entity) -> &InventoryData {
+        self.data::<InventoryData>(ent)
+    }
+}
+
+
+#[derive(Clone, Debug, Default)]
+pub struct CombatData {
+    pub natural_attacks : Vec<Attack>,
+    pub counters: Reduceable<i32>,
+    pub melee_accuracy: f64,
+    pub ranged_accuracy: f64,
+    pub dodge_chance: f64,
+}
+impl EntityData for CombatData {}
+
+pub trait CombatDataStore {
+    fn combat(&self, ent : Entity) -> &CombatData;
+}
+impl CombatDataStore for WorldView {
+    fn combat(&self, ent: Entity) -> &CombatData {
+        self.data::<CombatData>(ent)
+    }
+}
+
+
+#[derive(Clone, Debug, Default)]
+pub struct SkillData {
+    pub skills : EnumMap<Skill, u32>,
+    pub skill_xp : EnumMap<Skill, u32>
+}
+impl EntityData for SkillData {}
+
+
+pub trait SkillDataStore {
+    fn skills(&self, ent : Entity) -> &SkillData;
+}
+impl SkillDataStore for WorldView {
+    fn skills(&self, ent: Entity) -> &SkillData {
+        self.data::<SkillData>(ent)
+    }
+}
+
+/*
+    Action points : each AP may be turned into movement, or used for an action
+    Health : if it reaches zero, character dies
+    Move speed : each point represents an addition eighth movement point when turning an AP into move
+
+*/
+
 impl Default for CharacterData {
     fn default() -> Self {
         CharacterData {
             faction : Entity::default(),
             position : AxialCoord::new(0,0),
-            graphical_position : None,
-            graphical_color: [1.0, 1.0, 1.0, 1.0],
             health : Reduceable::new(1),
-            moves : Reduceable::new(1.0),
+            action_points : Reduceable::new(8),
+            moves : Oct::zero(),
+            move_speed : Oct::of(1),
             stamina : Reduceable::new(20),
-            actions : Reduceable::new(1),
-            counters : Reduceable::new(1),
-            melee_accuracy : 0.0,
-            ranged_accuracy : 0.0,
-            dodge_chance : 0.0,
             sprite : strf("default/defaultium"),
             name : strf("unnamed"),
-            natural_attacks : vec![],
-            equipped : vec![],
-            inventory : vec![],
-            skills : EnumMap::default(),
-            skill_xp : EnumMap::default()
+            graphical_position : None,
+            graphical_color: Color::new(1.0, 1.0, 1.0, 1.0),
         }
     }
 }
 
 impl CharacterData {
+    pub fn effective_graphical_pos(&self) -> CartVec {
+        self.graphical_position.unwrap_or_else(|| self.position.as_cart_vec())
+    }
+    pub fn is_alive(&self) -> bool {
+        self.health.cur_value() > 0
+    }
+    pub fn can_act(&self) -> bool { self.action_points.cur_value() > 0 }
+
+    pub fn max_moves_remaining(&self) -> Oct {
+        self.moves + self.move_speed * self.action_points.cur_value()
+    }
+    pub fn max_moves_per_turn(&self) -> Oct {
+        self.move_speed * self.action_points.max_value()
+    }
+}
+
+impl SkillData {
     pub fn skill_level(&self, skill : Skill) -> u32 {
         self.skills[skill]
     }
@@ -225,26 +297,6 @@ impl CharacterData {
     pub fn skill_xp_up(&mut self, skill : Skill, xp : u32) {
         self.skill_xp[skill] = self.skill_xp[skill] + xp;
     }
-    pub fn possible_attacks(&self, world : &WorldView) -> Vec<Attack> {
-        let mut res = self.natural_attacks.clone();
-        for item_ref in &self.equipped {
-            let item : &ItemData = world.data(*item_ref);
-            if let Some(ref attack) = item.primary_attack {
-                res.push(attack.clone());
-            }
-            if let Some(ref attack) = item.secondary_attack {
-                res.push(attack.clone());
-            }
-        }
-        res
-    }
-    pub fn effective_graphical_pos(&self, tile_radius : f32) -> Vec2f {
-        self.graphical_position.unwrap_or_else(|| self.position.as_cartesian(tile_radius))
-    }
-    pub fn is_alive(&self) -> bool {
-        self.health.cur_value() > 0
-    }
-    pub fn can_act(&self) -> bool { self.actions.cur_value() > 0 }
 }
 
 
@@ -254,24 +306,24 @@ pub fn modify<T : EntityData, CM : ConstantModifier<T>>(world : &mut World, ent 
 
 
 pub struct SkillXPMod(pub Skill, pub u32);
-impl ConstantModifier<CharacterData> for SkillXPMod {
-    fn modify(&self, data: &mut CharacterData) {
+impl ConstantModifier<SkillData> for SkillXPMod {
+    fn modify(&self, data: &mut SkillData) {
         let SkillXPMod(skill, xp) = *self;
         data.skill_xp[skill] += xp;
     }
 }
 
 pub struct SkillMod(pub Skill, pub u32);
-impl ConstantModifier<CharacterData> for SkillMod {
-    fn modify(&self, data: &mut CharacterData) {
+impl ConstantModifier<SkillData> for SkillMod {
+    fn modify(&self, data: &mut SkillData) {
         data.skills[self.0] += self.1;
     }
 }
 
-pub struct ReduceActionsMod(pub i32);
+pub struct ReduceActionsMod(pub u32);
 impl ConstantModifier<CharacterData> for ReduceActionsMod {
     fn modify(&self, data: &mut CharacterData) {
-        data.actions.reduce_by(self.0);
+        data.action_points.reduce_by(self.0 as i32);
     }
 }
 
@@ -282,26 +334,31 @@ impl ConstantModifier<CharacterData> for DamageMod {
     }
 }
 
-pub struct ReduceMoveMod(pub f64);
+pub struct ReduceMoveMod(pub Oct);
 impl ConstantModifier<CharacterData> for ReduceMoveMod {
     fn modify(&self, data: &mut CharacterData) {
-        data.moves.reduce_by(self.0);
+        data.moves = data.moves - self.0;
     }
 }
 
 pub struct EndMoveMod;
 impl ConstantModifier<CharacterData> for EndMoveMod {
     fn modify(&self, data: &mut CharacterData) {
-        data.moves.reduce_to(0.0f64);
+        data.moves = Oct::zero();
     }
 }
 
 pub struct ResetCharacterTurnMod;
 impl ConstantModifier<CharacterData> for ResetCharacterTurnMod {
     fn modify(&self, data: &mut CharacterData) {
-        data.moves.reset();
-        data.actions.reset();
-        data.counters.reset();
+        data.moves = Oct::zero();
+        data.action_points.reset();
+    }
+}
+pub struct ResetCombatTurnMod;
+impl ConstantModifier<CombatData> for ResetCombatTurnMod {
+    fn modify(&self, data: &mut CombatData) {
+        data.counters = Reduceable::new(0);
     }
 }
 
@@ -313,15 +370,15 @@ impl ConstantModifier<CharacterData> for ChangePositionMod {
 }
 
 pub struct CarryItemMod(pub Entity);
-impl ConstantModifier<CharacterData> for CarryItemMod {
-    fn modify(&self, data: &mut CharacterData) {
+impl ConstantModifier<InventoryData> for CarryItemMod {
+    fn modify(&self, data: &mut InventoryData) {
         data.inventory.push(self.0);
     }
 }
 
 pub struct EquipItemMod(pub Entity);
-impl ConstantModifier<CharacterData> for EquipItemMod {
-    fn modify(&self, data: &mut CharacterData) {
+impl ConstantModifier<InventoryData> for EquipItemMod {
+    fn modify(&self, data: &mut InventoryData) {
         data.equipped.push(self.0);
     }
 }
@@ -337,7 +394,7 @@ impl ConstantModifier<ItemData> for ItemHeldByMod{
 pub struct TileData {
     pub name : &'static str,
     pub position: AxialCoord,
-    pub move_cost: u32,
+    pub move_cost: Oct,
     pub cover: f64
 }
 impl EntityData for TileData {}

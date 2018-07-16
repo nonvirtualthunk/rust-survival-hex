@@ -12,14 +12,20 @@ use entities::Attack;
 use noisy_float::prelude::*;
 use noisy_float;
 
+pub enum ActionTypes {
+    Attack,
+    Defend,
+    CastSpell,
+    UseSkill,
+}
+
 
 pub fn handle_attack(world : &mut World, attacker_ref : Entity, defender_ref : Entity, attack : &Attack) {
     let world_view = world.view();
 
-    // reduce the actions available to the attacker by 1, regardless of how the attack goes
-    world.add_constant_modifier(attacker_ref, ReduceActionsMod(1));
+    let attacker_data = world_view.character(attacker_ref);
 
-    let mut attacker_strikes = (attack.speed as u32).max(1);
+    let mut attacker_strikes = attacker_data.action_points.cur_value() / attack.ap_cost as i32;
     let (defender_counter_attack, mut defender_counters) =
         combat::counters_for(world_view, defender_ref, attacker_ref, attack);
 
@@ -37,30 +43,40 @@ pub fn handle_attack(world : &mut World, attacker_ref : Entity, defender_ref : E
 }
 
 pub fn handle_strike(world : &mut World, attacker_ref : Entity, defender_ref : Entity, attack : &Attack) {
-    let seed : &[_] = &[world.current_time as usize,13 as usize];
+//    let seed : &[_] = &[world.current_time as usize,13 as usize];
+//    let mut rng : StdRng = SeedableRng::from_seed(seed);
+
+    let seed : [u8;32] = [1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,11,12];
     let mut rng : StdRng = SeedableRng::from_seed(seed);
 
     let view = world.view();
 
-    let attacker : &CharacterData = view.data(attacker_ref);
-    let defender : &CharacterData = view.data(defender_ref);
+    let attacker = view.character(attacker_ref);
+    let attacker_combat = view.combat(attacker_ref);
+    let attacker_skills = view.skills(attacker_ref);
+    let defender = view.character(defender_ref);
+    let defender_combat = view.combat(defender_ref);
+    let defender_skills = view.skills(defender_ref);
 
     if ! attacker.is_alive() || ! defender.is_alive() {
         return;
     }
 
+    // reduce the actions available to the attacker by the cost of the attack, regardless of how the attack goes
+    world.add_constant_modifier(attacker_ref, ReduceActionsMod(attack.ap_cost));
+
     let _attacker_tile : &TileData = view.tile(attacker.position);
     let defender_tile : &TileData = view.tile(defender.position);
 
     let (attack_skill_type, accuracy_bonus) = match attack.range {
-        i if i <= 1 => (Skill::Melee, attacker.melee_accuracy),
-        _ => (Skill::Ranged, attacker.ranged_accuracy)
+        i if i <= 1 => (Skill::Melee, attacker_combat.melee_accuracy),
+        _ => (Skill::Ranged, attacker_combat.ranged_accuracy)
     };
 
-    let attack_skill = attacker.skill_level(attack_skill_type);
+    let attack_skill = attacker_skills.skill_level(attack_skill_type);
 
-    let dodge_skill = defender.skill_level(Skill::Dodge);
-    let dodge_total = combat::dodge_for_skill_level(dodge_skill) + defender.dodge_chance;
+    let dodge_skill = defender_skills.skill_level(Skill::Dodge);
+    let dodge_total = combat::dodge_for_skill_level(dodge_skill) + defender_combat.dodge_chance;
 
     let accuracy_total = combat::accuracy_for_skill_level(attack_skill) + accuracy_bonus;
 
@@ -125,17 +141,18 @@ pub mod combat {
 
     pub fn counters_for(world_view : &WorldView, defender_ref : Entity, countering_ref : Entity, _countering_attack : &Attack) -> (Attack, u32) {
         let defender = world_view.character(defender_ref);
+        let defender_combat = world_view.combat(defender_ref);
         let countering = world_view.character(countering_ref);
 
         // can't counter on ranged attacks
         if defender.position.distance(&countering.position) > 1.0 {
             (Attack::default(), 0)
         } else {
-            let possible_attacks = defender.possible_attacks(world_view);
+            let possible_attacks = possible_attacks(world_view, defender_ref);
             let possible_attacks = valid_attacks(world_view, defender_ref, &possible_attacks, countering_ref);
             let attack_to_use = best_attack(world_view, defender_ref, &possible_attacks, countering_ref);
             if let Some(attack) = attack_to_use {
-                if defender.counters.cur_value() > 0 {
+                if defender_combat.counters.cur_value() > 0 {
                     (attack.clone(), 1)
                 } else {
                     (attack.clone(), 0)
@@ -144,6 +161,20 @@ pub mod combat {
                 (Attack::default(), 0)
             }
         }
+    }
+
+    pub fn possible_attacks(world : &WorldView, attacker : Entity) -> Vec<Attack> {
+        let mut res = world.combat(attacker).natural_attacks.clone();
+        for item_ref in &world.inventory(attacker).equipped {
+            let item = world.item(*item_ref);
+            if let Some(ref attack) = item.primary_attack {
+                res.push(attack.clone());
+            }
+            if let Some(ref attack) = item.secondary_attack {
+                res.push(attack.clone());
+            }
+        }
+        res
     }
 
     pub fn valid_attacks<'a, 'b>(world_view: &'a WorldView, attacker : Entity, attacks: &'b Vec<Attack>, defender : Entity) -> Vec<&'b Attack> {
@@ -187,15 +218,32 @@ pub fn level_curve(level : u32) -> f64 {
     f64::log(x, 4.5) * 0.5 * 0.7 + (x/20.0) * 0.3 - 0.015
 }
 
+pub fn hex_ap_cost(world : &WorldView, mover : Entity, hex : AxialCoord) -> u32 {
+    let mover = world.character(mover);
+    let hex_cost = world.tile(hex).move_cost;
+    let mut moves = mover.moves;
+    let mut ap_cost = 0;
+    while moves < hex_cost {
+        moves += mover.move_speed;
+        ap_cost += 1;
+    }
+    ap_cost
+}
+
 pub fn handle_move(world : &mut World, mover : Entity, path : &[AxialCoord]) {
     let start_pos = world.view().character(mover).position;
     let mut prev_hex = start_pos;
     for hex in path {
         let hex = *hex;
         if hex != start_pos {
-            let hex_cost = world.view().tile(hex).move_cost as f64;
-            if hex_cost <= world.view().character(mover).moves.cur_value() {
-                modify(world, mover, ReduceMoveMod(hex_cost));
+            let hex_cost = world.view().tile(hex).move_cost;
+            // how many ap must be changed to move points in order to enter the given hex
+            let ap_required = hex_ap_cost(world.view(), mover, hex);
+            if ap_required as i32 <= world.view().character(mover).action_points.cur_value() {
+                let moves_converted = world.view().character(mover).move_speed * ap_required;
+                let net_moves_lost = hex_cost - moves_converted;
+                modify(world, mover, ReduceActionsMod(ap_required));
+                modify(world, mover, ReduceMoveMod(net_moves_lost));
                 modify(world, mover, ChangePositionMod(hex));
 
                 // advance the event clock

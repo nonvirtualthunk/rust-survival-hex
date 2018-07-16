@@ -15,24 +15,22 @@ extern crate lazy_static;
 extern crate image;
 extern crate vecmath;
 extern crate arx_common as common;
-extern crate arx_game as game;
-extern crate arx_gui as gui;
-extern crate arx_graphics;
-extern crate pathfinding;
-extern crate conrod;
+extern crate arx_graphics as graphics;
 extern crate interpolation;
 extern crate noisy_float;
 #[macro_use]
 extern crate itertools;
 extern crate pretty_env_logger;
 #[macro_use] extern crate log;
+extern crate backtrace;
+extern crate num;
+#[macro_use] extern crate derive_more;
 
-pub mod tactical;
 
-pub mod tactical_gui;
+pub mod gui;
 
-pub mod core;
+pub use gui::*;
 
-pub use core::GameMode;
 
-mod tactical_event_handler;
+pub mod widgets;
+pub use widgets::*;

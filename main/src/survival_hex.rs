@@ -1,4 +1,5 @@
 #![allow(unused_imports)]
+#![allow(where_clauses_object_safety)]
 
 extern crate piston;
 extern crate piston_window;
@@ -17,11 +18,13 @@ extern crate arx_graphics;
 extern crate arx_common as common;
 extern crate arx_control as control;
 extern crate arx_game as game;
+extern crate opengl_graphics;
 
 //#![allow(dead_code)]
 
 use piston_window::*;
 use piston::input::keyboard::ModifierKey;
+use opengl_graphics::{ GlGraphics, OpenGL };
 
 mod tmp;
 
@@ -31,6 +34,7 @@ use common::hex::*;
 use arx_graphics::core::GraphicsWrapper;
 use control::core::Game;
 use control::core::Modifiers;
+use piston::input::GenericEvent;
 
 //use arx_graphics::core::Context as ArxContext;
 use arx_graphics::core::GraphicsResources;
@@ -64,11 +68,12 @@ pub fn theme() -> conrod::Theme {
 fn main() {
     let mut window: PistonWindow = WindowSettings::new(
         "piston-tutorial",
-        [1440, 900]
+        [1440, 900],
     )
         .build()
         .unwrap();
 
+//    println!("BLARP");
 
     let width = window.size().width;
     let height = window.size().height;
@@ -111,14 +116,8 @@ fn main() {
         let win_h = window.size().height;
 
         if let Some(render_args) = e.render_args() {
-//            let base_viewport = render_args.viewport();
-//            let scale = base_viewport.draw_size[0] as f64 / base_viewport.window_size[0] as f64;
-//            let adjusted_viewport = Viewport {
-//                rect : [0,0,base_viewport.rect[2] - 400, base_viewport.rect[3]],
-//                window_size : base_viewport.window_size,
-//                draw_size : [base_viewport.draw_size[0] - 400, base_viewport.draw_size[1]]
-//            };
             let adjusted_viewport = render_args.viewport();
+            game.resources.dpi_scale = adjusted_viewport.draw_size[0] as f32 / adjusted_viewport.window_size[0] as f32;
 
             window.window.make_current();
             window.g2d.draw(

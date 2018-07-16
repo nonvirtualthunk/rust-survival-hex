@@ -32,6 +32,7 @@ pub trait GameMode {
     fn enter (&mut self, world : &mut World);
     fn update (&mut self, world : &mut World, dt : f64);
     fn update_gui (&mut self, world: &mut World, ui : &mut conrod::UiCell, frame_id : conrod::widget::Id);
+    fn update_gui_2 (&mut self, world: &mut World, g : &mut GraphicsResources);
     fn draw (&mut self, world : &mut World, g : &mut GraphicsWrapper);
     fn on_event (&mut self, world : &mut World, event : conrod::event::Widget);
 }
@@ -65,7 +66,9 @@ impl Game {
             }
         }
     }
-    pub fn on_load(&mut self, _: &mut PistonWindow) {}
+    pub fn on_load(&mut self, _: &mut PistonWindow) {
+
+    }
     pub fn on_update(&mut self, upd: UpdateArgs) {
         self.active_mode.update(&mut self.world, upd.dt);
     }
@@ -84,6 +87,7 @@ impl Game {
         }
 
         self.active_mode.update_gui(&mut self.world, ui, frame_widget);
+        self.active_mode.update_gui_2(&mut self.world, &mut self.resources);
     }
     pub fn on_draw<'a>(&'a mut self, c: Context, g: &'a mut G2d) {
         if let Some(v) = c.viewport {

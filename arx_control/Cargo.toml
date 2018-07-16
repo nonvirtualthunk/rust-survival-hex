@@ -11,17 +11,19 @@ piston = "0.37.0"
 piston_window = "0.80.0"
 find_folder = "*"
 gfx_device_gl = "0.15.3"
-gfx = "0.17.1"
+gfx = "0.17.0"
 piston2d-gfx_graphics = "0.51.0"
-cgmath = "0.16.1"
-lazy_static = "1.0.1"
+cgmath = "*"
+lazy_static = "*"
 image = "0.19.0"
-pathfinding = "0.8.0"
+pathfinding = "*"
 conrod = { version = "^0.60.0", features = ["piston"] }
-interpolation = "0.1.0"
-noisy_float = "0.1.4"
-dimensioned = "0.6.0"
-num-traits = { path = "/Users/nvt/Code/third-party-libs/num-traits" }
+interpolation = "*"
+noisy_float = "*"
+dimensioned = "*"
+itertools = "0.7.3"
+log = "*"
+pretty_env_logger = "*"
 
 [dependencies.arx_common]
 path = "../arx_common"
@@ -33,6 +35,10 @@ version = "0.1.0"
 
 [dependencies.arx_graphics]
 path = "../arx_graphics"
+version = "0.1.0"
+
+[dependencies.arx_gui]
+path = "../arx_gui"
 version = "0.1.0"
 
 [dependencies.vecmath]

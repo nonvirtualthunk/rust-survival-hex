@@ -4,6 +4,7 @@ use game::entities::*;
 use game::world::EntityBuilder;
 
 use noisy_float::prelude::*;
+use itertools::Itertools;
 
 use piston_window::*;
 use common::prelude::*;
@@ -13,7 +14,9 @@ use core::normalize_mouse;
 
 use arx_graphics::core::GraphicsWrapper;
 use arx_graphics::animation::AnimationElement;
+use arx_graphics::interpolation::*;
 use common::hex::*;
+use common::color::Color;
 use arx_graphics::core::Quad;
 use arx_graphics::core::Text;
 use arx_graphics::camera::*;
@@ -26,6 +29,8 @@ use game::world::Entity;
 use game::world_util::*;
 use game::world::ConstantModifier;
 
+use game::combat::*;
+
 use pathfinding::prelude::astar;
 use std::cmp::*;
 use cgmath::num_traits::Zero;
@@ -37,6 +42,8 @@ use arx_graphics::renderers::UnitRenderer;
 use tactical_gui::TacticalGui;
 use tactical_gui;
 
+use tactical_event_handler;
+
 use conrod::*;
 use conrod::widget::primitive::*;
 use conrod;
@@ -45,6 +52,8 @@ use conrod::Widget;
 use std::time::*;
 
 use interpolation::*;
+use arx_graphics::core::DrawList;
+use arx_graphics::core::GraphicsResources;
 
 #[derive(PartialOrd, PartialEq, Copy, Clone)]
 pub struct Cost(pub R32);
@@ -81,9 +90,20 @@ impl Cost {
     }
 }
 
+
 pub struct AnimationElementWrapper {
-    pub animation : Box<AnimationElement>,
-    pub start_time : f64
+    pub animation: Box<AnimationElement>,
+    pub start_time: Option<f64>,
+}
+
+impl AnimationElementWrapper {
+    fn pcnt_elapsed(&self, realtime_clock: f64) -> f64 {
+        ((realtime_clock - self.start_time.unwrap_or(realtime_clock)) / self.animation.raw_duration()) as f64
+    }
+
+    fn blocking_pcnt_elapsed(&self, realtime_clock: f64) -> f64 {
+        ((realtime_clock - self.start_time.unwrap_or(realtime_clock)) / self.animation.blocking_duration()) as f64
+    }
 }
 
 pub struct TacticalMode {
@@ -96,6 +116,7 @@ pub struct TacticalMode {
     pub unit_renderer: UnitRenderer,
     pub display_event_clock: GameEventClock,
     pub realtime_clock: f64,
+    pub last_realtime_clock: f64,
     pub time_within_event: f64,
     pub fract_within_event: f64,
     pub event_clock_last_advanced: f64,
@@ -105,7 +126,7 @@ pub struct TacticalMode {
     event_start_times: Vec<f64>,
     pub victory: Option<bool>,
     animation_elements: Vec<AnimationElementWrapper>,
-    gui: TacticalGui
+    gui: TacticalGui,
 }
 
 impl TacticalMode {
@@ -113,6 +134,7 @@ impl TacticalMode {
         let tile_radius = 32.0;
         let mut camera = Camera2d::new();
         camera.move_speed = tile_radius * 20.0;
+        camera.zoom = 1.0;
 
         TacticalMode {
             selected_character: None,
@@ -122,15 +144,12 @@ impl TacticalMode {
             viewport: Viewport {
                 window_size: [256, 256],
                 draw_size: [256, 256],
-                rect: [0, 0, 256, 256]
+                rect: [0, 0, 256, 256],
             },
-            terrain_renderer: TerrainRenderer {
-                tile_radius
-            },
-            unit_renderer: UnitRenderer {
-                tile_radius
-            },
+            terrain_renderer: TerrainRenderer {},
+            unit_renderer: UnitRenderer {},
             display_event_clock: 0,
+            last_realtime_clock: 0.0,
             realtime_clock: 0.0,
             time_within_event: 0.0,
             fract_within_event: 0.0,
@@ -141,7 +160,7 @@ impl TacticalMode {
             event_start_times: vec![0.0],
             victory: None,
             animation_elements: vec![],
-            gui: TacticalGui::new()
+            gui: TacticalGui::new(),
         }
     }
 
@@ -169,10 +188,10 @@ impl TacticalMode {
     pub fn quad(&self, texture_identifier: String, pos: AxialCoord) -> Quad {
         Quad::new(texture_identifier, pos.as_cartesian(self.tile_radius)).centered()
     }
-    pub fn colored_quad(&self, texture_identifier: String, pos: AxialCoord, color: [f32; 4]) -> Quad {
+    pub fn colored_quad(&self, texture_identifier: String, pos: AxialCoord, color: Color) -> Quad {
         Quad::new(texture_identifier, pos.as_cartesian(self.tile_radius)).centered().color(color)
     }
-    pub fn colored_quad_cart(&self, texture_identifier: String, pos: Vec2f, color: [f32; 4]) -> Quad {
+    pub fn colored_quad_cart(&self, texture_identifier: String, pos: Vec2f, color: Color) -> Quad {
         Quad::new(texture_identifier, pos).centered().color(color)
     }
 
@@ -197,79 +216,71 @@ impl TacticalMode {
         }
     }
 
-    pub fn advance_event_clock(&mut self, next_event: Option<GameEvent>, max_event_clock: GameEventClock) {
+    fn blocking_animations_active(&self) -> bool {
+        self.animation_elements.iter().any(|e| e.blocking_pcnt_elapsed(self.realtime_clock) < 1.0)
+    }
+
+    pub fn advance_event_clock(&mut self, max_event_clock: GameEventClock) {
         let dt = Instant::now().duration_since(self.last_time).subsec_nanos() as f64 / 1e9f64;
         //        println!("Advancing event clock by {}", dt);
         self.last_time = Instant::now();
         self.camera.position = self.camera.position + self.camera.move_delta * (dt as f32) * self.camera.move_speed;
+        self.last_realtime_clock = self.realtime_clock;
         self.realtime_clock += dt;
-        let duration = match next_event {
-            Some(evt) => self.blocking_time_for_event(evt),
-            None => 0.000001
-        };
-        let full_duration = match next_event {
-            Some(evt) => self.time_for_event(evt),
-            None => 0.00001
-        };
-        if self.display_event_clock < max_event_clock - 1 {
-            if self.event_start_times.get((self.display_event_clock + 1) as usize).is_none() {
-                self.event_start_times.push(self.realtime_clock);
-            }
 
-            self.time_within_event += dt;
-            if self.time_within_event > duration {
-                //                println!("Advancing, realtime: {}, last_advanced: {}, duration: {}", self.realtime_clock, self.event_clock_last_advanced, duration);
+        // max_event_clock          the world time the next event will be added at when made
+        // max_event_clock-1        the world time of the latest event in the world so far
+        // display_event_clock      the world time used as a base-point for display
+        // display_event_clock-1    the world time of the event that is currently animating
+        if self.display_event_clock < max_event_clock - 1 {
+            let still_blocking = self.blocking_animations_active();
+            if !still_blocking {
+                let realtime_clock = self.realtime_clock;
+                // if we're going to advance the DEC we need to clear out all of the finished animations, the only
+                // ones remaining will be non-blocking animations that are presumed to be ok to continue
+                self.animation_elements.retain(|e| e.pcnt_elapsed(realtime_clock) < 1.0);
+                // advance the DEC
                 self.display_event_clock += 1;
-                self.event_clock_last_advanced = self.realtime_clock;
-                self.time_within_event = 0.0;
             }
-            self.fract_within_event = (self.time_within_event / full_duration).min(1.0).max(0.0);
-            //            println!("Fract within event: {:?}", self.fract_within_event);
         }
+
+//        let duration = match next_event {
+//            Some(evt) => self.blocking_time_for_event(evt),
+//            None => 0.000001
+//        };
+//        let full_duration = match next_event {
+//            Some(evt) => self.time_for_event(evt),
+//            None => 0.00001
+//        };
+//        if self.display_event_clock < max_event_clock - 1 {
+//            if self.event_start_times.get((self.display_event_clock + 1) as usize).is_none() {
+//                self.event_start_times.push(self.realtime_clock);
+//            }
+//
+//            self.time_within_event += dt;
+//            let advanced = if self.time_within_event > duration {
+//                //                println!("Advancing, realtime: {}, last_advanced: {}, duration: {}", self.realtime_clock, self.event_clock_last_advanced, duration);
+//                self.display_event_clock += 1;
+//                self.event_clock_last_advanced = self.realtime_clock;
+//                self.time_within_event = 0.0;
+//                true
+//            } else {
+//                false
+//            };
+//            self.fract_within_event = (self.time_within_event / full_duration).min(1.0).max(0.0);
+//            //            println!("Fract within event: {:?}", self.fract_within_event);
+//            advanced
+//        } else {
+//            false
+//        }
     }
 
-    pub fn animating(&self, world: &World) -> bool {
-        self.display_event_clock < world.current_time - 1
+    pub fn at_latest_event(&self, world: &World) -> bool {
+        self.display_event_clock >= world.current_time - 1
     }
 
     fn event_started_at(&self, gec: GameEventClock) -> f64 {
         *self.event_start_times.get(gec as usize).unwrap()
-    }
-
-    fn active_events(&mut self, world: &World) -> Vec<(GameEvent, f64, Option<f64>)> {
-        let mut ret = vec![];
-
-        // plus 2 because we ant to go up through display_event_clock + 1 inclusive
-        for gec in self.minimum_active_event_clock..self.display_event_clock + 2 {
-            if let Some(event) = world.event_at(gec) {
-                let duration = self.time_for_event(event);
-
-                let fract = if gec < self.display_event_clock + 1 {
-                    let start_point = self.event_started_at(gec);
-                    (self.realtime_clock - start_point) / duration
-                } else {
-                    self.fract_within_event
-                };
-
-                let blocking_fract = if gec < self.display_event_clock + 1 {
-                    None
-                } else {
-                    let blocking_duration = self.blocking_time_for_event(event);
-                    Some(self.time_within_event / blocking_duration)
-                };
-
-                if fract < 1.0 {
-                    ret.push((event, fract, blocking_fract));
-                } else {
-                    // if the oldest event is past 1.0, go ahead and advance the minimum
-                    if gec == self.minimum_active_event_clock {
-                        self.minimum_active_event_clock = gec;
-                    }
-                }
-            }
-        }
-
-        ret
     }
 
     fn ai_action(&mut self, ai_ref: &Entity, cdata: &CharacterData, world: &mut World, world_view: &WorldView, _all_characters: &Vec<Entity>) {
@@ -293,7 +304,7 @@ impl TacticalMode {
             }
 
             if enemy_data.position.distance(&ai.position) < r32(1.5) {
-                let all_possible_attacks = ai.possible_attacks(world_view);
+                let all_possible_attacks = possible_attacks(world_view, *ai_ref);
                 if let Some(attack) = all_possible_attacks.first() {
                     actions::handle_attack(world, *ai_ref, *enemy_ref, attack);
                 }
@@ -346,128 +357,251 @@ impl TacticalMode {
             self.victory = Some(false);
         }
     }
+
+
+    fn add_animation_element(&mut self, elem: Box<AnimationElement>) {
+        self.animation_elements.push(AnimationElementWrapper { animation: elem, start_time: None });
+    }
+
+    fn render_draw_list(&self, draw_list: DrawList, g: &mut GraphicsWrapper) {
+        for mut quad in draw_list.quads {
+            quad.offset *= self.tile_radius;
+            quad.size = match quad.size {
+                Some(specific_size) => Some(specific_size * self.tile_radius),
+                None => None
+            };
+            g.draw_quad(quad);
+        }
+        for mut text in draw_list.text {
+            text.offset *= self.tile_radius;
+            g.draw_text(text);
+        }
+    }
+
+    fn create_animations_if_necessary(&mut self, world_in: &World, world_view: &WorldView) {
+        if !self.blocking_animations_active() && !self.at_latest_event(world_in) {
+            if let Some(new_event) = world_in.event_at(self.display_event_clock + 1) {
+                trace!("Advanced event, new event is {:?}", new_event);
+                for elem in tactical_event_handler::animation_elements_for_new_event(&world_view, new_event) {
+                    self.add_animation_element(elem)
+                }
+            };
+        }
+    }
+
+    fn create_move_ui_draw_list(&mut self, world_in: &mut World) -> DrawList {
+        let is_animating = !self.at_latest_event(world_in);
+        if is_animating {
+            DrawList::none()
+        } else {
+            let hovered_hex = AxialCoord::from_cartesian(&self.mouse_game_pos(), self.tile_radius);
+
+            let mut draw_list = DrawList::of_quad(Quad::new_cart(String::from("ui/hoverHex"), hovered_hex.as_cart_vec()).centered());
+
+            if let Some(selected) = self.selected_character {
+                let sel_c = world_in.view().data::<CharacterData>(selected);
+                if let Some(path_result) = self.path(sel_c.position, hovered_hex) {
+                    let path = path_result.0;
+                    for hex in path {
+                        draw_list = draw_list.add_quad(Quad::new_cart(String::from("ui/feet"), hex.as_cart_vec()).centered());
+                    }
+                }
+            }
+
+            draw_list
+        }
+    }
 }
 
 impl GameMode for TacticalMode {
+    fn enter(&mut self, world: &mut World) {
+        // -------- entity data --------------
+        world.register::<TileData>();
+        world.register::<CharacterData>();
+        world.register::<CombatData>();
+        world.register::<InventoryData>();
+        world.register::<SkillData>();
+        world.register::<ItemData>();
+        world.register::<FactionData>();
+        // -------- world data ---------------
+        world.register::<MapData>();
+        world.register::<TimeData>();
+
+        world.register_index::<AxialCoord>();
+
+        world.attach_world_data(&MapData {
+            min_tile_bound: AxialCoord::new(-10, -10),
+            max_tile_bound: AxialCoord::new(10, 10),
+        });
+        world.attach_world_data(&TimeData {
+            turn_number: 0
+        });
+
+        for x in -10..10 {
+            for y in -10..10 {
+                let coord = AxialCoord::new(x, y);
+                let tile = EntityBuilder::new()
+                    .with(TileData {
+                        position: coord,
+                        name: "grass",
+                        move_cost: Oct::of(1),
+                        cover: 0.0,
+                    }).create(world);
+                world.index_entity(tile, coord);
+            }
+        }
+
+        let player_faction = EntityBuilder::new()
+            .with(FactionData {
+                name: String::from("Player"),
+                color: Color::new(1.1, 0.3, 0.3, 1.0),
+            }).create(world);
+        self.player_faction = player_faction;
+
+        let enemy_faction = EntityBuilder::new()
+            .with(FactionData {
+                name: String::from("Enemy"),
+                color: Color::new(0.3, 0.3, 0.9, 1.0),
+
+            }).create(world);
+
+
+        let bow = EntityBuilder::new()
+            .with(ItemData {
+                primary_attack: Some(Attack {
+                    ap_cost: 4,
+                    damage_dice: DicePool {
+                        die: 8,
+                        count: 2,
+                    },
+                    damage_bonus: 1,
+                    relative_accuracy: 0.5,
+                    primary_damage_type: DamageType::Piercing,
+                    secondary_damage_type: None,
+                    range: 10,
+                    min_range: 2,
+                }),
+                ..Default::default()
+            }).create(world);
+
+        let archer = EntityBuilder::new()
+            .with(CharacterData {
+                faction: player_faction,
+                position: AxialCoord::new(0, 0),
+                sprite: String::from("elf/archer"),
+                name: String::from("Archer"),
+                move_speed: Oct::of_parts(1, 2), // one and 2 eights
+                health: Reduceable::new(25),
+                ..Default::default()
+            })
+            .with(CombatData::default())
+            .with(SkillData::default())
+            .with(InventoryData::default())
+            .create(world);
+
+        actions::equip_item(world, archer, bow);
+
+        let create_monster_at = |world_in: &mut World, pos: AxialCoord| {
+            EntityBuilder::new()
+                .with(CharacterData {
+                    faction: enemy_faction,
+                    position: pos,
+                    sprite: String::from("void/monster"),
+                    name: String::from("Monster"),
+                    move_speed: Oct::of_rounded(0.75),
+                    action_points: Reduceable::new(6),
+                    health: Reduceable::new(22),
+                    ..Default::default()
+                })
+                .with(CombatData {
+                    natural_attacks: vec![Attack {
+                        damage_dice: DicePool {
+                            count: 1,
+                            die: 4,
+                        },
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                })
+                .with(SkillData::default())
+                .with(InventoryData::default())
+                .create(world_in);
+        };
+
+        create_monster_at(world, AxialCoord::new(4, 0));
+        create_monster_at(world, AxialCoord::new(0, 4));
+
+        world.add_event(GameEvent::WorldStart);
+    }
+
     fn update(&mut self, _: &mut World, _: f64) {}
 
-    fn draw(&mut self, world_in: &mut World, g: &mut GraphicsWrapper) {
-        let next_event = world_in.event_at(self.display_event_clock + 1);
-        self.advance_event_clock(next_event, world_in.current_time);
-        let active_events = self.active_events(world_in);
+    fn update_gui_2(&mut self, world: &mut World, resources : &mut GraphicsResources) {
 
+    }
+
+    fn update_gui(&mut self, world: &mut World, ui: &mut conrod::UiCell, frame_id: conrod::widget::Id) {
+        self.gui.draw_gui(world, ui, frame_id, tactical_gui::GameState {
+            display_event_clock: self.display_event_clock,
+            selected_character: self.selected_character,
+            victory: self.victory,
+        });
+    }
+
+    fn draw(&mut self, world_in: &mut World, g: &mut GraphicsWrapper) {
+//        let active_events = self.active_events(world_in);
         let mut world_view = world_in.view_at_time(self.display_event_clock);
 
+        self.create_animations_if_necessary(&world_in, &world_view);
+
+        self.advance_event_clock(world_in.current_time);
+
+        world_in.update_view_to_time(&mut world_view, self.display_event_clock);
+
+        self.create_animations_if_necessary(&world_in, &world_view);
 
         if let Some(v) = g.context.viewport {
             self.viewport = v;
         }
         g.context.view = self.camera.matrix(self.viewport);
 
-        // Perform any pre-emptive modification of the environment according to the event we're
-        // currently animating (if any)
-        for &(event, fract, blocking_fract) in &active_events {
-            match event {
-                GameEvent::Move { character, from, to, .. } => {
-                    let from_pos = from.as_cartesian(self.tile_radius);
-                    let to_pos = to.as_cartesian(self.tile_radius);
-                    let pos = from_pos + (to_pos - from_pos) * fract as f32;
-                    if fract > 1.0 { println!("Past 1"); }
-                    let mut mover = world_view.data_mut::<CharacterData>(character);
-                    mover.graphical_position = Some(pos);
-                }
-                GameEvent::Attack { defender, damage_done, attacker, .. } => {
-                    if let Some(bfract) = blocking_fract {
-                        let circ_fract: f32 = Ease::sine_in_out(bfract as f32);
-                        let circ_fract = if circ_fract < 0.5 {
-                            circ_fract * 2.0
-                        } else {
-                            1.0 - (circ_fract - 0.5) * 2.0
-                        };
+        // draw list of all of the drawing requests from all currently active animations
+        let mut anim_draw_list = DrawList::default();
 
-                        {
-                            let defender = world_view.data_mut::<CharacterData>(defender);
-                            //                    let end_alpha = if killing_blow { 0.0 } else { defender.graphical_color[3] };
+        let realtime_clock = self.realtime_clock;
+        for elem in &mut self.animation_elements {
+            elem.start_time = match elem.start_time {
+                Some(existing) => Some(existing),
+                None => Some(self.last_realtime_clock)
+            };
+            let pcnt = elem.pcnt_elapsed(realtime_clock).min(1.0);
+            anim_draw_list.append(&mut elem.animation.draw(&mut world_view, pcnt));
 
-                            if damage_done > 0 {
-                                defender.health.reduce_by((damage_done as f64 * bfract) as i32);
-                                let start_color = defender.graphical_color;
-                                let end_color = [1f32, 0.1f32, 0.1f32, 1f32];
-                                defender.graphical_color = lerp(&start_color, &end_color, &circ_fract);
-
-                                //                            defender.graphical_color = (&[1.0f32, 1.0f32, 1.0f32, 1.0f32], &[1.0f32,0.1f32,0.1f32,1.0f32], bfract as f32);
-                            }
-                        }
-                        let new_attacker_pos = {
-                            use cgmath::InnerSpace;
-
-                            let attacker = world_view.character(attacker);
-                            let defender = world_view.character(defender);
-
-                            let defender_pos = defender.position.as_cartesian(self.tile_radius);
-                            let attacker_pos = attacker.position.as_cartesian(self.tile_radius);
-                            let delta: Vec2f = (defender_pos - attacker_pos).normalize() * self.tile_radius;
-
-                            attacker_pos + delta * circ_fract * 0.5
-                        };
-                        {
-                            let attacker = world_view.data_mut::<CharacterData>(attacker);
-                            attacker.graphical_position = Some(new_attacker_pos);
-                        }
-
-                        //                    let cur_alpha = defender.graphical_color[3];
-                        //                    defender.graphical_color[3] = lerp(&cur_alpha, &end_alpha, &(fract as f32));
-                    }
-                }
-                _ => ()
+            let blocking_pcnt = elem.blocking_pcnt_elapsed(realtime_clock);
+            if blocking_pcnt < 1.0 {
+                break;
             }
         }
 
-        let is_animating = self.animating(world_in);
+        // draw list for the map tiles
+        let terrain_draw_list = self.terrain_renderer.render_tiles(&world_view, self.display_event_clock);
+        // draw list for the units and built-in unit UI elements
+        let unit_draw_list = self.unit_renderer.render_units(&world_view, self.display_event_clock, self.selected_character);
+        // draw list for hover hex and foot icons
+        let movement_ui_draw_list = self.create_move_ui_draw_list(world_in);
 
-        self.terrain_renderer.render_tiles(&world_view, g, self.display_event_clock);
+        self.render_draw_list(terrain_draw_list, g);
+        self.render_draw_list(movement_ui_draw_list, g);
+        self.render_draw_list(unit_draw_list, g);
+        self.render_draw_list(anim_draw_list, g);
 
-        let hovered_hex = AxialCoord::from_cartesian(&self.mouse_game_pos(), self.tile_radius);
+        let gui_camera = Camera2d::new();
+//        gui_camera.zoom = 0.5;
+        g.context.view = gui_camera.matrix(self.viewport);
 
-        if !is_animating {
-            g.draw_quad(self.quad(String::from("ui/hoverHex"), hovered_hex));
-        }
+        self.gui.draw(world_in, g)
 
-
-        if let Some(selected) = self.selected_character {
-            let sel_c = world_in.view().data::<CharacterData>(selected);
-            if let Some(path_result) = self.path(sel_c.position, hovered_hex) {
-                if !is_animating {
-                    let path = path_result.0;
-                    for hex in path {
-                        g.draw_quad(self.quad(String::from("ui/feet"), hex));
-                    }
-                }
-            }
-        }
-
-        self.unit_renderer.render_units(&world_view, g, self.display_event_clock, self.selected_character);
-
-
-
-        // perform any explicit drawing due to the events we're animating, if any
-        for &(event, fract, _blocking_fract) in &active_events {
-            match event {
-                GameEvent::Attack { defender, damage_done, hit, .. } => {
-                    let (msg, color) = if hit {
-                        (format!("{}", damage_done), [0.9, 0.2, 0.2, 1.0 - fract.powf(2.0)])
-                    } else {
-                        (String::from("miss"), [0.1, 0.0, 0.0, 1.0 - fract.powf(2.0)])
-                    };
-                    let defender = world_view.character(defender);
-                    let pos = defender.position.as_cartesian(self.tile_radius);
-                    g.draw_text(Text::new(msg.as_str(), 20)
-                        .offset(v2(pos.x, pos.y + self.tile_radius * 0.75 + fract as f32 * 15.0f32))
-                        .colord(color));
-                }
-                _ => ()
-            }
-        }
+//        g.draw_text(Text::new(String::from("This is some example text, iiiiiiiiiiiiiii"), 20).offset(v2(0.0,0.0)).font("NotoSerif-Regular.ttf"));
     }
 
     fn on_event(&mut self, world: &mut World, event: conrod::event::Widget) {
@@ -480,7 +614,7 @@ impl GameMode for TacticalMode {
                 }
                 _ => ()
             },
-            Widget::Click(click) if !self.animating(world) => match click.button {
+            Widget::Click(click) if self.at_latest_event(world) => match click.button {
                 conrod::input::MouseButton::Left => {
                     let mouse_pos = self.mouse_game_pos();
                     let clicked_coord = AxialCoord::from_cartesian(&mouse_pos, self.tile_radius);
@@ -496,7 +630,7 @@ impl GameMode for TacticalMode {
                                 if target_data.faction != self.player_faction &&
                                     sel_data.faction == self.player_faction {
                                     if sel_data.can_act() {
-                                        let all_possible_attacks = sel_data.possible_attacks(&world_view);
+                                        let all_possible_attacks = possible_attacks(&world_view, cur_sel);
                                         if let Some(attack) = all_possible_attacks.first() {
                                             actions::handle_attack(world, cur_sel, found_ref, attack);
                                         } else {
@@ -538,6 +672,7 @@ impl GameMode for TacticalMode {
                             Key::Right => self.camera.move_delta.x = 1.0,
                             Key::Up => self.camera.move_delta.y = 1.0,
                             Key::Down => self.camera.move_delta.y = -1.0,
+                            Key::Z => self.camera.zoom += 0.1,
                             _ => ()
                         }
                     }
@@ -564,117 +699,4 @@ impl GameMode for TacticalMode {
             _ => ()
         }
     }
-
-    fn enter(&mut self, world: &mut World) {
-        // -------- entity data --------------
-        world.register::<TileData>();
-        world.register::<CharacterData>();
-        world.register::<ItemData>();
-        world.register::<FactionData>();
-        // -------- world data ---------------
-        world.register::<MapData>();
-        world.register::<TimeData>();
-
-        world.register_index::<AxialCoord>();
-
-        world.attach_world_data(&MapData {
-            min_tile_bound : AxialCoord::new(-10,-10),
-            max_tile_bound : AxialCoord::new(10,10)
-        });
-        world.attach_world_data(&TimeData {
-            turn_number : 0
-        });
-
-        for x in -10..10 {
-            for y in -10..10 {
-                let coord = AxialCoord::new(x, y);
-                let tile = EntityBuilder::new()
-                    .with(TileData {
-                        position: coord,
-                        name: "grass",
-                        move_cost: 1,
-                        cover: 0.0
-                    }).create(world);
-                world.index_entity(tile, coord);
-            }
-        }
-
-        let player_faction = EntityBuilder::new()
-            .with(FactionData {
-                name: String::from("Player"),
-                color: [1.1, 0.3, 0.3, 1.0]
-            }).create(world);
-        self.player_faction = player_faction;
-
-        let enemy_faction = EntityBuilder::new()
-            .with(FactionData {
-                name: String::from("Enemy"),
-                color: [0.3, 0.3, 0.9, 1.0],
-
-            }).create(world);
-
-
-        let bow = EntityBuilder::new()
-            .with(ItemData {
-                primary_attack: Some(Attack {
-                    speed: 2.0,
-                    damage_dice: DicePool {
-                        die: 8,
-                        count: 2
-                    },
-                    damage_bonus: 1,
-                    relative_accuracy: 0.5,
-                    primary_damage_type: DamageType::Piercing,
-                    secondary_damage_type: None,
-                    range: 10,
-                    min_range: 2
-                }),
-                ..Default::default()
-            }).create(world);
-
-        let archer = EntityBuilder::new()
-            .with(CharacterData {
-                faction: player_faction,
-                position: AxialCoord::new(0, 0),
-                sprite: String::from("elf/archer"),
-                name: String::from("Archer"),
-                moves: Reduceable::new(10.0),
-                health: Reduceable::new(25),
-                ..Default::default()
-            }).create(world);
-
-        actions::equip_item(world, archer, bow);
-
-        let create_monster_at = |world_in: &mut World, pos: AxialCoord| {
-            EntityBuilder::new()
-                .with(CharacterData {
-                faction: enemy_faction,
-                position: pos,
-                sprite: String::from("void/monster"),
-                name: String::from("Monster"),
-                moves: Reduceable::new(5.0),
-                health: Reduceable::new(22),
-                natural_attacks: vec![Attack {
-                    damage_dice: DicePool {
-                        count: 1,
-                        die: 4
-                    },
-                    ..Default::default()
-                }],
-                ..Default::default()
-            }).create(world_in);
-        };
-
-        create_monster_at(world, AxialCoord::new(4, 0));
-        create_monster_at(world, AxialCoord::new(0, 4));
-    }
-
-    fn update_gui(&mut self, world: &mut World, ui: &mut conrod::UiCell, frame_id: conrod::widget::Id) {
-        self.gui.draw_gui(world, ui, frame_id, tactical_gui::GameState {
-            display_event_clock: self.display_event_clock,
-            selected_character: self.selected_character,
-            victory: self.victory
-        });
-    }
 }
-

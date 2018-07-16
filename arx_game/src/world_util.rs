@@ -32,12 +32,12 @@ pub fn path_any(world : &WorldView, from: AxialCoord, to: &HashSet<AxialCoord>, 
 
 
 
-trait GetCommonData {
-    fn character (&self, entity : Entity) -> &CharacterData;
-}
-
-impl GetCommonData for WorldView {
-    fn character(&self, entity: Entity) -> &CharacterData {
-        self.data::<CharacterData>(entity)
-    }
-}
+//pub trait GetCommonData {
+//    fn character (&self, entity : Entity) -> &CharacterData;
+//}
+//
+//impl GetCommonData for WorldView {
+//    fn character(&self, entity: Entity) -> &CharacterData {
+//        self.data::<CharacterData>(entity)
+//    }
+//}

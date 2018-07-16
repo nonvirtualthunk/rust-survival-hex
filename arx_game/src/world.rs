@@ -281,6 +281,8 @@ pub struct IndexApplication {
     index_func: Rc<Fn(&World, &mut WorldView)>
 }
 
+
+
 impl World {
     pub fn new() -> World {
         let self_ent = World::create_entity();
@@ -765,6 +767,8 @@ mod test {
         }
     }
 
+    use spectral::prelude::*;
+
     pub struct AddFooBValueModifier {}
 
     impl ConstantModifier<FooData> for AddFooBValueModifier {
@@ -772,8 +776,6 @@ mod test {
             data.b.push(1.0);
         }
     }
-
-    use spectral::prelude::*;
 
     #[test]
     pub fn test_new_world() {
