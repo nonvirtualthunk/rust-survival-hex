@@ -72,3 +72,13 @@ impl ToStringWithSign for f64 {
         }
     }
 }
+
+pub trait ExtendedCollection {
+    fn non_empty(&self) -> bool;
+}
+
+impl <T> ExtendedCollection for Vec<T> {
+    fn non_empty(&self) -> bool {
+        ! self.is_empty()
+    }
+}

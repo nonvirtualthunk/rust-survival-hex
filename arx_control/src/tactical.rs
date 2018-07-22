@@ -55,6 +55,13 @@ use interpolation::*;
 use arx_graphics::core::DrawList;
 use arx_graphics::core::GraphicsResources;
 
+use gui::UIEvent;
+use gui::UIEventType;
+use gui::GUI;
+use gui::Wid;
+use gui::MouseButton;
+use gui::Key;
+
 #[derive(PartialOrd, PartialEq, Copy, Clone)]
 pub struct Cost(pub R32);
 
@@ -109,7 +116,7 @@ impl AnimationElementWrapper {
 pub struct TacticalMode {
     pub selected_character: Option<Entity>,
     pub tile_radius: f32,
-    pub mouse_pos: [f64; 2],
+    pub mouse_pos: Vec2f,
     pub camera: Camera2d,
     pub viewport: Viewport,
     pub terrain_renderer: TerrainRenderer,
@@ -130,7 +137,7 @@ pub struct TacticalMode {
 }
 
 impl TacticalMode {
-    pub fn new() -> TacticalMode {
+    pub fn new(gui: &mut GUI) -> TacticalMode {
         let tile_radius = 32.0;
         let mut camera = Camera2d::new();
         camera.move_speed = tile_radius * 20.0;
@@ -139,7 +146,7 @@ impl TacticalMode {
         TacticalMode {
             selected_character: None,
             tile_radius,
-            mouse_pos: [0.0, 0.0],
+            mouse_pos: v2(0.0, 0.0),
             camera,
             viewport: Viewport {
                 window_size: [256, 256],
@@ -160,7 +167,7 @@ impl TacticalMode {
             event_start_times: vec![0.0],
             victory: None,
             animation_elements: vec![],
-            gui: TacticalGui::new(),
+            gui: TacticalGui::new(gui),
         }
     }
 
@@ -180,7 +187,7 @@ impl TacticalMode {
         let camera_mat = self.camera.matrix(self.viewport);
         let inverse_mat = vecmath::mat2x3_inv(camera_mat);
         let norm_mouse = normalize_mouse(self.mouse_pos, &self.viewport);
-        let transformed_mouse = math::transform_pos(inverse_mat, norm_mouse);
+        let transformed_mouse = math::transform_pos(inverse_mat, [norm_mouse.x as f64, norm_mouse.y as f64]);
         let mouse_pos = v2(transformed_mouse[0] as f32, transformed_mouse[1] as f32);
         mouse_pos
     }
@@ -536,12 +543,8 @@ impl GameMode for TacticalMode {
 
     fn update(&mut self, _: &mut World, _: f64) {}
 
-    fn update_gui_2(&mut self, world: &mut World, resources : &mut GraphicsResources) {
-
-    }
-
-    fn update_gui(&mut self, world: &mut World, ui: &mut conrod::UiCell, frame_id: conrod::widget::Id) {
-        self.gui.draw_gui(world, ui, frame_id, tactical_gui::GameState {
+    fn update_gui(&mut self, world: &mut World, ui: &mut GUI, frame_id: Option<Wid>) {
+        self.gui.update_gui(world, ui, frame_id, tactical_gui::GameState {
             display_event_clock: self.display_event_clock,
             selected_character: self.selected_character,
             victory: self.victory,
@@ -604,19 +607,16 @@ impl GameMode for TacticalMode {
 //        g.draw_text(Text::new(String::from("This is some example text, iiiiiiiiiiiiiii"), 20).offset(v2(0.0,0.0)).font("NotoSerif-Regular.ttf"));
     }
 
-    fn on_event(&mut self, world: &mut World, event: conrod::event::Widget) {
-        use conrod::event::Widget;
 
+    fn handle_event(&mut self, world: &mut World, gui: &mut GUI, event: &UIEvent) {
         match event {
-            Widget::Motion(motion) => match motion.motion {
-                conrod::input::Motion::MouseCursor { x, y } => {
-                    self.mouse_pos = [x + self.viewport.window_size[0] as f64 / 2.0, self.viewport.window_size[1] as f64 / 2.0 - y];
-                }
-                _ => ()
-            },
-            Widget::Click(click) if self.at_latest_event(world) => match click.button {
-                conrod::input::MouseButton::Left => {
+            UIEvent::MouseMove { pos, .. } => {
+                self.mouse_pos = pos.pixel_pos
+            }
+            UIEvent::MouseRelease { pos, button } if self.at_latest_event(world) => match button {
+                MouseButton::Left => {
                     let mouse_pos = self.mouse_game_pos();
+                    info!("Mouse released, raw pos {:?}, game_pos {:?}", self.mouse_pos, mouse_pos);
                     let clicked_coord = AxialCoord::from_cartesian(&mouse_pos, self.tile_radius);
 
                     let world_view = world.view_at_time(self.display_event_clock);
@@ -662,41 +662,32 @@ impl GameMode for TacticalMode {
                 }
                 _ => ()
             },
-            Widget::Press(press) => {
-                match press.button {
-                    conrod::event::Button::Keyboard(key) => {
-                        use conrod::input::Key;
-
-                        match key {
-                            Key::Left => self.camera.move_delta.x = -1.0,
-                            Key::Right => self.camera.move_delta.x = 1.0,
-                            Key::Up => self.camera.move_delta.y = 1.0,
-                            Key::Down => self.camera.move_delta.y = -1.0,
-                            Key::Z => self.camera.zoom += 0.1,
-                            _ => ()
-                        }
-                    }
+            UIEvent::KeyPress { key } => {
+                match key {
+                    Key::Left => self.camera.move_delta.x = -1.0,
+                    Key::Right => self.camera.move_delta.x = 1.0,
+                    Key::Up => self.camera.move_delta.y = 1.0,
+                    Key::Down => self.camera.move_delta.y = -1.0,
+                    Key::Z => self.camera.zoom += 0.1,
                     _ => ()
                 }
-            }
-            Widget::Release(release) => {
-                match release.button {
-                    conrod::event::Button::Keyboard(key) => {
-                        use conrod::input::Key;
-
-                        match key {
-                            Key::Left => self.camera.move_delta.x = 0.0,
-                            Key::Right => self.camera.move_delta.x = 0.0,
-                            Key::Up => self.camera.move_delta.y = 0.0,
-                            Key::Down => self.camera.move_delta.y = 0.0,
-                            Key::Return => self.end_turn(world),
-                            _ => ()
-                        }
-                    }
+            },
+            UIEvent::KeyRelease { key } => {
+                match key {
+                    Key::Left => self.camera.move_delta.x = 0.0,
+                    Key::Right => self.camera.move_delta.x = 0.0,
+                    Key::Up => self.camera.move_delta.y = 0.0,
+                    Key::Down => self.camera.move_delta.y = 0.0,
+                    Key::Return => self.end_turn(world),
                     _ => ()
                 }
-            }
+            },
             _ => ()
         }
+    }
+
+
+    fn on_event<'a, 'b, 'c>(&'a mut self, world: &'b mut World, gui: &'c mut GUI, event: &UIEvent) {
+        gui.handle_ui_event_2(event, self, world);
     }
 }

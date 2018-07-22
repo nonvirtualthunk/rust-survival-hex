@@ -36,3 +36,5 @@ pub use interpolation::*;
 
 pub mod text;
 pub use text::*;
+
+mod resources;

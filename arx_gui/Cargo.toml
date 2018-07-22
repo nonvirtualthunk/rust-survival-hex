@@ -26,6 +26,9 @@ pretty_env_logger = "*"
 backtrace = "0.3.9"
 num = "0.2.0"
 derive_more = "0.11.0"
+anymap = "0.12.1"
+spectral = "*"
+multimap = "0.4.0"
 
 [dependencies.arx_common]
 path = "../arx_common"

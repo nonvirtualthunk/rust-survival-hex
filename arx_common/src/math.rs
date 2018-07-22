@@ -1,7 +1,8 @@
 use num::Num;
 use cgmath::Vector2;
+use std::fmt::Debug;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Rect<T : Num + Copy> {
     pub x : T,
     pub y : T,
@@ -9,10 +10,22 @@ pub struct Rect<T : Num + Copy> {
     pub h : T
 }
 
-impl <T : Num + Copy + PartialOrd> Rect<T> {
+impl <T : Num + Copy + PartialOrd + Debug> Rect<T> {
     pub fn new(x : T, y : T, w : T, h : T) -> Rect<T> {
         Rect {
             x,y,w,h
+        }
+    }
+
+    pub fn from_corners(x : T, y : T, x2 : T, y2 : T) -> Rect<T> {
+        Rect {
+            x,y,w : x2 - x,h : y2 - y
+        }
+    }
+
+    pub fn from_corners_v(p1 : Vector2<T>, p2 : Vector2<T>) -> Rect<T> {
+        Rect {
+            x : p1.x, y : p1.y, w: p2.x - p1.x, h: p2.y - p1.y
         }
     }
 
@@ -43,6 +56,28 @@ impl <T : Num + Copy + PartialOrd> Rect<T> {
         }
     }
 
+    pub fn intersect(&self, r2: Rect<T>) -> Option<Rect<T>> {
+        let x = Rect::max_v(self.x, r2.x);
+        let y = Rect::max_v(self.y, r2.y);
+        let max_x = Rect::min_v(self.max_x(), r2.max_x());
+        let max_y = Rect::min_v(self.max_y(), r2.max_y());
+
+        let w = max_x - x;
+        let h = max_y - y;
+        if w > T::zero() && h > T::zero() {
+            Some(Rect::new(x,y,w,h))
+        } else {
+            None
+        }
+    }
+
+    pub fn translated(&self, dx : T, dy : T) -> Rect<T> {
+        Rect::new(self.x + dx, self.y + dy, self.w, self.h)
+    }
+    pub fn resized(&self, w : T, h : T) -> Rect<T> {
+        Rect::new(self.x, self.y, w, h)
+    }
+
     pub fn dimensions(&self) -> Vector2<T> {
         Vector2 {
             x : self.w,
@@ -55,6 +90,10 @@ impl <T : Num + Copy + PartialOrd> Rect<T> {
             x : self.x,
             y : self.y
         }
+    }
+
+    pub fn contains(&self, v : Vector2<T>) -> bool {
+        self.x <= v.x && self.y <= v.y && self.max_x() >= v.x && self.max_y() >= v.y
     }
 
     pub fn max_x(&self) -> T {

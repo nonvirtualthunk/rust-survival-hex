@@ -1,42 +1,27 @@
-use piston_window::*;
-use piston_window::types;
-use piston_window::TextureSettings;
-
-use find_folder;
-use std::path::PathBuf;
-
-use common::prelude::*;
+use camera::*;
 use common::color::*;
-use common::Rect;
 use common::hex::CartVec;
-
-use std::collections::HashMap;
-
+use common::prelude::*;
+use common::Rect;
+use find_folder;
+use gfx;
 use gfx_device_gl;
-use itertools::Itertools;
-
-use piston_window::math;
-
 use image as image_lib;
 use image::GenericImage;
-
+use itertools::Itertools;
+use piston_window::*;
+use piston_window::math;
+use piston_window::TextureSettings;
+use piston_window::types;
 use rusttype as rt;
 use rusttype::gpu_cache::Cache as RTCache;
 use rusttype::gpu_cache::CacheBuilder as RTCacheBuilder;
 use std;
-
-pub type RTFont = rt::Font<'static>;
-pub type RTPositionedGlyph = rt::PositionedGlyph<'static>;
-
-use gfx;
-
-use camera::*;
+use std::collections::HashMap;
+use std::path::PathBuf;
 use text::TextLayout;
 
-
-
-pub type FontIdentifier = &'static str;
-pub type ImageIdentifier = String;
+pub use resources::*;
 
 #[derive(Clone)]
 pub struct Quad {
@@ -273,25 +258,10 @@ impl<'a, 'b : 'a> GraphicsWrapper<'a, 'b> {
             glyph_cache.cache_queued(|rect, data| {
                 font_texture_data.clear();
                 font_texture_data.extend(data.iter().flat_map(|&b| vec![255,255,255,b]));
-                let img_info = gfx::texture::NewImageInfo {
-                    xoffset : rect.min.x as u16,
-                    yoffset : rect.min.y as u16,
-                    zoffset : 0,
-                    width : rect.width() as u16,
-                    height : rect.height() as u16,
-                    depth: 0,
-                    format: (),
-                    mipmap: 0
-
-                };
-
                 let offset = [rect.min.x, rect.min.y];
                 let size = [rect.width(), rect.height()];
                 texture::UpdateTexture::update(font_texture, encoder, texture::Format::Rgba8, &font_texture_data[..], offset, size)
                                     .expect("Failed to update texture");
-//                let data = gfx::memory::cast_slice(&font_texture_data[..]);
-//                encoder.update_texture::<_, gfx::format::Rgba8>(&font_surface, None, img_info, data)
-//                    .expect("Failed to update texture");
             }).expect("Could not update glyph cache");
         }
 
@@ -328,7 +298,6 @@ impl<'a, 'b : 'a> GraphicsWrapper<'a, 'b> {
         let offset_y = layout_dims.y as f64;
         let pos = [text.offset.x as f64 + offset_x, text.offset.y as f64 + offset_y];
         let transform = math::multiply(math::multiply(self.context.view, math::translate(pos)), math::scale(1.0, -1.0));
-//        let transform = math::multiply(self.context.view, math::translate(pos));
 
         image::draw_many(&glyph_rectangles,
                                           text.color.0,
@@ -336,39 +305,6 @@ impl<'a, 'b : 'a> GraphicsWrapper<'a, 'b> {
                                           &self.draw_state,
                                           transform,
                                           self.graphics);
-
-
-//        let transform = math::multiply(math::multiply(self.context.view, math::translate([-512.0,256.0])), math::scale(1.0, -1.0));
-//        image::Image::new().draw(&self.resources.font_texture, &self.draw_state, transform, self.graphics);
-    }
-
-    pub fn draw_text_old(&mut self, text: Text) {
-        let dimensions_no_wrap = self.resources.string_dimensions_no_wrap(text.font_identifier, text.text.as_str(), text.size);
-        let line_height = text.size; //self.resources.line_height(text.font_identifier, text.size);
-
-        let lines : Vec<&str> = text.text.split('\n').collect_vec();
-        let glyphs = self.resources.glyphs(text.font_identifier);
-
-        for (i,line) in lines.iter().enumerate() {
-            let offset_x = if text.centered_x {
-                dimensions_no_wrap.x as f64 * -0.5
-            } else {
-                0.0
-            };
-            let offset_y = if text.centered_y {
-                dimensions_no_wrap.y as f64 * -0.5
-            } else {
-                0.0
-            };
-            let offset_y = offset_y + (dimensions_no_wrap.y as f64 - (line_height as f64 * (i + 1) as f64));
-
-            let pos = [text.offset.x as f64 + offset_x, text.offset.y as f64 + offset_y];
-            let transform = math::multiply(math::multiply(self.context.view, math::translate(pos)), math::scale(1.0, -1.0));
-
-            let mut raw = text::Text::new_color(text.color.0, text.size);
-            raw.round = text.rounded;
-            raw.draw(line, glyphs, &self.draw_state, transform, self.graphics).unwrap();
-        }
     }
 
     pub fn quad(&mut self, img: String, transform: math::Matrix2d) {
@@ -378,154 +314,3 @@ impl<'a, 'b : 'a> GraphicsWrapper<'a, 'b> {
     }
 }
 
-#[derive(Clone)]
-pub struct TextureInfo {
-    texture: G2dTexture,
-    size: Vec2i,
-}
-
-#[allow(dead_code)]
-pub struct GraphicsResources {
-    images: HashMap<ImageIdentifier, TextureInfo>,
-    assets_path: PathBuf,
-    main_path: PathBuf,
-    texture_path: PathBuf,
-    factory: gfx_device_gl::Factory,
-    glyphs: HashMap<FontIdentifier, Glyphs>,
-    fonts: HashMap<FontIdentifier, RTFont>,
-    glyph_cache : RTCache<'static>,
-    pub font_texture_data : Vec<u8>,
-    pub font_texture : G2dTexture,
-    pub dpi_scale : f32
-}
-
-impl GraphicsResources {
-    pub fn new(factory: gfx_device_gl::Factory, base_path: &'static str) -> GraphicsResources {
-        let mut factory = factory;
-        let assets_path = find_folder::Search::ParentsThenKids(3, 3).for_folder("assets").unwrap();
-        let main_path = assets_path.join(base_path);
-        let texture_path = main_path.join("textures");
-
-        let texture_settings = TextureSettings::new().mag(Filter::Nearest).min(Filter::Nearest);
-
-        let w = 512;
-        let h = 512;
-        let mut font_texture_data : Vec<u8> = Vec::new();
-        for _i in 0..w * h {
-            font_texture_data.push(126);
-        }
-
-
-        let font_texture = G2dTexture::from_memory_alpha(&mut factory, &font_texture_data[..], 512, 512, &texture_settings).expect("Could not make texture needed");
-
-
-        GraphicsResources {
-            images: HashMap::new(),
-            assets_path,
-            main_path,
-            texture_path,
-            factory,
-            glyphs: HashMap::new(),
-            fonts: HashMap::new(),
-            glyph_cache : RTCacheBuilder { height : 512, width : 512, pad_glyphs : true, position_tolerance: 0.5, scale_tolerance : 0.5 }.build(),
-            font_texture,
-            font_texture_data,
-            dpi_scale: 1.0
-        }
-    }
-
-    pub fn read_texture(assets_path: &PathBuf, factory: &mut gfx_device_gl::Factory, identifier: ImageIdentifier) -> TextureInfo {
-        let identifier = if !identifier.ends_with(".png") {
-            format!("{}.png", identifier)
-        } else {
-            identifier
-        };
-
-        let path = assets_path.join(identifier);
-        let mut texture_settings = TextureSettings::new();
-        texture_settings.set_min(Filter::Nearest);
-        texture_settings.set_mag(Filter::Nearest);
-
-        let image = image_lib::open(path.as_path()).expect(format!("Could not find path {:?}", path).as_str());
-        let image = image_lib::imageops::flip_vertical(&image);
-
-        let tex = Texture::from_image(
-            factory,
-            &image,
-            &texture_settings,
-        ).expect(format!("Could not find path {:?}", path).as_str());
-
-        let w = image.width();
-        let h = image.height();
-        TextureInfo {
-            texture: tex,
-            size: v2(w as i32, h as i32),
-        }
-    }
-
-    pub fn texture(&mut self, identifier: ImageIdentifier) -> TextureInfo {
-        if self.images.contains_key(&identifier) {
-            self.images.get(&identifier).unwrap().clone()
-        } else {
-            let tex = GraphicsResources::read_texture(&self.texture_path, &mut self.factory, identifier.clone());
-            self.images.insert(identifier.clone(), tex);
-            self.images.get(&identifier).unwrap().clone()
-        }
-    }
-
-    pub fn font(&mut self, identifier: FontIdentifier) -> &RTFont {
-        if !self.fonts.contains_key(identifier) {
-            let font_path = self.assets_path.join("fonts").join(identifier);
-            use std::io::Read;
-            let mut file = std::fs::File::open(font_path).expect("Could not open font file");
-            let mut file_buffer = Vec::new();
-            file.read_to_end(&mut file_buffer).expect("Could not read file to end to load font");
-            self.fonts.insert(identifier, RTFont::from_bytes(file_buffer).expect("Could not load font"));
-        }
-        self.fonts.get(identifier).unwrap()
-    }
-
-    pub fn glyphs(&mut self, identifier: FontIdentifier) -> &mut Glyphs {
-        if !self.glyphs.contains_key(identifier) {
-            let font = self.assets_path.join("fonts").join(identifier);
-            let texture_settings = TextureSettings::new().min(Filter::Linear).mag(Filter::Linear);
-            let glyphs = Glyphs::new(font, self.factory.clone(), texture_settings)
-                .expect(format!("Could not load font at {:?}", self.assets_path.join("fonts").join(identifier)).as_str());
-            self.glyphs.insert(identifier, glyphs);
-        }
-
-        self.glyphs.get_mut(identifier).unwrap()
-    }
-
-    pub fn with_glyphs<F: Fn(&mut Glyphs)>(&mut self, identifier: FontIdentifier, func: F) {
-        if !self.glyphs.contains_key(identifier) {
-            let font = self.assets_path.join("fonts").join(&identifier);
-            self.glyphs.insert(identifier, Glyphs::new(font, self.factory.clone(), TextureSettings::new()).unwrap());
-        }
-
-        let mut glyphs = self.glyphs.get_mut(&identifier).unwrap();
-        func(&mut glyphs);
-    }
-
-    pub fn layout_text(&mut self, text : &Text) -> TextLayout {
-        let dpi_scale = self.dpi_scale;
-        let font = self.font(text.font_identifier);
-        TextLayout::layout_text(text.text.as_str(), font, text.size, dpi_scale)
-    }
-
-    pub fn line_height(&self, font: &RTFont, size :u32) -> f32 {
-        TextLayout::line_height(font, size, self.dpi_scale)
-    }
-
-    pub fn string_dimensions_no_wrap<'b>(&mut self, font_identifier: FontIdentifier, text: &'b str, size: u32) -> Vec2f {
-        if text.is_empty() {
-            v2(0.0,0.0)
-        } else {
-            let dpi_scale = self.dpi_scale;
-            let font = self.font(font_identifier);
-            let layout = TextLayout::layout_text(text, font, size, dpi_scale);
-
-            layout.dimensions()
-        }
-    }
-}

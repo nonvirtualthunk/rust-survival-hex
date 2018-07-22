@@ -13,6 +13,12 @@ impl Color {
     pub fn white() -> Color {
         Color::new(1.0,1.0,1.0,1.0)
     }
+    pub fn light_grey() -> Color {
+        Color::new(0.8,0.8,0.8,1.0)
+    }
+    pub fn greyscale(brightness : f32) -> Color {
+        Color::new(brightness,brightness,brightness,1.0)
+    }
     pub fn black() -> Color {
         Color::new(0.0,0.0,0.0,1.0)
     }
@@ -108,6 +114,29 @@ impl Mul<f32> for Color {
             self.0[3] * rhs])
     }
 }
+
+
+impl<'a> Mul<Color> for &'a Color {
+    type Output = Color;
+
+    fn mul(self, rhs: Color) -> Self::Output {
+        Color([self.0[0] * rhs.0[0],
+            self.0[1] * rhs.0[1],
+            self.0[2] * rhs.0[2],
+            self.0[3] * rhs.0[3]])
+    }
+}
+impl Mul<Color> for Color {
+    type Output = Color;
+
+    fn mul(self, rhs: Color) -> Self::Output {
+        Color([self.0[0] * rhs.0[0],
+            self.0[1] * rhs.0[1],
+            self.0[2] * rhs.0[2],
+            self.0[3] * rhs.0[3]])
+    }
+}
+
 impl PartialEq<Color> for Color {
     fn eq(&self, other: &Color) -> bool {
         self.0[0] == other.0[0] && self.0[1] == other.0[1] && self.0[2] == other.0[2] && self.0[3] == other.0[3]

@@ -19,6 +19,8 @@ extern crate arx_common as common;
 extern crate arx_control as control;
 extern crate arx_game as game;
 extern crate opengl_graphics;
+extern crate pretty_env_logger;
+#[macro_use] extern crate log;
 
 //#![allow(dead_code)]
 
@@ -66,8 +68,11 @@ pub fn theme() -> conrod::Theme {
 }
 
 fn main() {
+    pretty_env_logger::init();
+    info!("Init!");
+
     let mut window: PistonWindow = WindowSettings::new(
-        "piston-tutorial",
+        "survival-hex",
         [1440, 900],
     )
         .build()
@@ -117,7 +122,7 @@ fn main() {
 
         if let Some(render_args) = e.render_args() {
             let adjusted_viewport = render_args.viewport();
-            game.resources.dpi_scale = adjusted_viewport.draw_size[0] as f32 / adjusted_viewport.window_size[0] as f32;
+            game.resources.assets.dpi_scale = adjusted_viewport.draw_size[0] as f32 / adjusted_viewport.window_size[0] as f32;
 
             window.window.make_current();
             window.g2d.draw(
@@ -226,8 +231,8 @@ fn main() {
         if let Some(upd) = e.update_args() {
             game.on_update(upd);
 
-            let mut ui = ui.set_widgets();
-            game.on_gui_update(&mut ui, upd);
+//            let mut ui = ui.set_widgets();
+//            game.on_gui_update(&mut ui, upd);
         }
 
         game.on_event(&e);

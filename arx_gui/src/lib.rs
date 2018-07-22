@@ -1,8 +1,11 @@
 #![allow(unused_imports)]
-#![feature(box_syntax)]
 #![allow(where_clauses_object_safety)]
 #![allow(unused_variables)]
 #![allow(dead_code)]
+
+#![feature(associated_type_defaults)]
+#![feature(box_syntax)]
+#![feature(get_type_id)]
 
 extern crate piston_window;
 extern crate gfx_device_gl;
@@ -25,12 +28,23 @@ extern crate pretty_env_logger;
 extern crate backtrace;
 extern crate num;
 #[macro_use] extern crate derive_more;
-
+extern crate anymap;
+extern crate core;
+#[macro_use] extern crate spectral;
+extern crate multimap;
 
 pub mod gui;
-
 pub use gui::*;
 
 
 pub mod widgets;
 pub use widgets::*;
+
+pub mod compound_widgets;
+
+pub mod events;
+pub use events::*;
+
+
+pub use piston_window::MouseButton;
+pub use piston_window::Key;
