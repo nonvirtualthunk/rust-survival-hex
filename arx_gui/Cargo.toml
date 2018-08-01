@@ -29,6 +29,9 @@ derive_more = "0.11.0"
 anymap = "0.12.1"
 spectral = "*"
 multimap = "0.4.0"
+syn = "0.14"
+quote = "0.6"
+
 
 [dependencies.arx_common]
 path = "../arx_common"

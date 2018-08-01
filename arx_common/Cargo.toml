@@ -17,7 +17,10 @@ dimensioned = "0.6.0"
 num = "0.2.0"
 derive_more = "0.11.0"
 itertools = "0.7.3"
-
+anymap = "0.12.1"
+spectral = "*"
+log = "0.4"
+pretty_env_logger = "0.2"
 
 [dependencies.vecmath]
 git = "https://github.com/PistonDevelopers/vecmath"

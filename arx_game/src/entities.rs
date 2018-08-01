@@ -61,6 +61,22 @@ pub enum Skill {
     IceMagic = 6
 }
 
+impl Skill {
+    pub fn xp_required_for_level(lvl : u32) -> u32 {
+        let lvl = (lvl + 1) as f64; // shift over by 1 so that getting to level 1 doesn't cost 0 xp
+        ((0.5 * lvl.powf(2.0) - 0.5 * lvl) * 10.0) as u32
+    }
+
+    pub fn level_for_xp(xp : u32) -> u32 {
+        for i in 0 .. 100 {
+            if Skill::xp_required_for_level(i) > xp {
+                return i - 1;
+            }
+        }
+        100
+    }
+}
+
 #[derive(Debug)]
 pub struct SkillInfo {
     pub name : &'static str,
@@ -175,7 +191,7 @@ pub struct CharacterData {
     pub action_points: Reduceable<i32>,
     pub move_speed: Oct, // represented in octs
     pub moves: Oct,
-    pub stamina: Reduceable<i32>,
+    pub stamina: Reduceable<Oct>,
     pub sprite : String,
     pub name : String
 }
@@ -230,7 +246,7 @@ impl CombatDataStore for WorldView {
 
 #[derive(Clone, Debug, Default)]
 pub struct SkillData {
-    pub skills : EnumMap<Skill, u32>,
+    pub skill_bonuses: EnumMap<Skill, u32>,
     pub skill_xp : EnumMap<Skill, u32>
 }
 impl EntityData for SkillData {}
@@ -261,7 +277,7 @@ impl Default for CharacterData {
             action_points : Reduceable::new(8),
             moves : Oct::zero(),
             move_speed : Oct::of(1),
-            stamina : Reduceable::new(20),
+            stamina : Reduceable::new(Oct::of(8)),
             sprite : strf("default/defaultium"),
             name : strf("unnamed"),
             graphical_position : None,
@@ -279,23 +295,31 @@ impl CharacterData {
     }
     pub fn can_act(&self) -> bool { self.action_points.cur_value() > 0 }
 
-    pub fn max_moves_remaining(&self) -> Oct {
-        self.moves + self.move_speed * self.action_points.cur_value()
+    pub fn max_moves_remaining(&self, multiplier : f64) -> Oct {
+        self.moves + Oct::of_rounded(self.move_speed.as_f64() * self.action_points.cur_value() as f64 * multiplier)
     }
-    pub fn max_moves_per_turn(&self) -> Oct {
+    pub fn max_moves_per_turn(&self, multiplier : f64) -> Oct {
         self.move_speed * self.action_points.max_value()
     }
 }
 
 impl SkillData {
     pub fn skill_level(&self, skill : Skill) -> u32 {
-        self.skills[skill]
+         self.skill_bonuses[skill] + Skill::level_for_xp(self.skill_xp[skill])
     }
     pub fn skill_xp(&self, skill : Skill) -> u32 {
         self.skill_xp[skill]
     }
     pub fn skill_xp_up(&mut self, skill : Skill, xp : u32) {
         self.skill_xp[skill] = self.skill_xp[skill] + xp;
+    }
+
+    pub fn skill_levels(&self) -> Vec<(Skill, u32)> {
+        let mut res = Vec::new();
+        for (skill,xp) in &self.skill_xp {
+            res.push((skill, self.skill_level(skill)));
+        }
+        res
     }
 }
 
@@ -316,7 +340,7 @@ impl ConstantModifier<SkillData> for SkillXPMod {
 pub struct SkillMod(pub Skill, pub u32);
 impl ConstantModifier<SkillData> for SkillMod {
     fn modify(&self, data: &mut SkillData) {
-        data.skills[self.0] += self.1;
+        data.skill_bonuses[self.0] += self.1;
     }
 }
 
@@ -324,6 +348,13 @@ pub struct ReduceActionsMod(pub u32);
 impl ConstantModifier<CharacterData> for ReduceActionsMod {
     fn modify(&self, data: &mut CharacterData) {
         data.action_points.reduce_by(self.0 as i32);
+    }
+}
+
+pub struct ReduceStaminaMod(pub Oct);
+impl ConstantModifier<CharacterData> for ReduceStaminaMod {
+    fn modify(&self, data: &mut CharacterData) {
+        data.stamina.reduce_by(self.0);
     }
 }
 

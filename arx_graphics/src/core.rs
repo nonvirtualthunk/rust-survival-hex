@@ -31,6 +31,7 @@ pub struct Quad {
     pub rotation: f32,
     pub centered: bool,
     pub size: Option<Vec2f>,
+    pub sub_rect: Option<Rect<f32>>
 }
 
 impl Quad {
@@ -42,6 +43,7 @@ impl Quad {
             image: Image::new(),
             centered: false,
             size: None,
+            sub_rect: None
         }
     }
 
@@ -72,6 +74,10 @@ impl Quad {
         self.size = Some(size);
         self
     }
+    pub fn sub_rect(mut self, rect : Rect<f32>) -> Self {
+        self.sub_rect = Some(rect);
+        self
+    }
 }
 
 pub const DEFAULT_FONT_IDENTIFIER: FontIdentifier = "NotoSans-Regular.ttf";
@@ -85,6 +91,7 @@ pub struct Text {
     pub rounded: bool,
     pub centered_y: bool,
     pub centered_x: bool,
+    pub wrap_to: f32
 }
 
 impl Clone for Text {
@@ -98,6 +105,7 @@ impl Clone for Text {
             rounded: self.rounded,
             centered_y: self.centered_y,
             centered_x: self.centered_x,
+            wrap_to: self.wrap_to
         }
     }
 }
@@ -113,6 +121,7 @@ impl Text {
             rounded: true,
             centered_y: false,
             centered_x: true,
+            wrap_to: 100000000.0
         }
     }
 
@@ -141,9 +150,14 @@ impl Text {
         self.centered_y = y;
         self
     }
+
+    pub fn wrap_to(mut self, wrap_to : f32) -> Self {
+        self.wrap_to = wrap_to;
+        self
+    }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct DrawList {
     pub quads: Vec<Quad>,
     pub text: Vec<Text>,
@@ -225,7 +239,7 @@ impl<'a, 'b : 'a> GraphicsWrapper<'a, 'b> {
             quad.image.rect([-w / 2.0, -h / 2.0, w, h])
         } else {
             quad.image.rect([0.0, 0.0, w, h])
-        };
+        }.maybe_src_rect(quad.sub_rect.map(|r| [r.x as f64 * tex_info.size.x as f64, r.y as f64 * tex_info.size.y as f64, r.w as f64 * tex_info.size.x as f64, r.h as f64 * tex_info.size.y as f64]));
 
         let pos = as_f64(quad.offset);
         let transform = math::multiply(self.context.view, math::translate(pos));

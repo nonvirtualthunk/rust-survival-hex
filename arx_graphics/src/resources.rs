@@ -202,22 +202,27 @@ impl GraphicsAssets {
     pub fn layout_text(&mut self, text : &Text) -> TextLayout {
         let dpi_scale = self.dpi_scale;
         let font = self.font(text.font_identifier);
-        TextLayout::layout_text(text.text.as_str(), font, text.size, dpi_scale)
+        TextLayout::layout_text(text.text.as_str(), font, text.size, dpi_scale, text.wrap_to)
     }
 
     pub fn line_height(&self, font: &RTFont, size :u32) -> f32 {
         TextLayout::line_height(font, size, self.dpi_scale)
     }
 
-    pub fn string_dimensions_no_wrap<'b>(&mut self, font_identifier: FontIdentifier, text: &'b str, size: u32) -> Vec2f {
+
+    pub fn string_dimensions<'b>(&mut self, font_identifier: FontIdentifier, text: &'b str, size: u32, wrap_at : f32) -> Vec2f {
         if text.is_empty() {
             v2(0.0,0.0)
         } else {
             let dpi_scale = self.dpi_scale;
             let font = self.font(font_identifier);
-            let layout = TextLayout::layout_text(text, font, size, dpi_scale);
+            let layout = TextLayout::layout_text(text, font, size, dpi_scale, wrap_at);
 
             layout.dimensions()
         }
+    }
+
+    pub fn string_dimensions_no_wrap<'b>(&mut self, font_identifier: FontIdentifier, text: &'b str, size: u32) -> Vec2f {
+        self.string_dimensions(font_identifier, text, size, 10000000.0)
     }
 }

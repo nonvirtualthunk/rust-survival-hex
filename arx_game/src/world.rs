@@ -646,6 +646,17 @@ impl World {
         let id = ENTITY_ID_COUNTER.fetch_add(1, Ordering::SeqCst) + 1;
         Entity(id)
     }
+
+
+    pub fn random_seed(&self, extra : u8) -> [u8;32] {
+        use std;
+
+        let time_bytes : [u8;8] = unsafe {
+            std::mem::transmute(self.current_time)
+        };
+
+        [time_bytes[0],time_bytes[1],time_bytes[2],time_bytes[3],time_bytes[4],time_bytes[5],time_bytes[6],time_bytes[7],0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,extra]
+    }
 }
 
 pub struct EntityBuilder {
@@ -707,6 +718,15 @@ impl WorldView {
         let index : &EntityIndex<I> = self.entity_indices.get::<EntityIndex<I>>()
             .unwrap_or_else(|| panic!(format!("Index on {:?} not created", unsafe {std::intrinsics::type_name::<I>()})));
         index.index.get(key).cloned()
+    }
+
+    pub fn has_data<T : EntityData>(&self, entity : Entity) -> bool {
+        self.has_data_r::<T>(&entity)
+    }
+    pub fn has_data_r<T : EntityData>(&self, entity : &Entity) -> bool {
+        let data: &DataContainer<T> = self.effective_data.get::<DataContainer<T>>()
+            .unwrap_or_else(|| panic!(format!("Could not retrieve effective data for entity {:?}, looking for data {:?}", entity, unsafe {std::intrinsics::type_name::<T>()})));
+        data.storage.contains_key(&entity)
     }
 
     pub fn events(&self) -> &Vec<Rc<GameEventWrapper>> {

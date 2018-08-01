@@ -26,7 +26,7 @@ use std::fmt::Error;
 
 pub fn animation_elements_for_new_event(world_view : &WorldView, event : GameEvent) -> Vec<Box<AnimationElement>> {
     match event {
-        GameEvent::Attack { attacker, defender, damage_done, hit, .. } => {
+        GameEvent::Strike { attacker, defender, damage_done, hit, .. } => {
             animate_attack(world_view, attacker, defender, damage_done, hit)
         },
         GameEvent::Move { character, from, to, .. } => {
@@ -87,11 +87,6 @@ fn animate_attack(world_view: &WorldView, attacker : Entity, defender: Entity, d
             0.5
         );
 
-        let text_color = Color::new(0.9, 0.2, 0.2, 1.0);
-        let rising_damage_text = TextAnimationElement::new(damage_done.to_string(), 20, defender_pos, text_color, 3.0)
-            .with_delta(CartVec::new(0.0, 1.0), InterpolationType::Linear)
-            .with_blocking_duration(0.0);
-
         animation_group = animation_group
             .with_animation(damage_bar_animation, Some(damage_anim_start_point))
             .with_animation(red_tint_animation, Some(damage_anim_start_point));
@@ -104,6 +99,7 @@ fn animate_attack(world_view: &WorldView, attacker : Entity, defender: Entity, d
     };
     let rising_damage_text = TextAnimationElement::new(msg, 20, defender_pos + CartVec::new(0.0,0.5), color, 3.0)
         .with_delta(CartVec::new(0.0, 1.0), InterpolationType::Linear)
+        .with_end_color(color.with_a(0.0), InterpolationType::Linear)
         .with_blocking_duration(0.0);
 
     let animation_group = animation_group.with_animation(rising_damage_text, Some(damage_anim_start_point));
@@ -136,7 +132,7 @@ impl <T : EntityData, F : Interpolateable<F>, S : Fn(&mut T, F)> EntityFieldAnim
 impl <T : EntityData, F : Interpolateable<F>, S : Fn(&mut T, F)> AnimationElement for EntityFieldAnimation<T,F,S> {
     fn draw(&self, view: &mut WorldView, pcnt_elapsed: f64) -> DrawList {
         if pcnt_elapsed > 1.0 || pcnt_elapsed < 0.0 {
-            println!("Unexpected, pcnt was more than 1: {}", pcnt_elapsed);
+            warn!("Unexpected, pcnt was more than 1: {}", pcnt_elapsed);
         }
         let mut data = view.data_mut::<T>(self.entity);
         let new_value = self.interpolation.interpolate(pcnt_elapsed);

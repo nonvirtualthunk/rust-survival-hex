@@ -10,7 +10,7 @@ use piston_window::*;
 use common::prelude::*;
 
 use core::GameMode;
-use core::normalize_mouse;
+use core::normalize_screen_pos;
 
 use arx_graphics::core::GraphicsWrapper;
 use arx_graphics::animation::AnimationElement;
@@ -22,9 +22,10 @@ use arx_graphics::core::Text;
 use arx_graphics::camera::*;
 use piston_window::math;
 use vecmath;
+use cgmath::InnerSpace;
 use game::core::*;
 use game::events::*;
-use game::actions;
+use game::action_execution;
 use game::world::Entity;
 use game::world_util::*;
 use game::world::ConstantModifier;
@@ -43,11 +44,7 @@ use tactical_gui::TacticalGui;
 use tactical_gui;
 
 use tactical_event_handler;
-
-use conrod::*;
-use conrod::widget::primitive::*;
-use conrod;
-use conrod::Widget;
+use common::Rect;
 
 use std::time::*;
 
@@ -128,6 +125,7 @@ pub struct TacticalMode {
     pub fract_within_event: f64,
     pub event_clock_last_advanced: f64,
     pub last_time: Instant,
+    pub last_update_time: Instant,
     pub player_faction: Entity,
     pub minimum_active_event_clock: GameEventClock,
     event_start_times: Vec<f64>,
@@ -138,7 +136,7 @@ pub struct TacticalMode {
 
 impl TacticalMode {
     pub fn new(gui: &mut GUI) -> TacticalMode {
-        let tile_radius = 32.0;
+        let tile_radius = 35.5;
         let mut camera = Camera2d::new();
         camera.move_speed = tile_radius * 20.0;
         camera.zoom = 1.0;
@@ -153,7 +151,7 @@ impl TacticalMode {
                 draw_size: [256, 256],
                 rect: [0, 0, 256, 256],
             },
-            terrain_renderer: TerrainRenderer {},
+            terrain_renderer: TerrainRenderer::default(),
             unit_renderer: UnitRenderer {},
             display_event_clock: 0,
             last_realtime_clock: 0.0,
@@ -162,6 +160,7 @@ impl TacticalMode {
             fract_within_event: 0.0,
             event_clock_last_advanced: 0.0,
             last_time: Instant::now(),
+            last_update_time: Instant::now(),
             player_faction: Entity::sentinel(),
             minimum_active_event_clock: 0,
             event_start_times: vec![0.0],
@@ -183,13 +182,17 @@ impl TacticalMode {
         }
     }
 
-    pub fn mouse_game_pos(&self) -> Vec2f {
+    pub fn screen_pos_to_game_pos(&self, screen_pos : Vec2f) -> Vec2f {
         let camera_mat = self.camera.matrix(self.viewport);
         let inverse_mat = vecmath::mat2x3_inv(camera_mat);
-        let norm_mouse = normalize_mouse(self.mouse_pos, &self.viewport);
-        let transformed_mouse = math::transform_pos(inverse_mat, [norm_mouse.x as f64, norm_mouse.y as f64]);
-        let mouse_pos = v2(transformed_mouse[0] as f32, transformed_mouse[1] as f32);
-        mouse_pos
+        let norm_screen_pos = normalize_screen_pos(screen_pos, &self.viewport);
+        let transformed_pos = math::transform_pos(inverse_mat, [norm_screen_pos.x as f64, norm_screen_pos.y as f64]);
+        let transformed_pos = v2(transformed_pos[0] as f32, transformed_pos[1] as f32);
+        transformed_pos
+    }
+
+    pub fn mouse_game_pos(&self) -> Vec2f {
+        self.screen_pos_to_game_pos(self.mouse_pos)
     }
 
     pub fn quad(&self, texture_identifier: String, pos: AxialCoord) -> Quad {
@@ -206,23 +209,6 @@ impl TacticalMode {
         astar(&from, |c| c.neighbors().into_iter().map(|c| (c, Cost::new(1.0))), |c| Cost(c.distance(&to)), |c| *c == to)
     }
 
-    pub fn blocking_time_for_event(&self, event: GameEvent) -> f64 {
-        match event {
-            GameEvent::Attack { .. } => 0.75,
-            _ => self.time_for_event(event)
-        }
-    }
-
-    pub fn time_for_event(&self, event: GameEvent) -> f64 {
-        match event {
-            GameEvent::WorldStart => 0.0,
-            GameEvent::Move { .. } => 0.3,
-            GameEvent::Attack { .. } => 3.0,
-            GameEvent::Equip { .. } => 0.0,
-            GameEvent::TurnStart { .. } => 0.0
-        }
-    }
-
     fn blocking_animations_active(&self) -> bool {
         self.animation_elements.iter().any(|e| e.blocking_pcnt_elapsed(self.realtime_clock) < 1.0)
     }
@@ -231,7 +217,6 @@ impl TacticalMode {
         let dt = Instant::now().duration_since(self.last_time).subsec_nanos() as f64 / 1e9f64;
         //        println!("Advancing event clock by {}", dt);
         self.last_time = Instant::now();
-        self.camera.position = self.camera.position + self.camera.move_delta * (dt as f32) * self.camera.move_speed;
         self.last_realtime_clock = self.realtime_clock;
         self.realtime_clock += dt;
 
@@ -304,7 +289,7 @@ impl TacticalMode {
 
             if enemy_data.position.distance(&ai.position) >= r32(1.5) {
                 if let Some(path) = path_any_v(world_view, ai.position, &enemy_data.position.neighbors(), enemy_data.position) {
-                    actions::handle_move(world, *ai_ref, path.0.as_slice())
+                    action_execution::handle_move(world, *ai_ref, path.0.as_slice())
                 } else {
                     println!("No move towards closest enemy, stalling");
                 }
@@ -313,12 +298,12 @@ impl TacticalMode {
             if enemy_data.position.distance(&ai.position) < r32(1.5) {
                 let all_possible_attacks = possible_attacks(world_view, *ai_ref);
                 if let Some(attack) = all_possible_attacks.first() {
-                    actions::handle_attack(world, *ai_ref, *enemy_ref, attack);
+                    action_execution::handle_attack(world, *ai_ref, *enemy_ref, attack);
                 }
             }
         } else {
             if let Some(path) = self.path(cdata.position, cdata.position.neighbor(0)) {
-                actions::handle_move(world, *ai_ref, path.0.as_slice());
+                action_execution::handle_move(world, *ai_ref, path.0.as_slice());
             }
         }
     }
@@ -401,21 +386,38 @@ impl TacticalMode {
         if is_animating {
             DrawList::none()
         } else {
-            let hovered_hex = AxialCoord::from_cartesian(&self.mouse_game_pos(), self.tile_radius);
+            if let Some(hovered_tile_) = self.hovered_tile(world_in.view()) {
+                let hovered_hex = AxialCoord::from_cartesian(&self.mouse_game_pos(), self.tile_radius);
 
-            let mut draw_list = DrawList::of_quad(Quad::new_cart(String::from("ui/hoverHex"), hovered_hex.as_cart_vec()).centered());
+                let mut draw_list = DrawList::of_quad(Quad::new_cart(String::from("ui/hoverHex"), hovered_hex.as_cart_vec()).centered());
 
-            if let Some(selected) = self.selected_character {
-                let sel_c = world_in.view().data::<CharacterData>(selected);
-                if let Some(path_result) = self.path(sel_c.position, hovered_hex) {
-                    let path = path_result.0;
-                    for hex in path {
-                        draw_list = draw_list.add_quad(Quad::new_cart(String::from("ui/feet"), hex.as_cart_vec()).centered());
+                if let Some(selected) = self.selected_character {
+                    let sel_c = world_in.view().data::<CharacterData>(selected);
+                    if let Some(path_result) = self.path(sel_c.position, hovered_hex) {
+                        let path = path_result.0;
+                        for hex in path {
+                            draw_list = draw_list.add_quad(Quad::new_cart(String::from("ui/feet"), hex.as_cart_vec()).centered());
+                        }
                     }
                 }
-            }
 
-            draw_list
+                draw_list
+            } else {
+                DrawList::none()
+            }
+        }
+    }
+
+    fn hovered_tile<'a, 'b>(&'a self, world: &'b WorldView) -> Option<&'b TileData> {
+        let hovered_hex = AxialCoord::from_cartesian(&self.mouse_game_pos(), self.tile_radius);
+        world.tile_opt(hovered_hex)
+    }
+
+    fn current_game_state(&self) -> tactical_gui::GameState {
+        tactical_gui::GameState {
+            display_event_clock: self.display_event_clock,
+            selected_character: self.selected_character,
+            victory: self.victory,
         }
     }
 }
@@ -437,24 +439,26 @@ impl GameMode for TacticalMode {
         world.register_index::<AxialCoord>();
 
         world.attach_world_data(&MapData {
-            min_tile_bound: AxialCoord::new(-10, -10),
-            max_tile_bound: AxialCoord::new(10, 10),
+            min_tile_bound: AxialCoord::new(-30, -30),
+            max_tile_bound: AxialCoord::new(30, 30),
         });
         world.attach_world_data(&TimeData {
             turn_number: 0
         });
 
-        for x in -10..10 {
-            for y in -10..10 {
+        for x in -50..50 {
+            for y in -50..50 {
                 let coord = AxialCoord::new(x, y);
-                let tile = EntityBuilder::new()
-                    .with(TileData {
-                        position: coord,
-                        name: "grass",
-                        move_cost: Oct::of(1),
-                        cover: 0.0,
-                    }).create(world);
-                world.index_entity(tile, coord);
+                if coord.as_cart_vec().magnitude2() < 30.0 * 30.0 {
+                    let tile = EntityBuilder::new()
+                        .with(TileData {
+                            position: coord,
+                            name: "grass",
+                            move_cost: Oct::of(1),
+                            cover: 0.0,
+                        }).create(world);
+                    world.index_entity(tile, coord);
+                }
             }
         }
 
@@ -506,7 +510,7 @@ impl GameMode for TacticalMode {
             .with(InventoryData::default())
             .create(world);
 
-        actions::equip_item(world, archer, bow);
+        action_execution::equip_item(world, archer, bow);
 
         let create_monster_at = |world_in: &mut World, pos: AxialCoord| {
             EntityBuilder::new()
@@ -541,14 +545,14 @@ impl GameMode for TacticalMode {
         world.add_event(GameEvent::WorldStart);
     }
 
-    fn update(&mut self, _: &mut World, _: f64) {}
+    fn update(&mut self, _: &mut World, _: f64) {
+        let dt = Instant::now().duration_since(self.last_update_time).subsec_nanos() as f64 / 1e9f64;
+        self.last_update_time = Instant::now();
+        self.camera.position = self.camera.position + self.camera.move_delta * (dt as f32) * self.camera.move_speed;
+    }
 
     fn update_gui(&mut self, world: &mut World, ui: &mut GUI, frame_id: Option<Wid>) {
-        self.gui.update_gui(world, ui, frame_id, tactical_gui::GameState {
-            display_event_clock: self.display_event_clock,
-            selected_character: self.selected_character,
-            victory: self.victory,
-        });
+        self.gui.update_gui(world, ui, frame_id, self.current_game_state());
     }
 
     fn draw(&mut self, world_in: &mut World, g: &mut GraphicsWrapper) {
@@ -586,25 +590,28 @@ impl GameMode for TacticalMode {
             }
         }
 
+        let min_game_pos = self.screen_pos_to_game_pos(v2(0.0,0.0));
+        let max_game_pos = self.screen_pos_to_game_pos(v2(self.viewport.window_size[0] as f32, self.viewport.window_size[1] as f32));
+
+        let culling_rect = Rect::from_corners(min_game_pos.x / self.tile_radius, max_game_pos.y / self.tile_radius, max_game_pos.x / self.tile_radius, min_game_pos.y / self.tile_radius);
+
         // draw list for the map tiles
-        let terrain_draw_list = self.terrain_renderer.render_tiles(&world_view, self.display_event_clock);
+        let terrain_draw_list = self.terrain_renderer.render_tiles(&world_view, self.display_event_clock, culling_rect);
         // draw list for the units and built-in unit UI elements
         let unit_draw_list = self.unit_renderer.render_units(&world_view, self.display_event_clock, self.selected_character);
         // draw list for hover hex and foot icons
         let movement_ui_draw_list = self.create_move_ui_draw_list(world_in);
 
+        let ui_draw_list = self.gui.draw(&world_view, self.current_game_state());
+
         self.render_draw_list(terrain_draw_list, g);
+        self.render_draw_list(ui_draw_list, g);
         self.render_draw_list(movement_ui_draw_list, g);
         self.render_draw_list(unit_draw_list, g);
         self.render_draw_list(anim_draw_list, g);
 
         let gui_camera = Camera2d::new();
-//        gui_camera.zoom = 0.5;
         g.context.view = gui_camera.matrix(self.viewport);
-
-        self.gui.draw(world_in, g)
-
-//        g.draw_text(Text::new(String::from("This is some example text, iiiiiiiiiiiiiii"), 20).offset(v2(0.0,0.0)).font("NotoSerif-Regular.ttf"));
     }
 
 
@@ -616,7 +623,6 @@ impl GameMode for TacticalMode {
             UIEvent::MouseRelease { pos, button } if self.at_latest_event(world) => match button {
                 MouseButton::Left => {
                     let mouse_pos = self.mouse_game_pos();
-                    info!("Mouse released, raw pos {:?}, game_pos {:?}", self.mouse_pos, mouse_pos);
                     let clicked_coord = AxialCoord::from_cartesian(&mouse_pos, self.tile_radius);
 
                     let world_view = world.view_at_time(self.display_event_clock);
@@ -632,12 +638,12 @@ impl GameMode for TacticalMode {
                                     if sel_data.can_act() {
                                         let all_possible_attacks = possible_attacks(&world_view, cur_sel);
                                         if let Some(attack) = all_possible_attacks.first() {
-                                            actions::handle_attack(world, cur_sel, found_ref, attack);
+                                            action_execution::handle_attack(world, cur_sel, found_ref, attack);
                                         } else {
-                                            println!("Cannot attack, there are no attacks to use!");
+                                            warn!("Cannot attack, there are no attacks to use!");
                                         }
                                     } else {
-                                        println!("Cannot attack, no actions remaining");
+                                        warn!("Cannot attack, no actions remaining");
                                     }
                                 } else {
                                     self.selected_character = Some(found_ref);
@@ -649,12 +655,14 @@ impl GameMode for TacticalMode {
                         }
                     } else {
                         if let Some(sel_c) = self.selected_character {
-                            let cur_sel_data = world_view.character(sel_c);
-                            if cur_sel_data.faction == self.player_faction {
-                                let start_pos = world_view.character(sel_c).position;
-                                if let Some(path_result) = self.path(start_pos, clicked_coord) {
-                                    let path = path_result.0;
-                                    actions::handle_move(world, sel_c, path.as_slice());
+                            if let Some(hovered_) = self.hovered_tile(world.view()) {
+                                let cur_sel_data = world_view.character(sel_c);
+                                if cur_sel_data.faction == self.player_faction {
+                                    let start_pos = world_view.character(sel_c).position;
+                                    if let Some(path_result) = self.path(start_pos, clicked_coord) {
+                                        let path = path_result.0;
+                                        action_execution::handle_move(world, sel_c, path.as_slice());
+                                    }
                                 }
                             }
                         }

@@ -41,5 +41,9 @@ version = "0.1.0"
 path = "../arx_gui"
 version = "0.1.0"
 
+[dependencies.arx_gui_macros]
+path = "../arx_gui_macros"
+version = "0.1.0"
+
 [dependencies.vecmath]
 git = "https://github.com/PistonDevelopers/vecmath"

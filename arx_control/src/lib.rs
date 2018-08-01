@@ -1,8 +1,10 @@
 #![allow(unused_imports)]
-#![feature(box_syntax)]
 #![allow(where_clauses_object_safety)]
 #![allow(unused_variables)]
 #![allow(dead_code)]
+
+#![feature(box_syntax)]
+#![feature(nll)]
 
 extern crate piston_window;
 extern crate gfx_device_gl;
@@ -26,6 +28,8 @@ extern crate noisy_float;
 extern crate itertools;
 extern crate pretty_env_logger;
 #[macro_use] extern crate log;
+extern crate arx_gui;
+#[macro_use] extern crate arx_gui_macros;
 
 pub mod tactical;
 
@@ -36,3 +40,7 @@ pub mod core;
 pub use core::GameMode;
 
 mod tactical_event_handler;
+
+mod control_gui;
+
+mod control_events;

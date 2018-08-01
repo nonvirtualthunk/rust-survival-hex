@@ -6,6 +6,7 @@
 #![feature(associated_type_defaults)]
 #![feature(box_syntax)]
 #![feature(get_type_id)]
+#![feature(specialization)]
 
 extern crate piston_window;
 extern crate gfx_device_gl;
@@ -36,6 +37,8 @@ extern crate multimap;
 pub mod gui;
 pub use gui::*;
 
+mod gui_event_handling;
+mod gui_rendering;
 
 pub mod widgets;
 pub use widgets::*;

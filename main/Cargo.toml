@@ -45,6 +45,10 @@ version = "0.1.0"
 path = "../arx_control"
 version = "0.1.0"
 
+[dependencies.arx_gui]
+path = "../arx_gui"
+version = "0.1.0"
+
 [dependencies.arx_common]
 path = "../arx_common"
 version = "0.1.0"

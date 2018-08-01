@@ -9,6 +9,10 @@ extern crate num;
 #[macro_use]
 extern crate derive_more;
 #[macro_use] extern crate itertools;
+extern crate anymap;
+#[macro_use] extern crate spectral;
+extern crate pretty_env_logger;
+#[macro_use] extern crate log;
 
 pub mod hex;
 pub use hex::*;
@@ -24,3 +28,9 @@ pub use color::*;
 
 pub mod math;
 pub use math::*;
+
+pub mod event_bus;
+pub use event_bus::*;
+
+pub mod search;
+pub use search::*;

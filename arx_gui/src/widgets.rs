@@ -1,33 +1,47 @@
-use common::Color;
-
-use gui::*;
-use graphics::ImageIdentifier;
-
-use backtrace::Backtrace;
-use events::UIEvent;
-use events::WidgetEvent;
-
 use anymap;
 use anymap::any::CloneAny;
+use anymap::AnyMap;
+use backtrace::Backtrace;
+use common::Color;
+use common::prelude::*;
+pub use compound_widgets::*;
+use events::EventPosition;
+use events::ui_event_types;
+use events::UIEvent;
+use events::UIEventType;
+use events::WidgetEvent;
+use graphics::DrawList;
+use graphics::FontIdentifier;
+use graphics::ImageIdentifier;
+use gui::*;
+use piston_window::keyboard;
+use piston_window::MouseButton;
 use std::any::Any;
 use std::any::TypeId;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::mem;
 use std::rc::Rc;
-use events::EventPosition;
-use std::collections::HashMap;
-use anymap::AnyMap;
+use std::sync::Arc;
+use std::sync::atomic::{ATOMIC_USIZE_INIT, AtomicUsize, Ordering};
 use std::sync::Mutex;
-use piston_window::MouseButton;
-use common::prelude::*;
-use std::cell::RefCell;
-use piston_window::keyboard;
 use ui_event_types::*;
-use events::UIEventType;
-use events::ui_event_types;
 
-use graphics::FontIdentifier;
+pub static WIDGET_ID_COUNTER: AtomicUsize = ATOMIC_USIZE_INIT;
 
-pub use compound_widgets::*;
+
+
+pub type WidIntern = usize;
+
+#[derive(Eq, PartialEq, Ord, PartialOrd, Hash, Clone, Copy, Debug, Display)]
+pub struct Wid(WidIntern);
+
+pub fn create_wid() -> Wid {
+    let id = WIDGET_ID_COUNTER.fetch_add(1, Ordering::SeqCst) + 1;
+    Wid(id)
+}
+
+pub static NO_WID: Wid = Wid(0);
 
 
 thread_local! {
@@ -35,80 +49,139 @@ thread_local! {
     pub static WIDGET_CALLBACKS : RefCell<WidgetCallbackRegistry> = RefCell::new(WidgetCallbackRegistry::new());
 }
 
-pub fn execute_global_widget_registry_callback<State : 'static>(id: u32, state: &mut State, evt: &UIEvent) {
+pub fn execute_global_widget_registry_callback<State: 'static>(id: u32, state: &mut State, evt: &UIEvent) {
     WIDGET_CALLBACKS.with(|registry| registry.borrow().execute_callback(id, state, evt))
 }
 
-pub fn execute_global_widget_registry_callback_2<State : 'static, OtherState : 'static>(id: u32, state: &mut State, other : &mut OtherState, evt: &UIEvent) {
+pub fn execute_global_widget_registry_callback_2<State: 'static, OtherState: 'static>(id: u32, state: &mut State, other: &mut OtherState, evt: &UIEvent) {
     WIDGET_CALLBACKS.with(|registry| registry.borrow().execute_callback_2(id, state, other, evt))
 }
 
 
-#[derive(Clone,PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct Border {
-    pub width : u8,
-    pub color : Color,
-    pub sides : BorderSides
+    pub width: u8,
+    pub color: Color,
+    pub sides: BorderSides,
 }
+
 impl Default for Border {
     fn default() -> Self {
-        Border { width : 0, color : Color::black(), sides : BorderSides::all() }
+        Border { width: 0, color: Color::black(), sides: BorderSides::all() }
     }
 }
 
-#[derive(Clone,PartialEq,Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct BorderSides(u8);
 
 impl BorderSides {
     pub fn all() -> BorderSides { BorderSides(0xff) }
 
-    pub fn three_sides(a : Alignment, b : Alignment, c : Alignment) -> BorderSides {
+    pub fn three_sides(a: Alignment, b: Alignment, c: Alignment) -> BorderSides {
         BorderSides(BorderSides::alignment_to_flag(a) | BorderSides::alignment_to_flag(b) | BorderSides::alignment_to_flag(c))
     }
-    pub fn two_sides(a : Alignment, b : Alignment) -> BorderSides {
+    pub fn two_sides(a: Alignment, b: Alignment) -> BorderSides {
         BorderSides(BorderSides::alignment_to_flag(a) | BorderSides::alignment_to_flag(b))
     }
-    pub fn one_side(a : Alignment) -> BorderSides {
+    pub fn one_side(a: Alignment) -> BorderSides {
         BorderSides(BorderSides::alignment_to_flag(a))
     }
-
-    pub fn has_side(&self, a : Alignment) -> bool {
-        (self.0 & BorderSides::alignment_to_flag(a)) != 0
+    pub fn none() -> BorderSides {
+        BorderSides(0)
     }
 
-    fn alignment_to_flag (a : Alignment) -> u8 {
+    pub fn without_side(&self, side : Alignment) -> BorderSides {
+        BorderSides(self.0 & (!(BorderSides::alignment_to_flag(side))))
+    }
+    pub fn with_side(&self, side : Alignment) -> BorderSides {
+        BorderSides(self.0 | (BorderSides::alignment_to_flag(side)))
+    }
+
+    pub fn has_side(&self, a: Alignment) -> bool {
+        (self.0 & BorderSides::alignment_to_flag(a)) != 0
+    }
+    pub fn has_near_side_for_axis(&self, axis: usize) -> bool {
+        match axis {
+            0 => self.has_side(Alignment::Left),
+            1 => self.has_side(Alignment::Top),
+            _ => {
+                error!("Tried to get the near side for a non two dimensional axis");
+                false
+            }
+        }
+    }
+    pub fn has_far_side_for_axis(&self, axis: usize) -> bool {
+        match axis {
+            0 => self.has_side(Alignment::Right),
+            1 => self.has_side(Alignment::Bottom),
+            _ => {
+                error!("Tried to get the near side for a non two dimensional axis");
+                false
+            }
+        }
+    }
+
+    fn alignment_to_flag(a: Alignment) -> u8 {
         match a {
-            Alignment::Left =>      0b00000001,
-            Alignment::Right =>     0b00000010,
-            Alignment::Top =>       0b00000100,
-            Alignment::Bottom =>    0b00001000
+            Alignment::Left => 0b00000001,
+            Alignment::Right => 0b00000010,
+            Alignment::Top => 0b00000100,
+            Alignment::Bottom => 0b00001000
         }
     }
 }
 
 #[derive(Clone, PartialEq, Debug)]
+pub enum ImageSegmentation {
+    None,
+    Horizontal,
+    Vertical,
+    Sides,
+}
+
+impl Default for ImageSegmentation {
+    fn default() -> Self {
+        ImageSegmentation::None
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub enum TextWrap {
+    ToMaximumOf(UIUnits),
+    WithinParent
+}
+
+#[derive(Clone, PartialEq, Debug)]
 pub enum WidgetType {
-    Text { text: String, font: Option<FontIdentifier>, font_size: u32, wrap: bool },
-    Window { image: Option<String> },
+    Text { text: String, font: Option<FontIdentifier>, font_size: u32, wrap: Option<TextWrap> },
+    Window { image: Option<String>, segment: ImageSegmentation },
 }
 
 impl WidgetType {
     pub fn text<S>(text: S, font_size: u32) -> WidgetType where S: Into<String> {
-        WidgetType::Text { text: text.into(), font_size, font: None, wrap: false }
+        WidgetType::Text { text: text.into(), font_size, font: None, wrap: None }
+    }
+    pub fn wrapped_text<S>(text: S, font_size: u32, wrap : TextWrap) -> WidgetType where S: Into<String> {
+        WidgetType::Text { text: text.into(), font_size, font: None, wrap : Some(wrap) }
     }
     pub fn window() -> WidgetType {
-        WidgetType::Window { image: None }
+        WidgetType::Window { image: None, segment: ImageSegmentation::None }
     }
     pub fn image<S>(image: S) -> WidgetType where S: Into<String> {
-        WidgetType::Window { image: Some(image.into()) }
+        WidgetType::Window { image: Some(image.into()), segment: ImageSegmentation::None }
     }
 
-    pub fn set_text<S>(&mut self, text_in : S) where S : Into<String>{
+    pub fn set_text<S>(&mut self, text_in: S) where S: Into<String> {
         match self {
             WidgetType::Text { ref mut text, .. } => *text = text_in.into(),
             _ => ()
         };
-
+    }
+    pub fn set_text_wrap(&mut self, wrap_in : Option<TextWrap>) {
+        match self {
+            WidgetType::Text { ref mut wrap, .. } => *wrap = wrap_in,
+            _ => ()
+        }
     }
 }
 
@@ -116,6 +189,7 @@ impl WidgetType {
 pub enum EventConsumption {
     EventTypes(u32),
     Key(keyboard::Key),
+    Compound(Box<EventConsumption>, Box<EventConsumption>)
 }
 
 impl EventConsumption {
@@ -136,7 +210,21 @@ impl EventConsumption {
         EventConsumption::EventTypes(MOUSE_PRESS.bit_flag | MOUSE_RELEASE.bit_flag)
     }
     pub fn mouse_events() -> EventConsumption {
-        EventConsumption::EventTypes(MOUSE_PRESS.bit_flag | MOUSE_RELEASE.bit_flag | MOUSE_MOVE.bit_flag | DRAG.bit_flag | MOUSE_POSITION.bit_flag)
+        EventConsumption::EventTypes(MOUSE_PRESS.bit_flag | MOUSE_RELEASE.bit_flag | MOUSE_MOVE.bit_flag | MOUSE_DRAG.bit_flag | MOUSE_POSITION.bit_flag)
+    }
+    pub fn enter_and_leave() -> EventConsumption {
+        EventConsumption::EventTypes(MOUSE_ENTERED.bit_flag | MOUSE_EXITED.bit_flag)
+    }
+    pub fn widget_events() -> EventConsumption {
+        EventConsumption::EventTypes(WIDGET_EVENT.bit_flag)
+    }
+    pub fn and(&self, other : &EventConsumption) -> EventConsumption {
+        if let EventConsumption::EventTypes(type_flags_a) = self {
+            if let EventConsumption::EventTypes(type_flags_b) = other {
+                return EventConsumption::EventTypes(*type_flags_a | *type_flags_b);
+            }
+        }
+        EventConsumption::Compound(box self.clone(), box other.clone())
     }
 
     pub fn consumes_event(&self, e: &UIEvent) -> bool {
@@ -146,8 +234,21 @@ impl EventConsumption {
                 UIEvent::KeyPress { key } => key == consumed_key,
                 UIEvent::KeyRelease { key } => key == consumed_key,
                 _ => false
-            }
+            },
+            EventConsumption::Compound(a,b) => a.consumes_event(e) || b.consumes_event(e)
         }
+    }
+}
+
+
+pub trait CustomWidgetRenderer {
+    fn render(&self, widget: &Widget, state: &WidgetState, pixel_pos: Vec2f, pixel_dim: Vec2f) -> DrawList;
+    fn type_id(&self) -> TypeId;
+}
+
+impl PartialEq<CustomWidgetRenderer> for CustomWidgetRenderer {
+    fn eq(&self, other: &CustomWidgetRenderer) -> bool {
+        self.type_id() == other.type_id()
     }
 }
 
@@ -158,12 +259,71 @@ pub enum WidgetState {
     Slider { current_value: f64 },
     Button { pressed: bool },
     Text { text: String },
+    Tab { active_tab: u32, tabs: Vec<Wid>, tab_buttons: Vec<Wid> },
 }
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Sizing {
+    PcntOfParent(f32),
+    DeltaOfParent(UIUnits),
+    Constant(UIUnits),
+    Derived,
+    SurroundChildren,
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Positioning {
+    PcntOfParent(f32),
+    CenteredInParent,
+    Constant(UIUnits),
+    DeltaOfWidget(Wid, UIUnits, Alignment),
+}
+
+impl Positioning {
+    pub fn origin() -> Positioning { Positioning::Constant(0.0.ux()) }
+    pub fn pcnt_of_parent(pcnt : f32) -> Positioning { Positioning::PcntOfParent(pcnt) }
+    pub fn centered() -> Positioning { Positioning::CenteredInParent }
+    pub fn px(n : i32) -> Positioning { Positioning::Constant(n.px()) }
+    pub fn ux(f : f32) -> Positioning { Positioning::Constant(f.ux()) }
+    pub fn constant(uiu: UIUnits) -> Positioning { Positioning::Constant(uiu) }
+    pub fn below(other_widget : &Widget, delta_units : UIUnits) -> Positioning { Positioning::delta_of_widget(other_widget, delta_units, Alignment::Bottom) }
+    pub fn above(other_widget : &Widget, delta_units : UIUnits) -> Positioning { Positioning::delta_of_widget(other_widget, delta_units, Alignment::Top) }
+    pub fn left_of(other_widget : &Widget, delta_units : UIUnits) -> Positioning { Positioning::delta_of_widget(other_widget, delta_units, Alignment::Left) }
+    pub fn right_of(other_widget : &Widget, delta_units : UIUnits) -> Positioning { Positioning::delta_of_widget(other_widget, delta_units, Alignment::Right) }
+    pub fn delta_of_widget(other_widget: &Widget, delta_units :UIUnits, alignment : Alignment) -> Positioning {
+        Positioning::DeltaOfWidget(other_widget.id(), delta_units, alignment)
+    }
+}
+impl Default for Positioning {
+    fn default() -> Self {
+        Positioning::origin()
+    }
+}
+impl Sizing {
+    pub fn match_parent() -> Sizing { Sizing::PcntOfParent(1.0f32) }
+    pub fn surround_children() -> Sizing { Sizing::SurroundChildren }
+    pub fn pcnt_of_parent(f: f32) -> Sizing { Sizing::PcntOfParent(f) }
+    pub fn ux(ux : f32) -> Sizing { Sizing::Constant(ux.ux()) }
+    pub fn px(px : i32) -> Sizing { Sizing::Constant(px.px()) }
+    pub fn derived() -> Sizing { Sizing::Derived }
+    pub fn relative(uiu : UIUnits) -> Sizing { Sizing::DeltaOfParent(uiu) }
+    pub fn constant(uiu : UIUnits) -> Sizing { Sizing::Constant(uiu) }
+}
+
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+pub enum Alignment {
+    Top,
+    Left,
+    Right,
+    Bottom,
+}
+
 
 #[derive(Clone, PartialEq)]
 pub struct Widget {
+    pub name : Option<Str>,
     pub callbacks: Vec<u32>,
-    pub id: Wid,
+    id: Wid,
     pub parent_id: Option<Wid>,
     pub widget_type: WidgetType,
     pub size: [Sizing; 2],
@@ -174,15 +334,17 @@ pub struct Widget {
     pub margin: UIUnits,
     pub showing: bool,
     pub accepts_focus: bool,
+    pub ignores_parent_bounds : bool,
     pub state_override: Option<WidgetState>,
     pub event_consumption: EventConsumption,
+    pub custom_draw: Option<Arc<CustomWidgetRenderer>>,
 }
 
 
 impl Widget {
     pub fn new(widget_type: WidgetType) -> Widget {
         Widget {
-            id: NO_WID,
+            id: create_wid(),
             parent_id: None,
             widget_type,
             size: [Sizing::Constant(10.0.ux()), Sizing::Constant(10.0.ux())],
@@ -196,13 +358,46 @@ impl Widget {
             callbacks: Vec::new(),
             event_consumption: EventConsumption::none(),
             accepts_focus: false,
+            custom_draw: None,
+            ignores_parent_bounds: false,
+            name : None
         }
+    }
+
+    pub fn id(&self) -> Wid {
+        if self.id == NO_WID {
+            error!("Attempting to access the ID of a widget that has not been initialized, this is basically never a good idea {:?}", Backtrace::new());
+        }
+        self.id
+    }
+
+    pub fn has_id(&self) -> bool {
+        self.id != NO_WID
+    }
+
+    pub fn set_id(&mut self, wid : Wid) {
+        self.id = wid;
+    }
+
+    pub fn clear_id(&mut self) {
+        self.set_id(NO_WID);
+    }
+
+    pub fn div() -> Widget {
+        Widget::new(WidgetType::Window { image : None, segment : ImageSegmentation::None })
+            .color(Color::clear())
+            .size(Sizing::SurroundChildren, Sizing::SurroundChildren)
     }
 
     pub fn image<S>(image: S, color: Color, border_width: u8) -> Widget where S: Into<String> {
         Widget::new(WidgetType::image(image))
             .color(color)
-            .border(Border { color : Color::black(), width : border_width, sides : BorderSides::all() })
+            .border(Border { color: Color::black(), width: border_width, sides: BorderSides::all() })
+    }
+
+    pub fn segmented_image<S>(image: S, color: Color, segment: ImageSegmentation) -> Widget where S: Into<String> {
+        Widget::new(WidgetType::Window { image: Some(image.into()), segment })
+            .color(color)
     }
 
     pub fn text<S>(text: S, font_size: u32) -> Widget where S: Into<String> {
@@ -211,129 +406,22 @@ impl Widget {
             .size(Sizing::Derived, Sizing::Derived)
     }
 
+    pub fn wrapped_text<S>(text: S, font_size: u32, wrap : TextWrap) -> Widget where S: Into<String> {
+        Widget::new(WidgetType::wrapped_text(text, font_size, wrap))
+            .color(Color::black())
+            .size(Sizing::Derived, Sizing::Derived)
+    }
+
     pub fn window(color: Color, border_width: u8) -> Widget {
         Widget::new(WidgetType::window())
             .color(color)
-            .border(Border { color : Color::black(), width: border_width, sides : BorderSides::all() })
+            .border(Border { color: Color::black(), width: border_width, sides: BorderSides::all() })
     }
 
     pub fn none() -> Widget {
-        Widget::new(WidgetType::Window { image: None })
+        Widget::new(WidgetType::Window { image: None, segment: ImageSegmentation::None })
     }
 
-    pub fn widget_type(mut self, widget_type: WidgetType) -> Self {
-        self.set_widget_type(widget_type);
-        self
-    }
-    pub fn set_widget_type(&mut self, widget_type: WidgetType) -> &mut Self {
-        self.widget_type = widget_type;
-        self
-    }
-
-    pub fn modify_widget_type<F : Fn(&mut WidgetType)>(&mut self, func: F) -> &mut Self {
-        (func)(&mut self.widget_type);
-        self
-    }
-
-    pub fn showing(mut self, showing: bool) -> Self {
-        self.set_showing(showing);
-        self
-    }
-    pub fn set_showing(&mut self, showing: bool) -> &mut Self {
-        self.showing = showing;
-        self
-    }
-    pub fn set_color(&mut self, color: Color) -> &mut Self {
-        self.color = color;
-        self
-    }
-    pub fn color(mut self, color: Color) -> Self {
-        self.set_color(color);
-        self
-    }
-    pub fn set_border(&mut self, border: Border) -> &mut Self {
-        self.border = border;
-        self
-    }
-    pub fn border(mut self, border: Border) -> Self {
-        self.set_border(border);
-        self
-    }
-    pub fn border_width(mut self, border_width : u8) -> Self {
-        self.border.width = border_width;
-        self
-    }
-    pub fn border_color(mut self, border_color : Color) -> Self {
-        self.border.color = border_color;
-        self
-    }
-    pub fn border_sides(mut self, border_sides : BorderSides) -> Self {
-        self.border.sides = border_sides;
-        self
-    }
-
-    pub fn set_parent(&mut self, parent: &Widget) -> &mut Self {
-        if parent.id == NO_WID {
-            error!("Attempting to add a widget to a parent that has no ID, this is not acceptable");
-        }
-        self.parent_id = Some(parent.id);
-        self
-    }
-    pub fn parent(mut self, parent: &Widget) -> Self {
-        self.set_parent(parent);
-        self
-    }
-    pub fn parent_id(mut self, parent: Wid) -> Self {
-        if parent == NO_WID {
-            error!("Attempting to add a widget to a parent that has no ID, this is not acceptable");
-        }
-        self.parent_id = Some(parent);
-        self
-    }
-
-    pub fn position(mut self, x: Positioning, y: Positioning) -> Self {
-        self.set_position(x, y);
-        self
-    }
-    pub fn set_position(&mut self, x: Positioning, y: Positioning) {
-        self.position = [x, y];
-    }
-    pub fn x(mut self, x: Positioning) -> Self {
-        self.position[0] = x;
-        self
-    }
-    pub fn y(mut self, y: Positioning) -> Self {
-        self.position[1] = y;
-        self
-    }
-    pub fn alignment(mut self, x: Alignment, y: Alignment) -> Self {
-        if (x == Alignment::Top || x == Alignment::Bottom) && (y == Alignment::Left || y == Alignment::Right) {
-            self.alignment = [y, x];
-        } else {
-            self.alignment = [x, y];
-        }
-        self
-    }
-    pub fn size(mut self, w: Sizing, h: Sizing) -> Self {
-        self.size = [w, h];
-        self
-    }
-    pub fn width(mut self, w: Sizing) -> Self {
-        self.size[0] = w;
-        self
-    }
-    pub fn height(mut self, h: Sizing) -> Self {
-        self.size[1] = h;
-        self
-    }
-    pub fn event_consumption(mut self, consumption: EventConsumption) -> Self {
-        self.event_consumption = consumption;
-        self
-    }
-    pub fn accepts_focus(mut self, accept: bool) -> Self {
-        self.accepts_focus = accept;
-        self
-    }
     pub fn reapply(&mut self, gui: &mut GUI) {
         if !self.validate() {
             error!("Constructing invalid widget\n{:?}", Backtrace::new());
@@ -362,15 +450,26 @@ impl Widget {
         }
     }
 
-    pub fn with_callback<State : 'static, U: Fn(&mut State, &UIEvent) + 'static>(mut self, function: U) -> Self {
+    pub fn add_callback<State: 'static, U: Fn(&mut State, &UIEvent) + 'static>(&mut self, function: U) -> &mut Self {
         let new_id = WIDGET_CALLBACKS.with(|widget_callbacks| widget_callbacks.borrow_mut().add_callback(function));
         self.callbacks.push(new_id);
         self
     }
-    pub fn with_callback_2<State : 'static, OtherState : 'static, U: Fn(&mut State, &mut OtherState, &UIEvent) + 'static>(mut self, function : U) -> Self {
+    pub fn with_callback<State: 'static, U: Fn(&mut State, &UIEvent) + 'static>(mut self, function: U) -> Self {
+        self.add_callback(function);
+        self
+    }
+    pub fn add_callback_2<State: 'static, OtherState: 'static, U: Fn(&mut State, &mut OtherState, &UIEvent) + 'static>(&mut self, function: U) -> &mut Self {
         let new_id = WIDGET_CALLBACKS.with(|widget_callbacks| widget_callbacks.borrow_mut().add_callback_2(function));
         self.callbacks.push(new_id);
         self
+    }
+    pub fn with_callback_2<State: 'static, OtherState: 'static, U: Fn(&mut State, &mut OtherState, &UIEvent) + 'static>(mut self, function: U) -> Self {
+        self.add_callback_2(function);
+        self
+    }
+    pub fn clear_callbacks(&mut self) {
+        self.callbacks.clear();
     }
 
     // -------------------------------------------------- private functions -----------------------------------------------------------
@@ -392,18 +491,12 @@ impl Widget {
         }
     }
     fn validate(&self) -> bool {
-//        if self.parent_id.is_none() {
-//            if Widget::parent_based_size(self.size[0]) || Widget::parent_based_size(self.size[1]) ||
-//                Widget::parent_based_pos(self.position[0]) || Widget::parent_based_pos(self.position[1]) {
-//                return false;
-//            }
-//        }
         if self.alignment[0] == Alignment::Top || self.alignment[0] == Alignment::Bottom ||
             self.alignment[1] == Alignment::Left || self.alignment[1] == Alignment::Right {
             error!("Widget created that has nonsensical alignment");
             return false;
         }
-        if self.accepts_focus && !self.event_consumption.consumes_event(&UIEvent::MouseRelease { button: MouseButton::Left, pos: EventPosition::absolute(v2(0.0, 0.0), v2(0.0,0.0)) }) {
+        if self.accepts_focus && !self.event_consumption.consumes_event(&UIEvent::MouseRelease { button: MouseButton::Left, pos: EventPosition::absolute(v2(0.0, 0.0), v2(0.0, 0.0)) }) {
             error!("Widget created that theoretically accepts focus, but ignores mouse events that would give it focus");
             return false;
         }
@@ -418,42 +511,237 @@ impl Default for Widget {
 }
 
 
-//pub trait CompoundWidget {
-//    fn main_widget(&self) -> &Widget;
-//
-//    fn main_widget_mut(&mut self) -> &mut Widget;
-////    fn on_main_widget<F : FnMut(Widget) -> Widget>(&mut self, f : F) -> &mut Self;
-//
-//    fn position(&mut self, x: Positioning, y: Positioning) -> &mut Self {
-//        self.main_widget_mut().set_position(x,y);
-//        self
-//    }
-//
-////    fn parent(&mut self, parent: &Widget) -> &mut Self {
-//////        self.on_main_widget(|w| w.parent(parent))
-////    }
-////
-////    fn width(&mut self, width: Sizing) -> &mut Self {
-//////        self.on_main_widget(|w| w.width(width))
-////    }
-//}
-//
-//impl CompoundWidget for Button {
-//    fn main_widget(&self) -> &Widget {
-//        &self.body
-//    }
-//
-//
-//    fn main_widget_mut(&mut self) -> &mut Widget {
-//        &mut self.body
-//    }
-//
-////    fn on_main_widget<F: FnMut(Widget) -> Widget>(&mut self, mut f: F) -> &mut Self {
-////        (f)(self.body);
-////        self
-////    }
-//}
+pub trait WidgetContainer {
+    fn for_all_widgets<F: FnMut(&mut Widget)>(&mut self, func: F);
+}
 
+pub trait DelegateToWidget where Self: Sized {
+    fn id(&self) -> Wid {
+        self.as_widget_immut().id
+    }
+    fn signifier(&self) -> String {
+        if let Some(name) = self.as_widget_immut().name {
+            String::from(name)
+        } else {
+            format!("{:?}", self.id())
+        }
+    }
+    fn named(mut self, name : Str) -> Self {
+        self.as_widget().name = Some(name);
+        self
+    }
+    fn position(mut self, x: Positioning, y: Positioning) -> Self {
+        self.set_position(x,y);
+        self
+    }
+    fn centered(self) -> Self {
+        self.position(Positioning::centered(), Positioning::centered())
+    }
+    fn set_position(&mut self, x : Positioning, y : Positioning) -> &mut Self {
+        self.as_widget().position = [x,y];
+        self
+    }
+    fn size(mut self, w: Sizing, h: Sizing) -> Self {
+        self.set_size(w,h);
+        self
+    }
+    fn fixed_size(mut self, w : UIUnits, h : UIUnits) -> Self {
+        self.set_size(Sizing::constant(w), Sizing::constant(h));
+        self
+    }
+    fn parent(mut self, p: &Widget) -> Self {
+        self.set_parent(p);
+        self
+    }
+    fn set_parent(&mut self, p: &Widget) -> &mut Self {
+        self.set_parent_id(p.id);
+        self
+    }
+    fn ignore_parent_bounds(mut self) -> Self {
+        self.as_widget().ignores_parent_bounds = true;
+        self
+    }
+    fn color(mut self, c: Color) -> Self {
+        self.set_color(c);
+        self
+    }
+    fn set_color(&mut self, c: Color) -> &mut Self {
+        self.as_widget().color = c;
+        self
+    }
+
+    fn widget_type(mut self, widget_type: WidgetType) -> Self {
+        self.set_widget_type(widget_type);
+        self
+    }
+    fn set_widget_type(&mut self, widget_type: WidgetType) -> &mut Self {
+        self.as_widget().widget_type = widget_type;
+        self
+    }
+    fn set_text<S : Into<String>>(&mut self, text : S) -> &mut Self {
+        self.as_widget().widget_type.set_text(text);
+        self
+    }
+
+    fn modify_widget_type<F: Fn(&mut WidgetType)>(&mut self, func: F) -> &mut Self {
+        (func)(&mut self.as_widget().widget_type);
+        self
+    }
+
+    fn showing(mut self, showing: bool) -> Self {
+        self.set_showing(showing);
+        self
+    }
+    fn set_showing(&mut self, showing: bool) -> &mut Self {
+        self.as_widget().showing = showing;
+        self
+    }
+
+    fn set_border(&mut self, border: Border) -> &mut Self {
+        self.as_widget().border = border;
+        self
+    }
+    fn border(mut self, border: Border) -> Self {
+        self.set_border(border);
+        self
+    }
+
+    fn border_width(mut self, border_width: u8) -> Self {
+        self.as_widget().border.width = border_width;
+        self
+    }
+    fn border_color(mut self, border_color: Color) -> Self {
+        self.as_widget().border.color = border_color;
+        self
+    }
+    fn border_sides(mut self, border_sides: BorderSides) -> Self {
+        self.as_widget().border.sides = border_sides;
+        self
+    }
+
+    fn parent_id(mut self, parent: Wid) -> Self {
+        self.set_parent_id(parent);
+        self
+    }
+    fn set_parent_id(&mut self, parent_id: Wid) -> &mut Self {
+        if parent_id == NO_WID {
+            error!("Attempting to add a widget to a parent that has no ID, this is not acceptable:\n{:?}", Backtrace::new());
+        }
+        self.as_widget().parent_id = Some(parent_id);
+        self
+    }
+
+    fn set_x(&mut self, x: Positioning) -> &mut Self {
+        self.as_widget().position[0] = x;
+        self
+    }
+    fn set_size(&mut self, w: Sizing, h: Sizing) -> &mut Self {
+        self.as_widget().size = [w,h];
+        self
+    }
+    fn margin(mut self, margin: UIUnits) -> Self {
+        self.set_margin(margin);
+        self
+    }
+    fn set_margin(&mut self, margin: UIUnits) -> &mut Self {
+        self.as_widget().margin = margin;
+        self
+    }
+    fn x(mut self, x: Positioning) -> Self {
+        self.set_x(x);
+        self
+    }
+    fn y(mut self, y: Positioning) -> Self {
+        self.set_y(y);
+        self
+    }
+    fn set_y(&mut self, y: Positioning) -> &mut Self {
+        self.as_widget().position[1] = y;
+        self
+    }
+    fn alignment(mut self, x: Alignment, y: Alignment) -> Self {
+        if (x == Alignment::Top || x == Alignment::Bottom) && (y == Alignment::Left || y == Alignment::Right) {
+            self.as_widget().alignment = [y, x];
+        } else {
+            self.as_widget().alignment = [x, y];
+        }
+        self
+    }
+    fn width(mut self, w: Sizing) -> Self {
+        self.set_width(w);
+        self
+    }
+    fn set_width(&mut self, w: Sizing) -> &mut Self {
+        self.as_widget().size[0] = w;
+        self
+    }
+    fn height<S : Into<Sizing>>(mut self, h: S) -> Self {
+        self.set_height(h.into());
+        self
+    }
+    fn set_height(&mut self, h : Sizing) -> &mut Self {
+        self.as_widget().size[1] = h;
+        self
+    }
+    fn only_consume(mut self, consumption: EventConsumption) -> Self {
+        self.as_widget().event_consumption = consumption;
+        self
+    }
+    fn and_consume(mut self, consumption: EventConsumption) -> Self {
+        let new_consumption = {
+            let old_consumption = &self.as_widget().event_consumption;
+            old_consumption.and(&consumption)
+        };
+        self.as_widget().event_consumption = new_consumption;
+        self
+    }
+    fn accepts_focus(mut self, accept: bool) -> Self {
+        self.as_widget().accepts_focus = accept;
+        self
+    }
+
+    fn with_child(self, mut child_widget : Widget) -> Self {
+        child_widget.set_parent_id(self.id());
+        self
+    }
+
+    fn with_cleared_callbacks(mut self) -> Self {
+        self.clear_callbacks();
+        self
+    }
+    fn clear_callbacks(&mut self) {
+        self.as_widget().clear_callbacks();
+    }
+    fn with_callback<State: 'static, U: Fn(&mut State, &UIEvent) + 'static>(mut self, function: U) -> Self {
+        self.as_widget().add_callback(function);
+        self
+    }
+    fn with_callback_2<State: 'static, OtherState: 'static, U: Fn(&mut State, &mut OtherState, &UIEvent) + 'static>(mut self, function: U) -> Self {
+        self.as_widget().add_callback_2(function);
+        self
+    }
+
+
+
+    fn as_widget(&mut self) -> &mut Widget;
+    fn as_widget_immut(&self) -> &Widget;
+}
+
+impl DelegateToWidget for Widget {
+    fn as_widget(&mut self) -> &mut Widget {
+        self
+    }
+
+    fn as_widget_immut(& self) -> &Widget {
+        self
+    }
+}
+
+impl WidgetContainer for Widget {
+    fn for_all_widgets<F: FnMut(&mut Widget)>(&mut self, mut func: F) {
+        (func)(self)
+    }
+}
 
 
 pub struct WidgetCallbackRegistry {
@@ -468,12 +756,13 @@ type TypedWidgetCallback2<T, U> = Fn(&mut T, &mut U, &UIEvent);
 struct TypedWidgetCallbacks<T> {
     pub callbacks: HashMap<u32, Box<TypedWidgetCallback<T>>>
 }
+
 struct TypedWidgetCallbacks2<T, U> {
     pub callbacks: HashMap<u32, Box<TypedWidgetCallback2<T, U>>>
 }
 
 impl WidgetCallbackRegistry {
-    pub fn add_callback<State : 'static, U: Fn(&mut State, &UIEvent) + 'static>(&mut self, callback: U) -> u32 {
+    pub fn add_callback<State: 'static, U: Fn(&mut State, &UIEvent) + 'static>(&mut self, callback: U) -> u32 {
         let new_id = self.callback_id_counter;
         self.callback_id_counter += 1;
         let mut typed_callbacks = self.sub_callbacks.remove::<TypedWidgetCallbacks<State>>().unwrap_or_else(|| TypedWidgetCallbacks { callbacks: HashMap::new() });
@@ -484,7 +773,7 @@ impl WidgetCallbackRegistry {
         new_id
     }
 
-    pub fn add_callback_2<State : 'static, OtherState : 'static, U: Fn(&mut State, &mut OtherState, &UIEvent) + 'static>(&mut self, callback: U) -> u32 {
+    pub fn add_callback_2<State: 'static, OtherState: 'static, U: Fn(&mut State, &mut OtherState, &UIEvent) + 'static>(&mut self, callback: U) -> u32 {
         let new_id = self.callback_id_counter;
         self.callback_id_counter += 1;
         let mut typed_callbacks = self.sub_callbacks.remove::<TypedWidgetCallbacks2<State, OtherState>>().unwrap_or_else(|| TypedWidgetCallbacks2 { callbacks: HashMap::new() });
@@ -496,7 +785,7 @@ impl WidgetCallbackRegistry {
     }
 
 
-    pub fn execute_callback<State : 'static>(&self, id: u32, t: &mut State, evt: &UIEvent) {
+    pub fn execute_callback<State: 'static>(&self, id: u32, t: &mut State, evt: &UIEvent) {
         if let Some(typed_callbacks) = self.sub_callbacks.get::<TypedWidgetCallbacks<State>>() {
             if let Some(f) = typed_callbacks.callbacks.get(&id) {
                 (f)(t, evt)
@@ -504,7 +793,7 @@ impl WidgetCallbackRegistry {
         }
     }
 
-    pub fn execute_callback_2<State : 'static, OtherState : 'static>(&self, id: u32, t: &mut State, u : &mut OtherState, evt: &UIEvent) {
+    pub fn execute_callback_2<State: 'static, OtherState: 'static>(&self, id: u32, t: &mut State, u: &mut OtherState, evt: &UIEvent) {
         if let Some(typed_callbacks) = self.sub_callbacks.get::<TypedWidgetCallbacks2<State, OtherState>>() {
             if let Some(f) = typed_callbacks.callbacks.get(&id) {
                 (f)(t, u, evt)
@@ -520,10 +809,6 @@ impl WidgetCallbackRegistry {
     }
 }
 
-
-pub trait AsWidget {
-
-}
 
 
 #[derive(Debug)]
@@ -548,7 +833,7 @@ pub fn test() {
         f: 0.0,
     };
 
-    let evt = UIEvent::MousePress { button: MouseButton::Left, pos: EventPosition::absolute(v2(20.0,20.0), v2(20.0,20.0)) };
+    let evt = UIEvent::MousePress { button: MouseButton::Left, pos: EventPosition::absolute(v2(20.0, 20.0), v2(20.0, 20.0)) };
     callbacks.execute_callback(func_id, &mut test_struct, &evt);
 
     println!("{:?}", test_struct);

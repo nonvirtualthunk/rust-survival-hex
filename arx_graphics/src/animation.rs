@@ -126,7 +126,7 @@ impl TextAnimationElement {
 
     pub fn with_end_color(mut self, end_color : Color, interpolation_type : InterpolationType) -> Self {
         self.color_interpolation.delta = end_color - self.color_interpolation.start.clone();
-        self.position_interpolation.interpolation_type = interpolation_type;
+        self.color_interpolation.interpolation_type = interpolation_type;
         self
     }
     pub fn with_end_position(mut self, end_pos : CartVec, interpolation_type : InterpolationType) -> Self {

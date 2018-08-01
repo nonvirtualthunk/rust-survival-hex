@@ -19,27 +19,27 @@ use common::Color;
 use arx_graphics::core::GraphicsResources;
 
 
-pub static mut GLOBAL_MODIFIERS : Modifiers = Modifiers {
-    alt : false,
-    ctrl : false,
-    shift : false
-};
-
-//pub static mut MOUSE_POSITION : Vec2f = Vec2f {
-//    x : 0.0,
-//    y : 0.0
+//pub static mut GLOBAL_MODIFIERS : Modifiers = Modifiers {
+//    alt : false,
+//    ctrl : false,
+//    shift : false
 //};
-
-pub fn get_key_modifiers() -> Modifiers {
-    unsafe {
-        GLOBAL_MODIFIERS.clone()
-    }
-}
-pub fn set_key_modifiers(modifiers : Modifiers) {
-    unsafe {
-        GLOBAL_MODIFIERS = modifiers;
-    }
-}
+//
+////pub static mut MOUSE_POSITION : Vec2f = Vec2f {
+////    x : 0.0,
+////    y : 0.0
+////};
+//
+//pub fn get_key_modifiers() -> Modifiers {
+//    unsafe {
+//        GLOBAL_MODIFIERS.clone()
+//    }
+//}
+//pub fn set_key_modifiers(modifiers : Modifiers) {
+//    unsafe {
+//        GLOBAL_MODIFIERS = modifiers;
+//    }
+//}
 
 pub trait GameMode {
     fn enter (&mut self, world : &mut World);
@@ -48,13 +48,6 @@ pub trait GameMode {
     fn draw (&mut self, world : &mut World, g : &mut GraphicsWrapper);
     fn on_event<'a, 'b> (&'a mut self, world : &mut World, ui : &'b mut GUI, event : &UIEvent);
     fn handle_event(&mut self, world: &mut World, gui : &mut GUI, event: &UIEvent);
-}
-
-#[derive(Clone,Copy,Default)]
-pub struct Modifiers {
-    pub ctrl : bool,
-    pub shift : bool,
-    pub alt : bool
 }
 
 pub struct Game {
@@ -120,9 +113,9 @@ impl Game {
 }
 
 
-pub fn normalize_mouse(mouse: Vec2f, viewport: &Viewport) -> Vec2f {
-    let in_x = mouse.x;
-    let in_y = viewport.window_size[1] as f32 - mouse.y - 1.0;
+pub fn normalize_screen_pos(screen_pos: Vec2f, viewport: &Viewport) -> Vec2f {
+    let in_x = screen_pos.x;
+    let in_y = viewport.window_size[1] as f32 - screen_pos.y - 1.0;
 
     let centered_x = in_x - (viewport.window_size[0] / 2) as f32;
     let centered_y = in_y - (viewport.window_size[1] / 2) as f32;

@@ -25,6 +25,21 @@ impl Color {
     pub fn clear() -> Color {
         Color::new(1.0,1.0,1.0,0.0)
     }
+
+    pub fn r(&self) -> f32 {
+        self.0[0]
+    }
+    pub fn g(&self) -> f32 {
+        self.0[1]
+    }
+    pub fn b(&self) -> f32 {
+        self.0[2]
+    }
+    pub fn a(&self) -> f32 {
+        self.0[3]
+    }
+
+    pub fn with_a(&self, a : f32) -> Color { Color::new(self.r(), self.g(), self.b(), a) }
 }
 
 impl Default for Color {

@@ -14,6 +14,8 @@ pub type Vec3f = Vector3<f32>;
 pub type Vec2i = Vector2<i32>;
 pub type Vec2f = Vector2<f32>;
 
+pub type Str = &'static str;
+
 pub fn v3<T>(x: T, y: T, z: T) -> Vector3<T> {
     Vector3 { x, y, z }
 }
@@ -73,12 +75,52 @@ impl ToStringWithSign for f64 {
     }
 }
 
-pub trait ExtendedCollection {
+pub trait ExtendedCollection<T> {
     fn non_empty(&self) -> bool;
+
+    fn map<U, F : Fn(&T) -> U>(&self, func : F) -> Vec<U>;
+
+    fn foreach<F : Fn(&T)>(&self, func : F);
+
+    fn all_match<F : Fn(&T) -> bool>(&self, func : F) -> bool;
+
+    fn any_match<F : Fn(&T) -> bool>(&self, func : F) -> bool;
 }
 
-impl <T> ExtendedCollection for Vec<T> {
+impl <T> ExtendedCollection<T> for Vec<T> {
     fn non_empty(&self) -> bool {
         ! self.is_empty()
     }
+
+    fn map<U, F: Fn(&T) -> U>(&self, func: F) -> Vec<U> {
+        self.iter().map(func).collect_vec()
+    }
+
+    fn foreach<F : Fn(&T)>(&self, func : F) {
+        self.iter().foreach(func)
+    }
+
+    fn all_match<F : Fn(&T) -> bool>(&self, func : F) -> bool { self.iter().all(func) }
+
+    fn any_match<F : Fn(&T) -> bool>(&self, func : F) -> bool { self.iter().any(func) }
+}
+
+trait ChopToU32 {
+    fn as_u32_or_0(&self) -> u32;
+}
+impl ChopToU32 for i32 {
+    fn as_u32_or_0(&self) -> u32 {
+        if *self < 0 {
+            0
+        } else {
+            (*self) as u32
+        }
+    }
+}
+
+
+pub enum Orientation {
+    Horizontal,
+    Vertical,
+    Depth
 }

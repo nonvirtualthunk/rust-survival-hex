@@ -2,11 +2,13 @@ use piston_window::MouseButton;
 use piston_window::Key;
 use piston_window::GenericEvent;
 use piston_window::Button;
+use piston_window::ButtonState;
 
 use common::prelude::*;
 
 use gui::GUI;
 use widgets::WidgetState;
+use widgets::Wid;
 
 #[derive(Clone, Debug)]
 pub struct EventPosition {
@@ -42,19 +44,22 @@ impl EventPosition {
 
 #[derive(Clone, Debug)]
 pub enum WidgetEvent {
-    ButtonClicked,
-    RadioChanged{ new_index : i32 }
+    ButtonClicked(Wid),
+    RadioChanged{ new_index : i32 },
+    ShowWidget(Wid),
+    HideWidget(Wid),
+    ListItemClicked(usize)
 }
 
 #[derive(Clone, Debug)]
 pub enum UIEvent {
     MousePress { pos : EventPosition, button : MouseButton },
     MouseRelease { pos : EventPosition, button : MouseButton },
-    Drag { pos : EventPosition, delta : Vec2f, button : MouseButton},
+    MouseDrag { pos : EventPosition, delta : Vec2f, button : MouseButton},
     MouseMove { pos : EventPosition, delta : Vec2f },
     MousePosition { pos : EventPosition },
-    MouseEntered { pos : EventPosition },
-    MouseExited { pos : EventPosition },
+    MouseEntered { from_widget : Option<Wid>, to_widget : Wid, pos : EventPosition },
+    MouseExited { from_widget : Wid, to_widget : Option<Wid>, pos : EventPosition },
     Scroll { delta : Vec2f },
     KeyPress { key : Key },
     KeyRelease { key : Key },
@@ -77,7 +82,7 @@ pub mod ui_event_types {
     use super::*;
     pub const MOUSE_PRESS : UIEventType =           UIEventType { bit_flag : 0b00000000000000000000000000000001 };
     pub const MOUSE_RELEASE : UIEventType =         UIEventType { bit_flag : 0b00000000000000000000000000000010 };
-    pub const DRAG : UIEventType =                  UIEventType { bit_flag : 0b00000000000000000000000000000100 };
+    pub const MOUSE_DRAG: UIEventType =             UIEventType { bit_flag : 0b00000000000000000000000000000100 };
     pub const MOUSE_MOVE : UIEventType =            UIEventType { bit_flag : 0b00000000000000000000000000001000 };
     pub const MOUSE_POSITION : UIEventType =        UIEventType { bit_flag : 0b00000000000000000000000000010000 };
     pub const SCROLL : UIEventType =                UIEventType { bit_flag : 0b00000000000000000000000000100000 };
@@ -90,7 +95,7 @@ pub mod ui_event_types {
     pub const MOUSE_ENTERED : UIEventType =         UIEventType { bit_flag : 0b00000000000000000001000000000000 };
     pub const MOUSE_EXITED : UIEventType =          UIEventType { bit_flag : 0b00000000000000000010000000000000 };
     pub const WIDGET_EVENT : UIEventType =          UIEventType { bit_flag : 0b00000000000000000100000000000000 };
-    pub const MOUSE_EVENT_TYPES : [UIEventType; 7] = [MOUSE_PRESS, MOUSE_RELEASE, DRAG, MOUSE_MOVE, MOUSE_POSITION, MOUSE_ENTERED, MOUSE_EXITED];
+    pub const MOUSE_EVENT_TYPES : [UIEventType; 7] = [MOUSE_PRESS, MOUSE_RELEASE, MOUSE_DRAG, MOUSE_MOVE, MOUSE_POSITION, MOUSE_ENTERED, MOUSE_EXITED];
     pub const KEY_EVENTS : [UIEventType; 2] = [KEY_PRESS, KEY_RELEASE];
 }
 
@@ -102,7 +107,7 @@ impl UIEvent {
         match self {
             UIEvent::MousePress { .. } =>           MOUSE_PRESS,
             UIEvent::MouseRelease { .. } =>         MOUSE_RELEASE,
-            UIEvent::Drag { .. } =>                 DRAG,
+            UIEvent::MouseDrag { .. } =>            MOUSE_DRAG,
             UIEvent::MouseMove { .. } =>            MOUSE_MOVE,
             UIEvent::MousePosition { .. } =>        MOUSE_POSITION,
             UIEvent::MouseEntered { .. } =>         MOUSE_ENTERED,
@@ -121,7 +126,7 @@ impl UIEvent {
         self.event_type().bit_flag
     }
 
-    pub fn from_piston_event<E : GenericEvent>(units_per_pixel :f32, current_mouse_pixel_pos : Vec2f, event : E) -> Option<UIEvent> {
+    pub fn from_piston_event<E : GenericEvent>(units_per_pixel :f32, current_mouse_pixel_pos : Vec2f, active_mouse_button : Option<MouseButton>, event : E) -> Option<UIEvent> {
         let translate_coords = |xy: [f64; 2]| v2(xy[0] as f32 * units_per_pixel, xy[1] as f32 * units_per_pixel);
         let current_mouse_pos = current_mouse_pixel_pos * units_per_pixel;
 
@@ -134,11 +139,25 @@ impl UIEvent {
         if let Some(rel_xy) = event.mouse_relative_args() {
             let rel_v = translate_coords(rel_xy);
 //            println!("Relative mouse movement arg: {:?}", rel_v);
-            return Some(UIEvent::MouseMove { pos : EventPosition::absolute(current_mouse_pos, current_mouse_pixel_pos), delta : rel_v });
+            if let Some(button) = active_mouse_button {
+                return Some(UIEvent::MouseDrag { pos : EventPosition::absolute(current_mouse_pos, current_mouse_pixel_pos), delta : rel_v, button });
+            } else {
+                return Some(UIEvent::MouseMove { pos : EventPosition::absolute(current_mouse_pos, current_mouse_pixel_pos), delta : rel_v });
+            }
         }
 
         if let Some(xy) = event.mouse_scroll_args() {
             return Some(UIEvent::Scroll { delta : v2(xy[0] as f32, xy[1] as f32) });
+        }
+
+        if let Some(button) = event.button_args() {
+            if button.scancode == Some(54) || button.scancode == Some(55) {
+                if button.state == ButtonState::Press {
+                    return Some(UIEvent::KeyPress { key : Key::LCtrl })
+                } else {
+                    return Some(UIEvent::KeyRelease { key : Key::LCtrl })
+                }
+            }
         }
 
         if let Some(button) = event.press_args() {
