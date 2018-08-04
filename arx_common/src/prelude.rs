@@ -85,6 +85,8 @@ pub trait ExtendedCollection<T> {
     fn all_match<F : Fn(&T) -> bool>(&self, func : F) -> bool;
 
     fn any_match<F : Fn(&T) -> bool>(&self, func : F) -> bool;
+
+    fn find<F : Fn(&T) -> bool>(&self, func : F) -> Option<&T>;
 }
 
 impl <T> ExtendedCollection<T> for Vec<T> {
@@ -103,6 +105,10 @@ impl <T> ExtendedCollection<T> for Vec<T> {
     fn all_match<F : Fn(&T) -> bool>(&self, func : F) -> bool { self.iter().all(func) }
 
     fn any_match<F : Fn(&T) -> bool>(&self, func : F) -> bool { self.iter().any(func) }
+
+    fn find<F : Fn(&T) -> bool>(&self, func : F) -> Option<&T> {
+        self.iter().find(|t| (func)(t))
+    }
 }
 
 trait ChopToU32 {

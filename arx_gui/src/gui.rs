@@ -268,6 +268,9 @@ impl GUI {
         }
     }
 
+    pub(crate) fn child_widgets_of(&self, wid : Wid) -> Vec<&Widget> {
+        self.widget_reification(wid).children.iter().map(|w| &self.widget_reification(*w).widget).collect_vec()
+    }
 
     pub fn widget_state(&self, wid : Wid) -> &WidgetState {
         self.widget_reifications.get(&wid).map(|reif| &reif.widget_state).unwrap_or(&WidgetState::NoState)

@@ -50,36 +50,6 @@ pub struct TacticalEventBundle<'a, 'b> {
     pub world: &'b mut World,
 }
 
-//
-//#[derive(Default)]
-//pub struct SimpleCache2<A : PartialEq + Clone,B : PartialEq + Clone,R> {
-//    last_args : Option<(A,B)>,
-//    last_ret : Option<R>
-//}
-//
-//impl <A : PartialEq + Clone,B : PartialEq + Clone,R> SimpleCache2<A,B,R> {
-//    pub fn new() -> SimpleCache2<A,B,R> {
-//        SimpleCache2 {
-//            last_args : None,
-//            last_ret : None
-//        }
-//    }
-//
-//    pub fn call<'a,'b,'s,F : Fn(&A,&B) -> R>(&'s mut self, a : &'a A, b : &'b B, func : F) -> &'s R {
-//        if let Some((arg_a, arg_b)) = self.last_args.as_ref() {
-//            if (arg_a,arg_b) == (a,b) {
-//                if self.last_ret.is_some() {
-//                    return self.last_ret.as_ref().unwrap();
-//                }
-//            }
-//        }
-//        self.last_args = Some((a.clone(),b.clone()));
-//        self.last_ret = Some((func)(a,b));
-//        self.last_ret.as_ref().unwrap()
-//    }
-//}
-//
-
 pub struct TacticalGui {
     victory_widget : Widget,
     action_bar : ActionBar,

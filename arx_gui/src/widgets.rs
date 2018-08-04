@@ -345,6 +345,7 @@ pub struct Widget {
     pub state_override: Option<WidgetState>,
     pub event_consumption: EventConsumption,
     pub custom_draw: Option<Arc<CustomWidgetRenderer>>,
+    pub tooltip : Option<Box<WidgetContainer>>
 }
 
 
@@ -368,7 +369,8 @@ impl Widget {
             custom_draw: None,
             ignores_parent_bounds: false,
             name : None,
-            draw_layer : GUILayer::Main
+            draw_layer : GUILayer::Main,
+            tooltip: None
         }
     }
 

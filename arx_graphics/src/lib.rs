@@ -3,6 +3,7 @@
 
 #![feature(box_syntax)]
 #![feature(trait_alias)]
+#![feature(nll)]
 
 extern crate piston_window;
 extern crate gfx_device_gl;

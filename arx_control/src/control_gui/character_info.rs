@@ -54,10 +54,15 @@ impl CharacterInfoWidget {
             .apply(gui);
 
         let character_stats = vec![
-            CharacterStat::new_reduceable("HP", |cdata| &cdata.health),
-            CharacterStat::new("AP", |cdata| cdata.action_points.cur_value(), |cdata| cdata.action_points.max_value()),
-            CharacterStat::new("Moves", |cdata| cdata.max_moves_remaining(1.0).as_i32(), |cdata| cdata.max_moves_per_turn(1.0).as_i32()),
-            CharacterStat::new("Stamina", |cdata| cdata.stamina.cur_value().as_i32(), |cdata| cdata.stamina.max_value().as_i32()),
+            CharacterStat::new_reduceable("HP", |cdata| &cdata.health, "Health, characters fall unconscious if this reaches 0"),
+            CharacterStat::new("AP", |cdata| cdata.action_points.cur_value(), |cdata| cdata.action_points.max_value(),
+                               "Action Points, represents how much more this character can do this turn. Moving and using actions consume AP, AP resets every turn"),
+            CharacterStat::cur_only("Move Speed", |cdata| cdata.move_speed.as_f64(),
+                                    "How fast this character moves per action point spent at a normal pace. Max movement at a \
+                                    normal pace is therefore AP * Move Speed"),
+            CharacterStat::new("Stamina", |cdata| cdata.stamina.cur_value().as_i32(), |cdata| cdata.stamina.max_value().as_i32(),
+                               "How much endurance this character has left for performing strenuous actions. Attacking, reacting, running and the like all \
+                               consume some amount of stamina. Normally recovers by 1 each turn."),
         ];
 
         let character_stats_widget = ListWidget::featherweight()
@@ -109,7 +114,8 @@ impl CharacterInfoWidget {
                 let text = format!("{}: {}", stat.name, numeral_display);
                 stat_w.text.set_widget_type(WidgetType::text(text, 14))
                     .set_color(Color::black())
-                    .set_height(Sizing::Derived);
+                    .set_height(Sizing::Derived)
+                    .set_tooltip(stat.tooltip);
             });
 
 
@@ -161,25 +167,37 @@ impl Default for SkillWidget {
 }
 
 pub struct CharacterStat {
-    name: &'static str,
+    name: Str,
     cur_value_func: Box<Fn(&CharacterData) -> String>,
     max_value_func: Option<Box<Fn(&CharacterData) -> String>>,
+    tooltip: Str
 }
 
 impl CharacterStat {
-    fn new<T: std::string::ToString, F: Fn(&CharacterData) -> T + 'static, MF: Fn(&CharacterData) -> T + 'static>(name: &'static str, f: F, mf: MF) -> CharacterStat {
+    fn new<T: std::string::ToString, F: Fn(&CharacterData) -> T + 'static, MF: Fn(&CharacterData) -> T + 'static>(name: Str, f: F, mf: MF, tooltip : Str) -> CharacterStat {
         CharacterStat {
             name,
             cur_value_func: box move |raw| f(raw).to_string(),
             max_value_func: Some(box move |raw| mf(raw).to_string()),
+            tooltip
         }
     }
 
-    fn new_reduceable<T: ReduceableType + fmt::Display + 'static>(name: &'static str, f: fn(&CharacterData) -> &Reduceable<T>) -> CharacterStat {
+    fn cur_only<T : std::string::ToString + 'static>(name: Str, f: fn(&CharacterData) -> T, tooltip : Str) -> CharacterStat {
+        CharacterStat {
+            name,
+            cur_value_func: box move |raw| f(raw).to_string(),
+            max_value_func: None,
+            tooltip
+        }
+    }
+
+    fn new_reduceable<T: ReduceableType + fmt::Display + 'static>(name: Str, f: fn(&CharacterData) -> &Reduceable<T>, tooltip : Str) -> CharacterStat {
         CharacterStat {
             cur_value_func: box move |cdata| format!("{}", f(cdata).cur_value()),
             max_value_func: Some(box move |cdata| format!("{}", f(cdata).max_value())),
             name,
+            tooltip
         }
     }
 }
@@ -190,6 +208,7 @@ impl Default for CharacterStat {
             name: "Uninitialized",
             cur_value_func: box |cd| { String::from("uninitialized") },
             max_value_func: None,
+            tooltip: "uninitialized"
         }
     }
 }

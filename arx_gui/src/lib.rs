@@ -7,6 +7,7 @@
 #![feature(box_syntax)]
 #![feature(get_type_id)]
 #![feature(specialization)]
+#![feature(nll)]
 
 extern crate piston_window;
 extern crate gfx_device_gl;
