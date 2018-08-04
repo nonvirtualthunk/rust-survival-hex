@@ -11,6 +11,7 @@ use game::core::GameEventClock;
 use game::action_execution::movement::hexes_in_range;
 use game::EntitySelector;
 use game::EntitySelectors;
+use game::AttackReference;
 use std::ops;
 use std::fmt;
 use std;
@@ -30,7 +31,11 @@ use common::event_bus::ConsumerHandle;
 use arx_graphics::core::DrawList;
 use arx_graphics::Quad;
 use itertools::Itertools;
-
+use common::AxialCoord;
+use game::action_execution::movement;
+use game::action_execution::combat;
+use game::Oct;
+use std::collections::HashMap;
 
 
 #[derive(PartialEq)]
@@ -131,32 +136,63 @@ impl TacticalGui {
 
             let mut draw_list = DrawList::none();
 
-            let entity_selectors = (action_type.target)(selected, view);
-            for selector in entity_selectors {
-                let EntitySelector(pieces) = selector;
-                if pieces.contains(&EntitySelectors::IsTile) {
-                    let range_limiter = pieces.iter().find(|s| { if let EntitySelectors::InMoveRange {..} = s { true } else { false } });
-                    if let Some(range_limit) = range_limiter {
-                        // trim the selector down to remove the range limiter, we've pre-emptively taken care of that
-                        let selector = EntitySelector(pieces.iter().cloned().filter(|s| if let EntitySelectors::InMoveRange {..} = s { false } else { true } ).collect_vec());
+            if action_type == &action_types::MoveAndAttack {
+                let main_attack = combat::primary_attack(view, selected);
+                if let Some(attack) = main_attack {
+                    let hexes = hexes_in_range(view, selected, cdata.max_moves_remaining(1.0));
 
-                        let hexes = hexes_in_range(view, selected, range);
-                        for (hex,cost) in &hexes {
-                            if hex != &current_position {
-                                if let Some(tile) = view.entity_by_key(hex) {
-                                    if selector.matches(tile, view) {
-                                        let neighbors = hex.neighbors();
-                                        for q in 0 .. 6 {
-                                            if !hexes.contains_key(&neighbors[q]) {
-                                                draw_list = draw_list.add_quad(Quad::new(format!("ui/hex/hex_edge_{}", q), hex.as_cart_vec().0).color(Color::new(0.1,0.6,0.1,0.6)).centered());
-                                            }
+                    let ap_per_strike = attack.ap_cost;
+                    let ap_remaining = cdata.action_points.cur_value();
+                    let cur_move = cdata.moves.as_f64();
+                    let move_speed = cdata.move_speed.as_f64();
+                    let max_possible_strikes = ap_remaining / ap_per_strike as i32;
+
+//                    let hex_rings : Vec<HashMap<AxialCoord, f64>> = Vec::new();
+//                    for i in 0 ..= max_possible_strikes {
+//                        hex_rings.push(HashMap::new())
+//                    }
+
+                    let strikes_at_cost = |move_cost : &f64| -> i32 {
+                        let additional_move_required = *move_cost - cur_move;
+                        let additional_ap_required = (additional_move_required / move_speed).ceil() as i32;
+                        (ap_remaining - additional_ap_required) / ap_per_strike as i32
+                    };
+
+                    for (hex,cost) in &hexes {
+                        if hex != &current_position {
+                            if let Some(tile) = view.entity_by_key(hex) {
+                                let strikes_in_this_tile = strikes_at_cost(cost);
+                                let neighbors = hex.neighbors();
+                                for q in 0 .. 6 {
+                                    if let Some(neighbor_cost) = hexes.get(&neighbors[q]) {
+                                        let neighbor_strikes = strikes_at_cost(neighbor_cost);
+                                        if neighbor_strikes < strikes_in_this_tile {
+                                            draw_list = draw_list.add_quad(Quad::new(format!("ui/hex/hex_edge_{}", q), hex.as_cart_vec().0).color(Color::new(0.2,0.6,0.2,0.35)).centered());
                                         }
+                                    } else {
+                                        draw_list = draw_list.add_quad(Quad::new(format!("ui/hex/hex_edge_{}", q), hex.as_cart_vec().0).color(Color::new(0.4,0.4,0.4,0.35)).centered());
                                     }
                                 }
                             }
                         }
-                    } else {
-                        warn!("Tile selector without range limiter, this should not generally be the case")
+                    }
+                } else {
+                    warn!("No attack possible, whatsoever, for entity {}", selected);
+                }
+            } else {
+                let entity_selectors = (action_type.target)(selected, view);
+                for selector in entity_selectors {
+                    let EntitySelector(pieces) = selector;
+                    if pieces.contains(&EntitySelectors::IsTile) {
+                        let range_limiter = pieces.iter().find(|s| { if let EntitySelectors::InMoveRange {..} = s { true } else { false } });
+                        if let Some(range_limit) = range_limiter {
+                            // trim the selector down to remove the range limiter, we've pre-emptively taken care of that
+                            let selector = EntitySelector(pieces.iter().cloned().filter(|s| if let EntitySelectors::InMoveRange {..} = s { false } else { true } ).collect_vec());
+
+                            draw_list = self.draw_boundary_at_hex_range(view, selected, current_position, range, draw_list, &selector);
+                        } else {
+                            warn!("Tile selector without range limiter, this should not generally be the case")
+                        }
                     }
                 }
             }
@@ -168,6 +204,26 @@ impl TacticalGui {
         } else {
             DrawList::none()
         }
+    }
+
+    fn draw_boundary_at_hex_range(&self, view : &WorldView, selected : Entity, current_position : AxialCoord, range : Oct, mut draw_list : DrawList, selector : &EntitySelector) -> DrawList {
+        let hexes = hexes_in_range(view, selected, range);
+        for (hex,cost) in &hexes {
+            if hex != &current_position {
+                if let Some(tile) = view.entity_by_key(hex) {
+                    if selector.matches(tile, view) {
+                        let neighbors = hex.neighbors();
+                        for q in 0 .. 6 {
+                            if !hexes.contains_key(&neighbors[q]) {
+                                draw_list = draw_list.add_quad(Quad::new(format!("ui/hex/hex_edge_{}", q), hex.as_cart_vec().0).color(Color::new(0.1,0.6,0.1,0.6)).centered());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        draw_list
     }
 
 

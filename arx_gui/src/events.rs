@@ -60,6 +60,8 @@ pub enum UIEvent {
     MousePosition { pos : EventPosition },
     MouseEntered { from_widget : Option<Wid>, to_widget : Wid, pos : EventPosition },
     MouseExited { from_widget : Wid, to_widget : Option<Wid>, pos : EventPosition },
+    HoverStart { pos : EventPosition, over_widget : Wid },
+    HoverEnd { pos : EventPosition, over_widget : Wid },
     Scroll { delta : Vec2f },
     KeyPress { key : Key },
     KeyRelease { key : Key },
@@ -95,6 +97,8 @@ pub mod ui_event_types {
     pub const MOUSE_ENTERED : UIEventType =         UIEventType { bit_flag : 0b00000000000000000001000000000000 };
     pub const MOUSE_EXITED : UIEventType =          UIEventType { bit_flag : 0b00000000000000000010000000000000 };
     pub const WIDGET_EVENT : UIEventType =          UIEventType { bit_flag : 0b00000000000000000100000000000000 };
+    pub const HOVER_START : UIEventType =           UIEventType { bit_flag : 0b00000000000000001000000000000000 };
+    pub const HOVER_END : UIEventType =             UIEventType { bit_flag : 0b00000000000000010000000000000000 };
     pub const MOUSE_EVENT_TYPES : [UIEventType; 7] = [MOUSE_PRESS, MOUSE_RELEASE, MOUSE_DRAG, MOUSE_MOVE, MOUSE_POSITION, MOUSE_ENTERED, MOUSE_EXITED];
     pub const KEY_EVENTS : [UIEventType; 2] = [KEY_PRESS, KEY_RELEASE];
 }
@@ -119,7 +123,9 @@ impl UIEvent {
             UIEvent::Resize { .. } =>               RESIZE,
             UIEvent::Focus { .. } =>                FOCUS,
             UIEvent::WidgetStateChanged { .. } =>   WIDGET_STATE_CHANGED,
-            UIEvent::WidgetEvent { .. } =>          WIDGET_EVENT
+            UIEvent::WidgetEvent { .. } =>          WIDGET_EVENT,
+            UIEvent::HoverStart { .. } =>           HOVER_START,
+            UIEvent::HoverEnd { .. } =>             HOVER_END,
         }
     }
     pub fn bit_flag(&self) -> u32 {

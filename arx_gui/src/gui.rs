@@ -36,6 +36,10 @@ use piston_window;
 pub use gui_event_handling::*;
 pub use gui_rendering::*;
 
+use widget_delegation::DelegateToWidget;
+use std::time::Instant;
+use std::time::Duration;
+
 
 #[derive(Clone, Copy, PartialEq, Neg, Debug)]
 pub enum UIUnits {
@@ -136,6 +140,9 @@ pub struct GUI {
     pub(crate) active_modifiers: Modifiers,
     pub(crate) moused_over_widget: Option<Wid>,
     pub(crate) active_mouse_button: Option<MouseButton>,
+    pub(crate) hover_start : Instant,
+    pub(crate) hover_threshold: Duration,
+    pub(crate) hover_widget: Option<Wid>,
 }
 
 impl GUI {
@@ -154,6 +161,9 @@ impl GUI {
             active_modifiers: Modifiers::default(),
             moused_over_widget: None,
             active_mouse_button: None,
+            hover_threshold: Duration::from_secs(1),
+            hover_start: Instant::now(),
+            hover_widget: None,
         }
     }
 

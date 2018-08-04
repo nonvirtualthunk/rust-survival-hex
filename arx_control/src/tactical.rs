@@ -480,6 +480,7 @@ impl GameMode for TacticalMode {
         let bow = EntityBuilder::new()
             .with(ItemData {
                 primary_attack: Some(Attack {
+                    name: "shoot arrow",
                     ap_cost: 4,
                     damage_dice: DicePool {
                         die: 8,
@@ -509,6 +510,8 @@ impl GameMode for TacticalMode {
             .with(SkillData::default())
             .with(InventoryData::default())
             .create(world);
+        let bow_attack_ref = AttackReference::of_attack(world.view(), archer, world.view().item(bow).primary_attack.as_ref().unwrap());
+        modify(world, archer, SetActiveAttackMod(bow_attack_ref));
 
         action_execution::equip_item(world, archer, bow);
 
@@ -526,6 +529,7 @@ impl GameMode for TacticalMode {
                 })
                 .with(CombatData {
                     natural_attacks: vec![Attack {
+                        name: "slam",
                         damage_dice: DicePool {
                             count: 1,
                             die: 4,

@@ -40,7 +40,7 @@ impl<T: ops::Sub<Output=T> + ops::Add<Output=T> + Copy + Default + Into<f64>> Re
 }
 
 
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug, Copy, PartialEq)]
 pub struct DicePool {
     pub die: u32,
     pub count: u32,

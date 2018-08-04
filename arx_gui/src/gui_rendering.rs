@@ -27,6 +27,16 @@ use std::collections::HashSet;
 use widgets::*;
 use gui::UIUnits;
 use gui::ToGUIUnit;
+use widget_delegation::DelegateToWidget;
+use std::time::Instant;
+
+
+
+#[derive(PartialEq, Eq, Debug, Clone, Copy, PartialOrd)]
+pub enum GUILayer {
+    Overlay,
+    Main
+}
 
 impl GUI {
     pub fn compute_raw_widget_size(&self, size: Sizing, anchor_size: f32) -> f32 {
@@ -55,6 +65,7 @@ impl GUI {
                 for axis in 0..2 {
                     let anchor_pos = match widget.position[axis] {
                         Positioning::DeltaOfWidget(other_wid, _, _) => self.widget_reifications.get(&other_wid).expect("dependent wid must exist").position[axis],
+                        Positioning::MatchWidget(other_wid) => self.widget_reification(other_wid).position[axis],
                         _ => parent_position.map(|p| p[axis]).unwrap_or(0.0)
                     };
                     let anchor_size = match widget.position[axis] {
@@ -130,7 +141,9 @@ impl GUI {
                                 Alignment::Right | Alignment::Bottom => anchor_pos + anchor_size + delta.ux(pixels_per_ux),
                                 _ => anchor_pos - effective_dim - delta.ux(pixels_per_ux)
                             }
-                        }
+                        },
+                        Positioning::MatchWidget(other_wid) => alignment_point,
+                        Positioning::Absolute(absolute_position) => absolute_position.ux(pixels_per_ux),
                     } + effective_dim * dim_multiplier;
                     trace!(target: "gui_redraw_quads", "effective_pos {:?}, effective_dim {:?}, dim_multiplier {:?}", effective_pos, effective_dim, dim_multiplier);
 
@@ -385,14 +398,15 @@ impl GUI {
         }
     }
 
-    pub fn recursive_draw_widget(&self, g: &mut GraphicsWrapper, wid: Wid) {
+    pub fn recursive_draw_widget(&self, g: &mut GraphicsWrapper, wid: Wid, layer : GUILayer) {
         let widget_state = self.widget_reifications.get(&wid).expect("recursive update widget must take valid wid with known state");
+        if widget_state.widget.draw_layer == layer {
+            self.render_draw_list(g, &widget_state.draw_list);
+        }
 
-        self.render_draw_list(g, &widget_state.draw_list);
-
-        let children = widget_state.children.clone();
+        let children = &widget_state.children;
         for child in children {
-            self.recursive_draw_widget(g, child);
+            self.recursive_draw_widget(g, *child, layer);
         }
     }
 
@@ -423,6 +437,18 @@ impl GUI {
 
 
     pub fn update(&mut self, g: &mut GraphicsAssets, force_update: bool) {
+        if self.hover_widget == None && Instant::now().duration_since(self.hover_start) > self.hover_threshold {
+            self.hover_widget = self.moused_over_widget;
+            if let Some(hover_widget) = self.hover_widget {
+                let pixels_per_ux = self.pixels_per_ux();
+                let mouse_pos = self.current_mouse_pos.clone();
+
+                let evt = UIEvent::HoverStart { over_widget : hover_widget, pos : EventPosition::absolute(mouse_pos, mouse_pos * pixels_per_ux) };
+                self.handle_ui_event_for_self(&evt);
+                self.enqueue_event_excepting_self(&evt);
+            }
+        }
+
         let top_level_widgets = self.top_level_widgets.clone();
         for wid in &top_level_widgets {
             self.recursive_update_widget(g, *wid, force_update);
@@ -442,7 +468,11 @@ impl GUI {
         self.update(&mut g.resources.assets, size_changed);
 
         for wid in &self.top_level_widgets {
-            self.recursive_draw_widget(g, *wid);
+            self.recursive_draw_widget(g, *wid, GUILayer::Main);
+        }
+
+        for wid in &self.top_level_widgets {
+            self.recursive_draw_widget(g, *wid, GUILayer::Overlay);
         }
     }
 }

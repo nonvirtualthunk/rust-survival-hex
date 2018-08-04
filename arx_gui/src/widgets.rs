@@ -26,6 +26,8 @@ use std::sync::Arc;
 use std::sync::atomic::{ATOMIC_USIZE_INIT, AtomicUsize, Ordering};
 use std::sync::Mutex;
 use ui_event_types::*;
+use compound_widgets::TextDisplayWidget;
+use widget_delegation::DelegateToWidget;
 
 pub static WIDGET_ID_COUNTER: AtomicUsize = ATOMIC_USIZE_INIT;
 
@@ -277,6 +279,8 @@ pub enum Positioning {
     CenteredInParent,
     Constant(UIUnits),
     DeltaOfWidget(Wid, UIUnits, Alignment),
+    MatchWidget(Wid),
+    Absolute(UIUnits)
 }
 
 impl Positioning {
@@ -293,6 +297,8 @@ impl Positioning {
     pub fn delta_of_widget(other_widget: &Widget, delta_units :UIUnits, alignment : Alignment) -> Positioning {
         Positioning::DeltaOfWidget(other_widget.id(), delta_units, alignment)
     }
+    pub fn match_to(other_widget : &Widget) -> Positioning { Positioning::MatchWidget(other_widget.id()) }
+    pub fn absolute(uiu: UIUnits) -> Positioning { Positioning::Absolute(uiu) }
 }
 impl Default for Positioning {
     fn default() -> Self {
@@ -323,7 +329,7 @@ pub enum Alignment {
 pub struct Widget {
     pub name : Option<Str>,
     pub callbacks: Vec<u32>,
-    id: Wid,
+    pub(crate) id: Wid,
     pub parent_id: Option<Wid>,
     pub widget_type: WidgetType,
     pub size: [Sizing; 2],
@@ -335,6 +341,7 @@ pub struct Widget {
     pub showing: bool,
     pub accepts_focus: bool,
     pub ignores_parent_bounds : bool,
+    pub draw_layer : GUILayer,
     pub state_override: Option<WidgetState>,
     pub event_consumption: EventConsumption,
     pub custom_draw: Option<Arc<CustomWidgetRenderer>>,
@@ -360,7 +367,8 @@ impl Widget {
             accepts_focus: false,
             custom_draw: None,
             ignores_parent_bounds: false,
-            name : None
+            name : None,
+            draw_layer : GUILayer::Main
         }
     }
 
@@ -488,6 +496,8 @@ impl Widget {
             Positioning::CenteredInParent => true,
             Positioning::Constant(_) => false,
             Positioning::DeltaOfWidget(_, _, _) => false,
+            Positioning::MatchWidget(_) => false,
+            Positioning::Absolute(_) => false,
         }
     }
     fn validate(&self) -> bool {
@@ -513,219 +523,22 @@ impl Default for Widget {
 
 pub trait WidgetContainer {
     fn for_all_widgets<F: FnMut(&mut Widget)>(&mut self, func: F);
+
+    fn reapply(&mut self, gui : &mut GUI) {
+        self.for_all_widgets(|w| w.reapply(gui));
+    }
+    fn apply(mut self, gui : &mut GUI) -> Self where Self : Sized {
+        self.reapply(gui);
+        self
+    }
+
+    fn draw_layer_for_all(mut self, draw_layer : GUILayer) -> Self where Self : Sized {
+        self.for_all_widgets(|w| { w.draw_layer = draw_layer; });
+        self
+    }
 }
 
-pub trait DelegateToWidget where Self: Sized {
-    fn id(&self) -> Wid {
-        self.as_widget_immut().id
-    }
-    fn signifier(&self) -> String {
-        if let Some(name) = self.as_widget_immut().name {
-            String::from(name)
-        } else {
-            format!("{:?}", self.id())
-        }
-    }
-    fn named(mut self, name : Str) -> Self {
-        self.as_widget().name = Some(name);
-        self
-    }
-    fn position(mut self, x: Positioning, y: Positioning) -> Self {
-        self.set_position(x,y);
-        self
-    }
-    fn centered(self) -> Self {
-        self.position(Positioning::centered(), Positioning::centered())
-    }
-    fn set_position(&mut self, x : Positioning, y : Positioning) -> &mut Self {
-        self.as_widget().position = [x,y];
-        self
-    }
-    fn size(mut self, w: Sizing, h: Sizing) -> Self {
-        self.set_size(w,h);
-        self
-    }
-    fn fixed_size(mut self, w : UIUnits, h : UIUnits) -> Self {
-        self.set_size(Sizing::constant(w), Sizing::constant(h));
-        self
-    }
-    fn parent(mut self, p: &Widget) -> Self {
-        self.set_parent(p);
-        self
-    }
-    fn set_parent(&mut self, p: &Widget) -> &mut Self {
-        self.set_parent_id(p.id);
-        self
-    }
-    fn ignore_parent_bounds(mut self) -> Self {
-        self.as_widget().ignores_parent_bounds = true;
-        self
-    }
-    fn color(mut self, c: Color) -> Self {
-        self.set_color(c);
-        self
-    }
-    fn set_color(&mut self, c: Color) -> &mut Self {
-        self.as_widget().color = c;
-        self
-    }
 
-    fn widget_type(mut self, widget_type: WidgetType) -> Self {
-        self.set_widget_type(widget_type);
-        self
-    }
-    fn set_widget_type(&mut self, widget_type: WidgetType) -> &mut Self {
-        self.as_widget().widget_type = widget_type;
-        self
-    }
-    fn set_text<S : Into<String>>(&mut self, text : S) -> &mut Self {
-        self.as_widget().widget_type.set_text(text);
-        self
-    }
-
-    fn modify_widget_type<F: Fn(&mut WidgetType)>(&mut self, func: F) -> &mut Self {
-        (func)(&mut self.as_widget().widget_type);
-        self
-    }
-
-    fn showing(mut self, showing: bool) -> Self {
-        self.set_showing(showing);
-        self
-    }
-    fn set_showing(&mut self, showing: bool) -> &mut Self {
-        self.as_widget().showing = showing;
-        self
-    }
-
-    fn set_border(&mut self, border: Border) -> &mut Self {
-        self.as_widget().border = border;
-        self
-    }
-    fn border(mut self, border: Border) -> Self {
-        self.set_border(border);
-        self
-    }
-
-    fn border_width(mut self, border_width: u8) -> Self {
-        self.as_widget().border.width = border_width;
-        self
-    }
-    fn border_color(mut self, border_color: Color) -> Self {
-        self.as_widget().border.color = border_color;
-        self
-    }
-    fn border_sides(mut self, border_sides: BorderSides) -> Self {
-        self.as_widget().border.sides = border_sides;
-        self
-    }
-
-    fn parent_id(mut self, parent: Wid) -> Self {
-        self.set_parent_id(parent);
-        self
-    }
-    fn set_parent_id(&mut self, parent_id: Wid) -> &mut Self {
-        if parent_id == NO_WID {
-            error!("Attempting to add a widget to a parent that has no ID, this is not acceptable:\n{:?}", Backtrace::new());
-        }
-        self.as_widget().parent_id = Some(parent_id);
-        self
-    }
-
-    fn set_x(&mut self, x: Positioning) -> &mut Self {
-        self.as_widget().position[0] = x;
-        self
-    }
-    fn set_size(&mut self, w: Sizing, h: Sizing) -> &mut Self {
-        self.as_widget().size = [w,h];
-        self
-    }
-    fn margin(mut self, margin: UIUnits) -> Self {
-        self.set_margin(margin);
-        self
-    }
-    fn set_margin(&mut self, margin: UIUnits) -> &mut Self {
-        self.as_widget().margin = margin;
-        self
-    }
-    fn x(mut self, x: Positioning) -> Self {
-        self.set_x(x);
-        self
-    }
-    fn y(mut self, y: Positioning) -> Self {
-        self.set_y(y);
-        self
-    }
-    fn set_y(&mut self, y: Positioning) -> &mut Self {
-        self.as_widget().position[1] = y;
-        self
-    }
-    fn alignment(mut self, x: Alignment, y: Alignment) -> Self {
-        if (x == Alignment::Top || x == Alignment::Bottom) && (y == Alignment::Left || y == Alignment::Right) {
-            self.as_widget().alignment = [y, x];
-        } else {
-            self.as_widget().alignment = [x, y];
-        }
-        self
-    }
-    fn width(mut self, w: Sizing) -> Self {
-        self.set_width(w);
-        self
-    }
-    fn set_width(&mut self, w: Sizing) -> &mut Self {
-        self.as_widget().size[0] = w;
-        self
-    }
-    fn height<S : Into<Sizing>>(mut self, h: S) -> Self {
-        self.set_height(h.into());
-        self
-    }
-    fn set_height(&mut self, h : Sizing) -> &mut Self {
-        self.as_widget().size[1] = h;
-        self
-    }
-    fn only_consume(mut self, consumption: EventConsumption) -> Self {
-        self.as_widget().event_consumption = consumption;
-        self
-    }
-    fn and_consume(mut self, consumption: EventConsumption) -> Self {
-        let new_consumption = {
-            let old_consumption = &self.as_widget().event_consumption;
-            old_consumption.and(&consumption)
-        };
-        self.as_widget().event_consumption = new_consumption;
-        self
-    }
-    fn accepts_focus(mut self, accept: bool) -> Self {
-        self.as_widget().accepts_focus = accept;
-        self
-    }
-
-    fn with_child(self, mut child_widget : Widget) -> Self {
-        child_widget.set_parent_id(self.id());
-        self
-    }
-
-    fn with_cleared_callbacks(mut self) -> Self {
-        self.clear_callbacks();
-        self
-    }
-    fn clear_callbacks(&mut self) {
-        self.as_widget().clear_callbacks();
-    }
-    fn with_callback<State: 'static, U: Fn(&mut State, &UIEvent) + 'static>(mut self, function: U) -> Self {
-        self.as_widget().add_callback(function);
-        self
-    }
-    fn with_callback_2<State: 'static, OtherState: 'static, U: Fn(&mut State, &mut OtherState, &UIEvent) + 'static>(mut self, function: U) -> Self {
-        self.as_widget().add_callback_2(function);
-        self
-    }
-
-
-
-    fn as_widget(&mut self) -> &mut Widget;
-    fn as_widget_immut(&self) -> &Widget;
-}
 
 impl DelegateToWidget for Widget {
     fn as_widget(&mut self) -> &mut Widget {

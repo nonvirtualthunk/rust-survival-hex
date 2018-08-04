@@ -40,11 +40,6 @@ impl TextLayout {
         let mut last_glyph_id = None;
         let mut line_x = 0.0;
 
-//        let word : Vec<u8> = Vec::new();
-//
-//        let process_word = |word : &Vec<u8>| -> bool {
-//
-//        };
         let mut last_word_break = 0;
 
         for c in string.chars() {
@@ -62,6 +57,7 @@ impl TextLayout {
             } else {
                 if c == ' ' {
                     last_word_break = all_glyphs.len();
+                    max_x = max_x.max(line_x);
                 }
                 let g = font.glyph(c).scaled(scale);
 
@@ -75,7 +71,6 @@ impl TextLayout {
                 if let Some(bb) = glyph.pixel_bounding_box() {
                     if bb.max.x as f32 > wrap_at * dpi_scale {
                         line_x = 0.0;
-                        max_x = max_x.max(line_x - kerning_dist);
                         line_y += line_height;
 
                         if last_word_break < all_glyphs.len()-1 {
@@ -102,24 +97,12 @@ impl TextLayout {
             }
         }
         max_x = max_x.max(line_x);
+
         TextLayout {
             glyphs : all_glyphs,
             bounds : Rect::new(0.0, 0.0, max_x, line_y - vmetrics.ascent + line_height),
             dpi_scale
         }
-//        for line in &lines {
-//            all_glyphs.extend(
-//                font.layout(line, scale, rt::Point { x : 0.0, y : line_y})
-//                    .map(|g| g.standalone()));
-//            line_y += line_height;
-//            if let Some(last) = all_glyphs.last() {
-//                max_x = max_x.max(last.pixel_bounding_box().map(|p| p.max.x).unwrap_or(0) as f32);
-//            }
-//        }
-
-
-
-//        TextLayout::new(all_glyphs, Rect::new(0.0, 0.0, max_x, max_y), dpi_scale)
     }
 
     pub fn line_height(font : &RTFont, size : u32, dpi_scale : f32) -> f32 {

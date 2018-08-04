@@ -691,10 +691,16 @@ impl WorldView {
     pub fn data<T: EntityData>(&self, entity: Entity) -> &T {
         let data: &DataContainer<T> = self.effective_data.get::<DataContainer<T>>()
             .unwrap_or_else(|| panic!(format!("Could not retrieve effective data for entity {:?}, looking for data {:?}", entity, unsafe {std::intrinsics::type_name::<T>()})));
+
         match data.storage.get(&entity) {
             Some(t) => t,
             None => &data.sentinel
         }
+    }
+    pub fn data_opt<T: EntityData>(&self, entity: Entity) -> Option<&T> {
+        let data: &DataContainer<T> = self.effective_data.get::<DataContainer<T>>()
+            .unwrap_or_else(|| panic!(format!("Could not retrieve effective data for entity {:?}, looking for data {:?}", entity, unsafe {std::intrinsics::type_name::<T>()})));
+        data.storage.get(&entity)
     }
 
     pub fn data_mut<T: EntityData>(&mut self, entity: Entity) -> &mut T {

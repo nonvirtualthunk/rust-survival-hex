@@ -177,6 +177,28 @@ pub mod combat {
         res
     }
 
+    pub fn default_attack(world : &WorldView, attacker : Entity) -> Option<Attack> {
+        for item_ref in &world.inventory(attacker).equipped {
+            let item = world.item(*item_ref);
+            if let Some(ref attack) = item.primary_attack {
+                return Some(attack.clone());
+            }
+            if let Some(ref attack) = item.secondary_attack {
+                return Some(attack.clone());
+            }
+        }
+        return world.combat(attacker).natural_attacks.first().cloned();
+    }
+
+    pub fn primary_attack(world : &WorldView, attacker : Entity) -> Option<Attack> {
+        let combat_data = world.data::<CombatData>(attacker);
+        if let Some(attack) = combat_data.active_attack.and_then(|ar| ar.referenced_attack(world, attacker)) {
+            Some(attack.clone())
+        } else {
+            default_attack(world, attacker)
+        }
+    }
+
     pub fn valid_attacks<'a, 'b>(world_view: &'a WorldView, attacker : Entity, attacks: &'b Vec<Attack>, defender : Entity) -> Vec<&'b Attack> {
         let attacker = world_view.character(attacker);
         let defender = world_view.character(defender);

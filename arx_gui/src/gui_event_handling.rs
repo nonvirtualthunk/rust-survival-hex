@@ -25,6 +25,8 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use widgets::*;
 use gui::Modifiers;
+use widget_delegation::DelegateToWidget;
+use std::time::Instant;
 
 
 pub struct WidgetAlteration {
@@ -177,8 +179,18 @@ impl GUI {
         }
     }
 
-    fn enqueue_event(&mut self, evt : &UIEvent) {
-        self.queued_events.iter_mut().foreach(|(_, vec)| vec.push(evt.clone()));
+    pub(crate) fn enqueue_event(&mut self, evt : &UIEvent) {
+        self.queued_events.iter_mut().foreach(|(t, vec)| {
+            vec.push(evt.clone());
+        });
+    }
+
+    pub(crate) fn enqueue_event_excepting_self(&mut self, evt : &UIEvent) {
+        self.queued_events.iter_mut().foreach(|(t, vec)| {
+            if t != &TypeId::of::<WidgetStatePlaceholder>() {
+                vec.push(evt.clone());
+            }
+        });
     }
 
     fn handle_event_widget_2<State: 'static, OtherState: 'static>(&mut self, wid: Wid, event: &UIEvent, state: &mut State, other_state: &mut OtherState) -> bool {
@@ -231,6 +243,15 @@ impl GUI {
             };
 
             if let Some(pos) = altered_pos {
+                let now = Instant::now();
+                // if it was hovering before, send an event indicating its end
+                if let Some(hover_widget) = self.hover_widget {
+                    self.enqueue_event(&UIEvent::HoverEnd { pos : pos.clone(), over_widget : hover_widget });
+                }
+                // the mouse has been moved, restart the hover
+                self.hover_start = now;
+                self.hover_widget = None;
+
                 if route_to != self.moused_over_widget {
                     let cur_moused_over = self.moused_over_widget;
                     if let Some(prev) = cur_moused_over {
@@ -369,6 +390,10 @@ impl GUI {
 
     pub fn events_for(&self, widget: &Widget) -> &Vec<UIEvent> {
         self.events_by_widget.get(&widget.id()).unwrap_or_else(|| &self.empty_vec)
+    }
+
+    pub fn signifier_for(&self, widget : Wid) -> String {
+        self.widget_reification(widget).widget.signifier()
     }
 
 }
