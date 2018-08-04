@@ -232,63 +232,63 @@ pub trait DelegateToWidget where Self: Sized {
         self
     }
 
-    fn set_tooltip<S: Into<String>>(&mut self, gui: &mut GUI, string: S) -> &mut Self {
-        self.as_widget().reapply(gui);
+    fn set_tooltip<S: Into<String>>(&mut self, string: S) -> &mut Self {
         let string: String = string.into();
-
-        if let Some(tooltip) = gui.child_widgets_of(self.id()).find(|c| c.signifier().as_str() == "tooltip") {
-            let tooltip_children = gui.child_widgets_of(tooltip.id());
-            let text_portion = tooltip_children.find(|c| if let WidgetType::Text { .. } = c.widget_type { true } else { false });
-            if let Some(tooltip_text) = text_portion {
-                if let WidgetType::Text { ref text, .. } = tooltip_text.widget_type {
-                    if text != &string {
-                        info!("Tooltip text set to something new, from {} to {}, updating.", text, string);
-                        gui.alter_widget(tooltip_text.id(), |w| { w.set_text(string.clone()); });
-                    }
-                } else {
-                    error!("Somehow the text widget no longer has a text widget type? That should be logically impossible");
-                }
-                return self;
-            } else {
-                info!("Tooltip existed, but it didn't follow expected form, had to destroy and recreate");
-                gui.remove_widget_by_id(tooltip.id());
-            }
-        }
-
-        let mut tdw = TextDisplayWidget::new(string.clone(), 14, None, ImageSegmentation::None)
-            .parent_id(self.id())
-            .draw_layer_for_all(GUILayer::Overlay)
-            .ignore_parent_bounds()
-            .position(Positioning::Constant(1.ux()), Positioning::Constant(1.ux()))
-            .named("tooltip")
-            .showing(false);
-
-        if string.len() > 40 {
-            tdw = tdw.wrapped(Sizing::Constant(20.ux()));
-            tdw.text.set_x(Positioning::centered());
-        }
-
-        let tdw_id = tdw.id();
-        tdw.apply(gui);
-
-        self.add_callback(move |ctxt: &mut WidgetContext, evt: &UIEvent| {
-            match evt {
-                UIEvent::HoverStart { pos, .. } => {
-                    let (x, y) = ((pos.absolute_pos.x + 1.0).ux(), (pos.absolute_pos.y + 1.0).ux());
-                    ctxt.alter_widget(tdw_id, move |w| {
-                        w.set_showing(true);
-                        w.set_position(Positioning::absolute(x), Positioning::absolute(y));
-                    })
-                }
-                UIEvent::HoverEnd { .. } => ctxt.alter_widget(tdw_id, |w| { w.set_showing(false); }),
-                _ => ()
-            }
-        }).and_consume(EventConsumption::EventTypes(HOVER_START.bit_flag | HOVER_END.bit_flag));
+        self.as_widget().tooltip = Some(string);
+//
+//        if let Some(tooltip) = self.as_widget().tooltip {
+//            let tooltip_children = tooltip.for_all_widgets()
+//            let text_portion = tooltip_children.find(|c| if let WidgetType::Text { .. } = c.widget_type { true } else { false });
+//            if let Some(tooltip_text) = text_portion {
+//                if let WidgetType::Text { ref text, .. } = tooltip_text.widget_type {
+//                    if text != &string {
+//                        info!("Tooltip text set to something new, from {} to {}, updating.", text, string);
+//                        gui.alter_widget(tooltip_text.id(), |w| { w.set_text(string.clone()); });
+//                    }
+//                } else {
+//                    error!("Somehow the text widget no longer has a text widget type? That should be logically impossible");
+//                }
+//                return self;
+//            } else {
+//                info!("Tooltip existed, but it didn't follow expected form, had to destroy and recreate");
+//                gui.remove_widget_by_id(tooltip.id());
+//            }
+//        }
+//
+//        let mut tdw = TextDisplayWidget::new(string.clone(), 14, None, ImageSegmentation::None)
+//            .parent_id(self.id())
+//            .draw_layer_for_all(GUILayer::Overlay)
+//            .ignore_parent_bounds()
+//            .position(Positioning::Constant(1.ux()), Positioning::Constant(1.ux()))
+//            .named("tooltip")
+//            .showing(false);
+//
+//        if string.len() > 40 {
+//            tdw = tdw.wrapped(Sizing::Constant(20.ux()));
+//            tdw.text.set_x(Positioning::centered());
+//        }
+//
+//        let tdw_id = tdw.id();
+//        tdw.apply(gui);
+//
+//        self.add_callback(move |ctxt: &mut WidgetContext, evt: &UIEvent| {
+//            match evt {
+//                UIEvent::HoverStart { pos, .. } => {
+//                    let (x, y) = ((pos.absolute_pos.x + 1.0).ux(), (pos.absolute_pos.y + 1.0).ux());
+//                    ctxt.alter_widget(tdw_id, move |w| {
+//                        w.set_showing(true);
+//                        w.set_position(Positioning::absolute(x), Positioning::absolute(y));
+//                    })
+//                }
+//                UIEvent::HoverEnd { .. } => ctxt.alter_widget(tdw_id, |w| { w.set_showing(false); }),
+//                _ => ()
+//            }
+//        }).and_consume(EventConsumption::EventTypes(HOVER_START.bit_flag | HOVER_END.bit_flag));
 
         self
     }
-    fn with_tooltip<S: Into<String>>(mut self, gui: &mut GUI, string: S) -> Self {
-        self.set_tooltip(gui, string);
+    fn with_tooltip<S: Into<String>>(mut self, string: S) -> Self {
+        self.set_tooltip(string);
         self
     }
 

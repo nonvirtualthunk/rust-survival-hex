@@ -345,7 +345,7 @@ pub struct Widget {
     pub state_override: Option<WidgetState>,
     pub event_consumption: EventConsumption,
     pub custom_draw: Option<Arc<CustomWidgetRenderer>>,
-    pub tooltip : Option<Box<WidgetContainer>>
+    pub tooltip : Option<String>
 }
 
 

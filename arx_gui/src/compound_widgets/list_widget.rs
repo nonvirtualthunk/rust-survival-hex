@@ -18,6 +18,7 @@ use ui_event_types::*;
 use widgets::*;
 use widget_delegation::DelegateToWidget;
 
+#[derive(Clone)]
 pub struct ListWidget<T: Default> {
     pub body: Widget,
     pub item_archetype: Widget,
@@ -198,7 +199,7 @@ impl<T: Default> DelegateToWidget for ListWidget<T> {
     }
 }
 
-impl<T: Default> WidgetContainer for ListWidget<T> {
+impl<T: Default + Clone> WidgetContainer for ListWidget<T> {
     fn for_all_widgets<F: FnMut(&mut Widget)>(&mut self, mut func: F) {
         (func)(&mut self.body);
         for child in &mut self.children {

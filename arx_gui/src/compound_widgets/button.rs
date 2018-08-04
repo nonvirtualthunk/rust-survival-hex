@@ -18,7 +18,7 @@ use ui_event_types::*;
 use widgets::*;
 use widget_delegation::DelegateToWidget;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Button {
     pub body: Widget,
     pub text: Widget,

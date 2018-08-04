@@ -124,7 +124,7 @@ impl ChopToU32 for i32 {
     }
 }
 
-
+#[derive(Clone, PartialEq)]
 pub enum Orientation {
     Horizontal,
     Vertical,

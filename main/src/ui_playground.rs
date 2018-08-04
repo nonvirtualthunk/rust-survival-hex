@@ -126,7 +126,7 @@ fn make_windows(gui: &mut GUI) {
         .position(Positioning::Constant(4.ux()), Positioning::Constant(4.ux()))
         .size(Sizing::Constant(10.ux()), Sizing::Constant(4.ux()))
         .parent(&test_window)
-        .with_tooltip(gui, "This is a tooltip")
+        .with_tooltip("This is a tooltip")
         .apply(gui);
 
     let tab_widget = TabWidget::new(vec!["Foo","Bar","Bazilicus"])
@@ -143,7 +143,7 @@ fn make_windows(gui: &mut GUI) {
     let bar_widget = Widget::image("images/archer", Color::white(), 1)
         .position(Positioning::Constant(2.ux()), Positioning::Constant(10.ux()))
         .parent(tab_widget.tab_named("Bar"))
-        .with_tooltip(gui, "This is a longer tooltip, this should trigger the whole thing to become wrapped by parent")
+        .with_tooltip("This is a longer tooltip, this should trigger the whole thing to become wrapped by parent")
         .apply(gui);
 
 

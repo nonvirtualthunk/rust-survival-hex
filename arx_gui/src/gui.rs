@@ -39,6 +39,9 @@ pub use gui_rendering::*;
 use widget_delegation::DelegateToWidget;
 use std::time::Instant;
 use std::time::Duration;
+use events::ui_event_types::HOVER_START;
+use events::ui_event_types::HOVER_END;
+use widgets::TextDisplayWidget;
 
 
 #[derive(Clone, Copy, PartialEq, Neg, Debug)]
@@ -101,6 +104,8 @@ pub(crate) struct WidgetReification {
     pub(crate) bounding_box: Option<Rect<f32>>,
     pub(crate) inner_bounding_box: Option<Rect<f32>>,
     pub(crate) widget_state: WidgetState,
+    pub(crate) tooltip: Option<(Wid, Wid)>,
+    pub(crate) internal_callbacks: Vec<u32>
 }
 
 impl WidgetReification {
@@ -117,6 +122,8 @@ impl WidgetReification {
             bounding_box: None,
             inner_bounding_box: None,
             widget_state: WidgetState::NoState,
+            tooltip: None,
+            internal_callbacks: Vec::new()
         }
     }
 
@@ -171,7 +178,7 @@ impl GUI {
         create_wid()
     }
 
-    pub fn apply_widget(&mut self, widget: &Widget) {
+    pub fn apply_widget(&mut self, widget: &mut Widget) {
         let wid = widget.id();
 
         // ensure that the child is now registered with its parent, if any
@@ -190,8 +197,15 @@ impl GUI {
         let existing_state = self.widget_reifications.remove(&wid);
         if let Some(mut state) = existing_state {
             let mut mark_modified = false;
-            if state.widget != *widget {
+            let new_tooltip = if state.widget != *widget {
+                let new_tooltip = self.handle_tooltip(&state.tooltip, widget);
+
                 state.widget = widget.clone();
+
+                if let Some(ref new_tooltip) = new_tooltip {
+                    state.tooltip = Some((new_tooltip.body.id(), new_tooltip.text.id()));
+                }
+
                 // clear the override on the stored widget, don't want that continuously retrigger
                 state.widget.state_override = None;
                 // if there's a state override set, update the state to the new value
@@ -202,14 +216,77 @@ impl GUI {
                     }
                 }
                 mark_modified = true;
-            }
+                new_tooltip
+            } else {
+                None
+            };
+
             self.widget_reifications.insert(wid, state);
+            if let Some(mut new_tooltip) = new_tooltip {
+                new_tooltip.reapply(self);
+            }
             if mark_modified {
                 self.mark_widget_modified(wid);
             }
         } else {
-            self.widget_reifications.insert(wid, WidgetReification::new(widget.clone()));
+            let new_tooltip = self.handle_tooltip(&None, widget);
+
+            let state = WidgetReification::new(widget.clone());
+
+            self.widget_reifications.insert(wid, state);
+
+            if let Some(mut new_tooltip) = new_tooltip {
+                new_tooltip.reapply(self);
+            }
+
             self.mark_widget_modified(wid);
+        }
+    }
+
+    fn handle_tooltip(&mut self, existing : &Option<(Wid,Wid)>, widget : &mut Widget) -> Option<TextDisplayWidget> {
+        if let Some(ref tooltip_string) = widget.tooltip {
+            if let Some((tooltip_body_id, tooltip_text_id)) = existing {
+                info!("Modifying existing tooltip state");
+                let mut tooltip_text = self.widget_reifications.remove(&tooltip_text_id).expect("we recorded the presence of a tooltip, but it could not be found");
+                tooltip_text.widget.widget_type.set_text(tooltip_string.clone());
+                self.widget_reifications.insert(*tooltip_text_id, tooltip_text);
+
+                None
+            } else {
+                let mut tdw = TextDisplayWidget::new(tooltip_string.clone(), 14, None, ImageSegmentation::None)
+                    .parent_id(widget.id())
+                    .draw_layer_for_all(GUILayer::Overlay)
+                    .ignore_parent_bounds()
+                    .position(Positioning::Constant(1.ux()), Positioning::Constant(1.ux()))
+                    .named("tooltip")
+                    .showing(false);
+
+                if tooltip_string.len() > 40 {
+                    tdw = tdw.wrapped(Sizing::Constant(20.ux()));
+                    tdw.text.set_x(Positioning::centered());
+                }
+
+                let tdw_id = tdw.id();
+                let tdw_text_id = tdw.text.id();
+
+                widget.add_callback(move |ctxt: &mut WidgetContext, evt: &UIEvent| {
+                    match evt {
+                        UIEvent::HoverStart { pos, .. } => {
+                            let (x, y) = ((pos.absolute_pos.x + 1.0).ux(), (pos.absolute_pos.y + 1.0).ux());
+                            ctxt.alter_widget(tdw_id, move |w| {
+                                w.set_showing(true);
+                                w.set_position(Positioning::absolute(x), Positioning::absolute(y));
+                            })
+                        }
+                        UIEvent::HoverEnd { .. } => ctxt.alter_widget(tdw_id, |w| { w.set_showing(false); }),
+                        _ => ()
+                    }
+                }).and_consume(EventConsumption::EventTypes(HOVER_START.bit_flag | HOVER_END.bit_flag));
+
+                Some(tdw)
+            }
+        } else {
+            None
         }
     }
 

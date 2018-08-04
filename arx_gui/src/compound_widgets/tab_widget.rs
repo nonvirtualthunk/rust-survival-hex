@@ -40,6 +40,7 @@ impl WidgetContainer for TabWidget {
     }
 }
 
+#[derive(Clone)]
 pub struct TabWidget {
     pub body: Widget,
     pub tab_titles: Vec<String>,

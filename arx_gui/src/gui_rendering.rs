@@ -359,6 +359,10 @@ impl GUI {
         let signifier = self.widget_reification(wid).widget.signifier();
 
         let should_update = force_update || self.modified_set.contains(&wid);
+//        if should_update {
+//            debug!("Widget {} changed sufficiently to require update", signifier);
+//        }
+
         let child_dependent = if should_update {
             trace!(target: "gui_redraw", "{}Entering update of widget: {}, {:?}", "\t".repeat(widget_depth), signifier , self.widget_reification(wid).widget.widget_type);
             self.update_widget(g, wid, false)
