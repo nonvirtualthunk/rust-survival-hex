@@ -166,12 +166,41 @@ pub trait DelegateToWidget where Self: Sized {
         self.as_widget().position[1] = y;
         self
     }
+    fn below(self, other : &Widget, delta : UIUnits) -> Self {
+        self.y(Positioning::below(other, delta))
+    }
+    fn above(self, other : &Widget, delta : UIUnits) -> Self {
+        self.y(Positioning::above(other, delta))
+    }
+    fn left_of(self, other : &Widget, delta : UIUnits) -> Self {
+        self.x(Positioning::left_of(other, delta))
+    }
+    fn right_of(self, other : &Widget, delta : UIUnits) -> Self {
+        self.x(Positioning::right_of(other, delta))
+    }
+    fn surround_children(self) -> Self {
+        self.size(Sizing::surround_children(), Sizing::surround_children())
+    }
+    fn surround_children_h(self) -> Self {
+        self.width(Sizing::surround_children())
+    }
+    fn surround_children_v(self) -> Self {
+        self.height(Sizing::surround_children())
+    }
     fn alignment(mut self, x: Alignment, y: Alignment) -> Self {
         if (x == Alignment::Top || x == Alignment::Bottom) && (y == Alignment::Left || y == Alignment::Right) {
             self.as_widget().alignment = [y, x];
         } else {
             self.as_widget().alignment = [x, y];
         }
+        self
+    }
+    fn align_right(mut self) -> Self {
+        self.as_widget().alignment[0] = Alignment::Right;
+        self
+    }
+    fn align_bottom(mut self) -> Self {
+        self.as_widget().alignment[1] = Alignment::Bottom;
         self
     }
     fn width(mut self, w: Sizing) -> Self {
@@ -207,10 +236,11 @@ pub trait DelegateToWidget where Self: Sized {
         self
     }
 
-    fn with_child(self, mut child_widget: Widget) -> Self {
-        child_widget.set_parent_id(self.id());
-        self
-    }
+//    fn with_child(self, mut child_widget: Widget, gui: &mut GUI) -> Self {
+//        child_widget.set_parent_id(self.id());
+////        child_widget.reapply(gui); // doesn't work because parent doesn't exist yet. This would require a to-apply queue within the widget I think
+//        self
+//    }
 
     fn with_cleared_callbacks(mut self) -> Self {
         self.clear_callbacks();
@@ -235,56 +265,6 @@ pub trait DelegateToWidget where Self: Sized {
     fn set_tooltip<S: Into<String>>(&mut self, string: S) -> &mut Self {
         let string: String = string.into();
         self.as_widget().tooltip = Some(string);
-//
-//        if let Some(tooltip) = self.as_widget().tooltip {
-//            let tooltip_children = tooltip.for_all_widgets()
-//            let text_portion = tooltip_children.find(|c| if let WidgetType::Text { .. } = c.widget_type { true } else { false });
-//            if let Some(tooltip_text) = text_portion {
-//                if let WidgetType::Text { ref text, .. } = tooltip_text.widget_type {
-//                    if text != &string {
-//                        info!("Tooltip text set to something new, from {} to {}, updating.", text, string);
-//                        gui.alter_widget(tooltip_text.id(), |w| { w.set_text(string.clone()); });
-//                    }
-//                } else {
-//                    error!("Somehow the text widget no longer has a text widget type? That should be logically impossible");
-//                }
-//                return self;
-//            } else {
-//                info!("Tooltip existed, but it didn't follow expected form, had to destroy and recreate");
-//                gui.remove_widget_by_id(tooltip.id());
-//            }
-//        }
-//
-//        let mut tdw = TextDisplayWidget::new(string.clone(), 14, None, ImageSegmentation::None)
-//            .parent_id(self.id())
-//            .draw_layer_for_all(GUILayer::Overlay)
-//            .ignore_parent_bounds()
-//            .position(Positioning::Constant(1.ux()), Positioning::Constant(1.ux()))
-//            .named("tooltip")
-//            .showing(false);
-//
-//        if string.len() > 40 {
-//            tdw = tdw.wrapped(Sizing::Constant(20.ux()));
-//            tdw.text.set_x(Positioning::centered());
-//        }
-//
-//        let tdw_id = tdw.id();
-//        tdw.apply(gui);
-//
-//        self.add_callback(move |ctxt: &mut WidgetContext, evt: &UIEvent| {
-//            match evt {
-//                UIEvent::HoverStart { pos, .. } => {
-//                    let (x, y) = ((pos.absolute_pos.x + 1.0).ux(), (pos.absolute_pos.y + 1.0).ux());
-//                    ctxt.alter_widget(tdw_id, move |w| {
-//                        w.set_showing(true);
-//                        w.set_position(Positioning::absolute(x), Positioning::absolute(y));
-//                    })
-//                }
-//                UIEvent::HoverEnd { .. } => ctxt.alter_widget(tdw_id, |w| { w.set_showing(false); }),
-//                _ => ()
-//            }
-//        }).and_consume(EventConsumption::EventTypes(HOVER_START.bit_flag | HOVER_END.bit_flag));
-
         self
     }
     fn with_tooltip<S: Into<String>>(mut self, string: S) -> Self {

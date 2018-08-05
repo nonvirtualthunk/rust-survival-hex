@@ -1,6 +1,8 @@
 #![allow(unused_imports)]
-#![feature(vec_resize_default)]
 #![allow(where_clauses_object_safety)]
+
+#![feature(const_fn)]
+#![feature(vec_resize_default)]
 
 extern crate cgmath;
 extern crate interpolation;

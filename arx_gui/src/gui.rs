@@ -198,7 +198,7 @@ impl GUI {
         if let Some(mut state) = existing_state {
             let mut mark_modified = false;
             let new_tooltip = if state.widget != *widget {
-                let new_tooltip = self.handle_tooltip(&state.tooltip, widget);
+                let new_tooltip = self.handle_tooltip(&state.tooltip, &state.widget.tooltip, widget);
 
                 state.widget = widget.clone();
 
@@ -229,7 +229,7 @@ impl GUI {
                 self.mark_widget_modified(wid);
             }
         } else {
-            let new_tooltip = self.handle_tooltip(&None, widget);
+            let new_tooltip = self.handle_tooltip(&None, &None, widget);
 
             let state = WidgetReification::new(widget.clone());
 
@@ -243,10 +243,13 @@ impl GUI {
         }
     }
 
-    fn handle_tooltip(&mut self, existing : &Option<(Wid,Wid)>, widget : &mut Widget) -> Option<TextDisplayWidget> {
+    fn handle_tooltip(&mut self, existing : &Option<(Wid,Wid)>, old_tooltip: &Option<String>, widget : &mut Widget) -> Option<TextDisplayWidget> {
+        if old_tooltip == &widget.tooltip {
+            return None;
+        }
         if let Some(ref tooltip_string) = widget.tooltip {
             if let Some((tooltip_body_id, tooltip_text_id)) = existing {
-                info!("Modifying existing tooltip state");
+                info!("Modifying existing tooltip state, from {} to {}", old_tooltip.as_ref().unwrap_or(&strf("N/A")), tooltip_string);
                 let mut tooltip_text = self.widget_reifications.remove(&tooltip_text_id).expect("we recorded the presence of a tooltip, but it could not be found");
                 tooltip_text.widget.widget_type.set_text(tooltip_string.clone());
                 self.widget_reifications.insert(*tooltip_text_id, tooltip_text);

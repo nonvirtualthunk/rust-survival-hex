@@ -80,3 +80,21 @@ pub fn derive_widget_container(input: proc_macro::TokenStream) -> proc_macro::To
 
     expanded.into()
 }
+
+
+#[proc_macro_derive(DelegateToWidget)]
+pub fn derive_delegate_to_widget(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let input: DeriveInput = syn::parse(input).unwrap();
+
+    let name = input.ident;
+
+    let raw = quote! {
+        impl DelegateToWidget for #name {
+            fn as_widget(&mut self) -> &mut Widget { &mut self.body }
+
+            fn as_widget_immut(&self) -> &Widget { &self.body }
+        }
+    };
+
+    raw.into()
+}

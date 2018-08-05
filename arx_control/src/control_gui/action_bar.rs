@@ -14,6 +14,11 @@ pub struct ActionBar {
     pub actions : Vec<ActionType>,
     pub selected_actions : HashMap<Entity, ActionType>
 }
+impl DelegateToWidget for ActionBar {
+    fn as_widget(&mut self) -> &mut Widget { self.action_list.as_widget() }
+
+    fn as_widget_immut(&self) -> &Widget { self.action_list.as_widget_immut() }
+}
 
 #[derive(WidgetContainer)]
 pub struct ActionButton {
@@ -76,6 +81,8 @@ impl ActionBar {
 
     pub fn update(&mut self, gui : &mut GUI, actions : Vec<ActionType>, game_state : &GameState, control_context : ControlContext) {
         if let Some(selected_char) = game_state.selected_character {
+            self.action_list.set_showing(true).reapply(gui);
+
             let mut selection_changed = false;
             for event in gui.events_for(self.action_list.as_widget_immut()) {
                 if let UIEvent::WidgetEvent(wevent) = event {

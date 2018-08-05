@@ -2,15 +2,19 @@ use std::ops;
 use std::convert::From;
 use rand::Rng;
 use std::convert::Into;
+use itertools::Itertools;
+use std::fmt::Display;
+use std::fmt::Error;
+use std::fmt::Formatter;
 
-use num;
+//use num;
 
 pub type GameEventClock = u64;
 
 
-pub trait ReduceableType: ops::Sub<Output=Self> + ops::Add<Output=Self> + Copy + Default + Into<f64> {}
+pub trait ReduceableType: ops::Sub<Output=Self> + ops::Add<Output=Self> + Copy + Default + Into<f64> + PartialOrd<Self> {}
 
-impl<T> ReduceableType for T where T: ops::Sub<Output=T> + ops::Add<Output=T> + Copy + Default + Into<f64> {}
+impl<T> ReduceableType for T where T: ops::Sub<Output=T> + ops::Add<Output=T> + Copy + Default + Into<f64> + PartialOrd<Self> {}
 
 #[derive(Clone, Default, Debug)]
 pub struct Reduceable<T: ReduceableType> {
@@ -18,7 +22,7 @@ pub struct Reduceable<T: ReduceableType> {
     reduced_by: T,
 }
 
-impl<T: ops::Sub<Output=T> + ops::Add<Output=T> + Copy + Default + Into<f64>> Reduceable<T> {
+impl<T: ReduceableType> Reduceable<T> {
     pub fn value(&self) -> T {
         self.base_value - self.reduced_by
     }
@@ -33,6 +37,13 @@ impl<T: ops::Sub<Output=T> + ops::Add<Output=T> + Copy + Default + Into<f64>> Re
     pub fn max_value(&self) -> T { self.base_value }
     pub fn cur_value(&self) -> T { self.base_value - self.reduced_by }
     pub fn reduce_by(&mut self, by: T) { self.reduced_by = self.reduced_by + by; }
+    pub fn recover_by(&mut self, by: T) {
+        self.reduced_by = self.reduced_by - by;
+        let zero = T::default();
+        if self.reduced_by < zero {
+            self.reduced_by = zero;
+        }
+    }
     pub fn reduce_to(&mut self, to: T) { self.reduced_by = self.base_value - to; }
     pub fn reset(&mut self) { self.reduced_by = T::default(); }
     pub fn cur_fract(&self) -> f64 { self.cur_value().into() / self.max_value().into() }
@@ -46,16 +57,38 @@ pub struct DicePool {
     pub count: u32,
 }
 
-impl Default for DicePool {
-    fn default() -> Self {
-        DicePool {
-            die: 1,
-            count: 1,
-        }
+impl Default for DicePool { fn default() -> Self { DicePool { die: 1, count: 1 } } }
+
+impl Display for DicePool {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        write!(f, "{}d{}", self.count, self.die)
     }
 }
 
 impl DicePool {
+    pub fn of(count: u32, die: u32) -> DicePool {
+        DicePool {
+            die,
+            count,
+        }
+    }
+
+    pub fn from_str<S: Into<String>>(string: S) -> Option<DicePool> {
+        let string = string.into();
+        let parts = string.split("d").collect_vec();
+        if parts.len() != 2 {
+            None
+        } else {
+            let count: Result<u32, _> = parts[0].parse::<u32>();
+            let die: Result<u32, _> = parts[1].parse::<u32>();
+            if count.is_ok() && die.is_ok() {
+                Some(DicePool::of(count.unwrap(), die.unwrap()))
+            } else {
+                None
+            }
+        }
+    }
+
     pub fn roll<T: Rng>(&self, rng: &mut T) -> DiceRoll {
         let mut res: Vec<u32> = vec!();
         let mut total = 0u32;
@@ -162,22 +195,22 @@ impl Into<f64> for Oct {
 }
 
 #[derive(Default)]
-pub struct Progress<T : PartialOrd + Default + Clone> {
-    pub current : T,
-    pub required : T
+pub struct Progress<T: PartialOrd + Default + Clone> {
+    pub current: T,
+    pub required: T,
 }
 
-impl <T : PartialOrd + Default + Clone> Progress<T> {
+impl<T: PartialOrd + Default + Clone> Progress<T> {
     pub fn is_complete(&self) -> bool {
-        ! (self.current < self.required)
+        !(self.current < self.required)
     }
     pub fn not_complete(&self) -> bool {
-        ! self.is_complete()
+        !self.is_complete()
     }
-    pub fn with_current(&self, t : T) -> Progress<T> {
+    pub fn with_current(&self, t: T) -> Progress<T> {
         Progress {
-            current : t,
-            required : self.required.clone()
+            current: t,
+            required: self.required.clone(),
         }
     }
 }

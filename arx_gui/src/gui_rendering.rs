@@ -91,11 +91,14 @@ impl GUI {
                             if secondary {
                                 let mut enclosing_rect = None;
                                 for child_wid in &internal_state.children {
-                                    let child_bounds = self.widget_reifications.get(child_wid).expect("child must exist").bounds();
-                                    enclosing_rect = match enclosing_rect {
-                                        Some(existing) => Some(Rect::enclosing_both(existing, child_bounds)),
-                                        None => Some(child_bounds)
-                                    };
+                                    let child_reif = self.widget_reifications.get(child_wid).expect("child must exist");
+                                    if child_reif.widget.showing {
+                                        let child_bounds = child_reif.bounds();
+                                        enclosing_rect = match enclosing_rect {
+                                            Some(existing) => Some(Rect::enclosing_both(existing, child_bounds)),
+                                            None => Some(child_bounds)
+                                        };
+                                    }
                                 }
                                 let comparison_pos = internal_state.inner_position[axis];
                                 trace!(target: "gui_redraw", "Computed enclosing rect of {} children : {:?} for axis {} with comp-pos: {}", internal_state.children.len(), enclosing_rect, axis, comparison_pos);
@@ -359,37 +362,40 @@ impl GUI {
         let signifier = self.widget_reification(wid).widget.signifier();
 
         let should_update = force_update || self.modified_set.contains(&wid);
+        let skip_update = !should_update && !self.widget_reification(wid).widget.showing;
 //        if should_update {
 //            debug!("Widget {} changed sufficiently to require update", signifier);
 //        }
 
-        let child_dependent = if should_update {
-            trace!(target: "gui_redraw", "{}Entering update of widget: {}, {:?}", "\t".repeat(widget_depth), signifier , self.widget_reification(wid).widget.widget_type);
-            self.update_widget(g, wid, false)
-        } else {
-            false
-        };
+        if ! skip_update {
+            let child_dependent = if should_update {
+                trace!(target: "gui_redraw", "{}Entering update of widget: {}, {:?}", "\t".repeat(widget_depth), signifier , self.widget_reification(wid).widget.widget_type);
+                self.update_widget(g, wid, false)
+            } else {
+                false
+            };
 
-        let children = self.widget_reifications.get(&wid).expect("recursive update widget must take valid wid with known state").children.clone();
-        for child in &children {
-            self.recursive_update_widget(g, *child, should_update);
-        }
-
-        if should_update && child_dependent {
-            trace!(target: "gui_redraw", "{}Performing post-child update of wid: {}", "\t".repeat(widget_depth + 1), signifier);
-            self.update_widget(g, wid, true);
+            let children = self.widget_reifications.get(&wid).expect("recursive update widget must take valid wid with known state").children.clone();
             for child in &children {
                 self.recursive_update_widget(g, *child, should_update);
             }
-        }
 
-        if should_update {
-            trace!(target: "gui_redraw", "{}Performing draw update of wid: {}", "\t".repeat(widget_depth + 1), signifier);
-            self.update_widget_draw(g, wid);
-        }
+            if should_update && child_dependent {
+                trace!(target: "gui_redraw", "{}Performing post-child update of wid: {}", "\t".repeat(widget_depth + 1), signifier);
+                self.update_widget(g, wid, true);
+                for child in &children {
+                    self.recursive_update_widget(g, *child, should_update);
+                }
+            }
 
-        if should_update {
-            trace!(target: "gui_redraw", "{}Closing update of wid: {}", "\t".repeat(widget_depth), signifier);
+            if should_update {
+                trace!(target: "gui_redraw", "{}Performing draw update of wid: {}", "\t".repeat(widget_depth + 1), signifier);
+                self.update_widget_draw(g, wid);
+            }
+
+            if should_update {
+                trace!(target: "gui_redraw", "{}Closing update of wid: {}", "\t".repeat(widget_depth), signifier);
+            }
         }
     }
 

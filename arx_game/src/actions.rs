@@ -62,7 +62,7 @@ impl EntitySelectors {
                     world.character(of).faction == world.character(entity).faction,
             InMoveRange { hex_range, of } => {
                 if let Some(end_point) = position_of(entity, world) {
-                    if let Some((_, cost)) = super::action_execution::movement::path_to(world, of, end_point) {
+                    if let Some((_, cost)) = super::logic::movement::path_to(world, of, end_point) {
                         return cost < hex_range as f64
                     }
                 }

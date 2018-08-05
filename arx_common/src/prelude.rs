@@ -46,6 +46,7 @@ pub fn circlerp<T : Float + num::FromPrimitive>(linfract : T) -> T {
 
 pub trait ToStringWithSign {
     fn to_string_with_sign(&self) -> String;
+    fn sign_str(&self) -> Str;
 }
 impl ToStringWithSign for i32 {
     fn to_string_with_sign(&self) -> String {
@@ -53,6 +54,14 @@ impl ToStringWithSign for i32 {
             self.to_string()
         } else {
             format!("+{}", self.to_string())
+        }
+    }
+
+    fn sign_str(&self) -> Str {
+        if *self < 0 {
+            "-"
+        } else {
+            "+"
         }
     }
 }
@@ -64,6 +73,14 @@ impl ToStringWithSign for i64 {
             format!("+{}", self.to_string())
         }
     }
+
+    fn sign_str(&self) -> Str {
+        if *self < 0 {
+            "-"
+        } else {
+            "+"
+        }
+    }
 }
 impl ToStringWithSign for f64 {
     fn to_string_with_sign(&self) -> String {
@@ -71,6 +88,46 @@ impl ToStringWithSign for f64 {
             self.to_string()
         } else {
             format!("+{}", self.to_string())
+        }
+    }
+
+    fn sign_str(&self) -> Str {
+        if *self < 0.0 {
+            "-"
+        } else {
+            "+"
+        }
+    }
+}
+
+pub trait RichString {
+    fn capitalized(&self) -> String;
+}
+
+impl RichString for String {
+    fn capitalized(&self) -> String {
+        if self.is_empty() {
+            self.clone()
+        } else {
+            let mut start = self.chars().take(1).collect::<String>().to_uppercase();
+            let end = self.chars().skip(1).collect::<String>();
+
+            start.push_str(end.as_str());
+            start
+        }
+    }
+}
+
+impl RichString for Str {
+    fn capitalized(&self) -> String {
+        if self.is_empty() {
+            strf(self)
+        } else {
+            let mut start = self.chars().take(1).collect::<String>().to_uppercase();
+            let end = self.chars().skip(1).collect::<String>();
+
+            start.push_str(end.as_str());
+            start
         }
     }
 }
@@ -111,7 +168,7 @@ impl <T> ExtendedCollection<T> for Vec<T> {
     }
 }
 
-trait ChopToU32 {
+pub trait ChopToU32 {
     fn as_u32_or_0(&self) -> u32;
 }
 impl ChopToU32 for i32 {

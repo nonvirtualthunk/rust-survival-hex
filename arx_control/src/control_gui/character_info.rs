@@ -2,12 +2,13 @@ use std;
 use common::Color;
 use common::prelude::*;
 use game::core::*;
-use game::Skill;
+use game::entities::Skill;
 use game::WorldView;
 use game::entities::*;
 use gui::*;
 use std::fmt;
 use tactical_gui::GameState;
+use control_gui::attack_descriptions::*;
 
 
 pub struct CharacterInfoWidget {
@@ -19,6 +20,7 @@ pub struct CharacterInfoWidget {
     character_stats_widget: ListWidget<CharacterStatsWidget>,
     tabs: TabWidget,
     skills: ListWidget<SkillWidget>,
+    attack_descriptions : AttackDescriptionsWidget
 }
 
 impl DelegateToWidget for CharacterInfoWidget {
@@ -70,7 +72,7 @@ impl CharacterInfoWidget {
             .size(Sizing::match_parent(), Sizing::SurroundChildren)
             .position(Positioning::ux(2.0), Positioning::below(&unit_icon_background, 10.px()));
 
-        let tabs = TabWidget::new(vec!["Skills"])
+        let tabs = TabWidget::new(vec!["Attacks", "Skills"])
             .parent(&main_widget)
             .size(Sizing::ux(30.0), Sizing::ux(50.0))
             .position(Positioning::ux(2.0), Positioning::ux(30.0))
@@ -83,6 +85,8 @@ impl CharacterInfoWidget {
             .apply(gui);
         skills.item_archetype.set_margin(4.px());
 
+        let attack_descriptions = AttackDescriptionsWidget::new(gui, tabs.tab_named("Attacks"));
+
         CharacterInfoWidget {
             character_stats,
             character_stats_widget,
@@ -92,6 +96,7 @@ impl CharacterInfoWidget {
             unit_icon_background,
             skills,
             tabs,
+            attack_descriptions
         }
     }
 
@@ -140,6 +145,8 @@ impl CharacterInfoWidget {
                 skill_w.xp_bar_empty.set_y(Positioning::DeltaOfWidget(skill_w.text.id(), 4.px(), Alignment::Bottom));
                 skill_w.xp_bar_full.set_parent(&skill_w.xp_bar_empty).set_width(Sizing::PcntOfParent(xp_pcnt as f32));
             }).reapply(gui);
+
+            self.attack_descriptions.update(gui, world_view, selected);
         }
     }
 }

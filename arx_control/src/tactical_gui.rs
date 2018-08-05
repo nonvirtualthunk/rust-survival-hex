@@ -8,10 +8,11 @@ use game::entities::*;
 use game::core::Reduceable;
 use game::core::ReduceableType;
 use game::core::GameEventClock;
-use game::action_execution::movement::hexes_in_range;
-use game::EntitySelector;
-use game::EntitySelectors;
-use game::AttackReference;
+use game::logic::movement::hexes_in_range;
+use game::actions::EntitySelector;
+use game::actions::EntitySelectors;
+use game::entities::AttackReference;
+use game::logic::factions::is_enemy;
 use std::ops;
 use std::fmt;
 use std;
@@ -22,7 +23,7 @@ use control_gui::*;
 use game::action_types;
 use game::ActionType;
 
-use game::action_execution;
+use game::logic;
 use common::prelude::*;
 use arx_graphics::core::GraphicsWrapper;
 use common::event_bus::EventBus;
@@ -32,10 +33,13 @@ use arx_graphics::core::DrawList;
 use arx_graphics::Quad;
 use itertools::Itertools;
 use common::AxialCoord;
-use game::action_execution::movement;
-use game::action_execution::combat;
+use game::logic::movement;
+use game::logic::combat;
 use game::Oct;
 use std::collections::HashMap;
+use noisy_float::types::r32;
+use gui::WidgetContainer;
+use control_gui::attack_descriptions::AttackDetailsWidget;
 
 
 #[derive(PartialEq)]
@@ -43,6 +47,11 @@ pub struct GameState {
     pub display_event_clock: GameEventClock,
     pub selected_character: Option<Entity>,
     pub victory: Option<bool>,
+    pub player_faction: Entity,
+    pub hovered_hex_coord: AxialCoord,
+    pub animating: bool,
+    pub mouse_pixel_pos: Vec2f,
+    pub mouse_game_pos: Vec2f
 }
 
 pub struct TacticalEventBundle<'a, 'b> {
@@ -57,7 +66,8 @@ pub struct TacticalGui {
     event_bus_handle : ConsumerHandle,
     character_info_widget : CharacterInfoWidget,
     targeting_draw_list : DrawList,
-    last_targeting_info : Option<(GameState, ActionType)>
+    last_targeting_info : Option<(GameState, ActionType)>,
+    attack_details_widget : AttackDetailsWidget
 }
 
 
@@ -72,8 +82,9 @@ impl TacticalGui {
             .size(Sizing::ux(50.0), Sizing::ux(30.0))
             .position(Positioning::centered(), Positioning::centered())
             .showing(false)
-            .with_child(Widget::text("Victory!", 30).centered())
             .apply(gui);
+
+        let victory_text = Widget::text("Victory!", 30).centered().parent(&victory_widget).apply(gui);
 
 
         let event_bus = EventBus::new();
@@ -87,12 +98,18 @@ impl TacticalGui {
             character_info_widget : CharacterInfoWidget::new(gui),
             targeting_draw_list : DrawList::none(),
             last_targeting_info : None,
+            attack_details_widget : AttackDetailsWidget::new().draw_layer_for_all(GUILayer::Overlay)
         }
     }
 
     pub fn draw(&mut self, view: & WorldView, game_state : GameState) -> DrawList {
         if let Some(selected) = game_state.selected_character {
             let cdata = view.character(selected);
+            // if it's not the player's turn, don't display UI
+            if view.world_data::<TurnData>().active_faction != cdata.faction {
+                return DrawList::none();
+            }
+
             let action_type = self.action_bar.selected_action_for(selected);
 
             if let Some((last_state, last_action_type)) = self.last_targeting_info.as_ref() {
@@ -117,11 +134,6 @@ impl TacticalGui {
                     let move_speed = cdata.move_speed.as_f64();
                     let max_possible_strikes = ap_remaining / ap_per_strike as i32;
 
-//                    let hex_rings : Vec<HashMap<AxialCoord, f64>> = Vec::new();
-//                    for i in 0 ..= max_possible_strikes {
-//                        hex_rings.push(HashMap::new())
-//                    }
-
                     let strikes_at_cost = |move_cost : &f64| -> i32 {
                         let additional_move_required = *move_cost - cur_move;
                         let additional_ap_required = (additional_move_required / move_speed).ceil() as i32;
@@ -141,6 +153,19 @@ impl TacticalGui {
                                         }
                                     } else {
                                         draw_list = draw_list.add_quad(Quad::new(format!("ui/hex/hex_edge_{}", q), hex.as_cart_vec().0).color(Color::new(0.4,0.4,0.4,0.35)).centered());
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if attack.range > 1 {
+                        for (entity, cdata) in view.entities_with_data::<CharacterData>() {
+                            if cdata.is_alive() && cdata.position.distance(&current_position) < r32(attack.range as f32) {
+                                if is_enemy(view, *entity, selected) {
+                                    let hex = cdata.position;
+                                    for q in 0 .. 6 {
+                                        draw_list = draw_list.add_quad(Quad::new(format!("ui/hex/hex_edge_{}", q), hex.as_cart_vec().0).color(Color::new(0.7,0.1,0.1,0.75)).centered());
                                     }
                                 }
                             }
@@ -202,7 +227,17 @@ impl TacticalGui {
             let world_view = world.view_at_time(game_state.display_event_clock);
 
             self.character_info_widget.update(&world_view, gui, &game_state);
-            self.action_bar.update(gui, vec![action_types::MoveAndAttack, action_types::Move, action_types::Run], &game_state, ControlContext { event_bus : &mut self.event_bus });
+            if world_view.character(selected).faction == game_state.player_faction {
+                self.action_bar.update(gui, vec![action_types::MoveAndAttack, action_types::Move, action_types::Run], &game_state, ControlContext { event_bus : &mut self.event_bus });
+            } else {
+                self.action_bar.set_showing(false).as_widget().reapply(gui);
+            }
+
+            self.update_attack_details(&world_view, gui, &game_state, selected);
+        } else {
+            self.character_info_widget.set_showing(false).as_widget().reapply(gui);
+            self.action_bar.set_showing(false).as_widget().reapply(gui);
+            self.attack_details_widget.hide(gui);
         }
 
         for event in self.event_bus.events_for(&mut self.event_bus_handle) {
@@ -214,8 +249,24 @@ impl TacticalGui {
         }
 
 
+
         if let Some(victorious) = game_state.victory {
-            self.victory_widget.set_showing(true);
+            self.victory_widget.set_showing(true).reapply(gui);
         }
+    }
+
+    pub fn update_attack_details(&mut self, world : &WorldView, gui : &mut GUI, game_state : &GameState, selected : Entity) {
+        use game::logic::*;
+        if let Some(hovered_char) = world.tile_opt(game_state.hovered_hex_coord).and_then(|e| e.occupied_by) {
+            if ! game_state.animating && factions::is_enemy(world, selected, hovered_char) {
+                if let Some(attack) = combat::primary_attack(world, selected) {
+                    self.attack_details_widget.set_position(Positioning::constant((game_state.mouse_pixel_pos.x + 20.0).px()), Positioning::constant((game_state.mouse_pixel_pos.y + 20.0).px()));
+                    self.attack_details_widget.set_showing(true);
+                    self.attack_details_widget.update(gui, world, selected, hovered_char, &attack);
+                }
+                return;
+            }
+        }
+        self.attack_details_widget.hide(gui);
     }
 }
