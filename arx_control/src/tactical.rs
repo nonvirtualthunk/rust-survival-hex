@@ -29,7 +29,7 @@ use game::logic;
 use game::logic::movement;
 use game::world::Entity;
 use game::world_util::*;
-use game::world::ConstantModifier;
+use game::ConstantModifier;
 use game::entities::modifiers::*;
 
 use game::logic::combat::*;
@@ -136,16 +136,18 @@ pub struct TacticalMode {
     pub victory: Option<bool>,
     animation_elements: Vec<AnimationElementWrapper>,
     gui: TacticalGui,
+    world_view: WorldView
 }
 
 impl TacticalMode {
-    pub fn new(gui: &mut GUI) -> TacticalMode {
+    pub fn new(gui: &mut GUI, world: &World, player_faction : Entity) -> TacticalMode {
         let tile_radius = 35.5;
         let mut camera = Camera2d::new();
         camera.move_speed = tile_radius * 20.0;
         camera.zoom = 1.0;
 
         TacticalMode {
+            world_view: world.view_at_time(0),
             selected_character: None,
             tile_radius,
             mouse_pos: v2(0.0, 0.0),
@@ -165,7 +167,7 @@ impl TacticalMode {
             event_clock_last_advanced: 0.0,
             last_time: Instant::now(),
             last_update_time: Instant::now(),
-            player_faction: Entity::sentinel(),
+            player_faction,
             minimum_active_event_clock: 0,
             event_start_times: vec![0.0],
             victory: None,
@@ -239,36 +241,6 @@ impl TacticalMode {
                 self.display_event_clock += 1;
             }
         }
-
-//        let duration = match next_event {
-//            Some(evt) => self.blocking_time_for_event(evt),
-//            None => 0.000001
-//        };
-//        let full_duration = match next_event {
-//            Some(evt) => self.time_for_event(evt),
-//            None => 0.00001
-//        };
-//        if self.display_event_clock < max_event_clock - 1 {
-//            if self.event_start_times.get((self.display_event_clock + 1) as usize).is_none() {
-//                self.event_start_times.push(self.realtime_clock);
-//            }
-//
-//            self.time_within_event += dt;
-//            let advanced = if self.time_within_event > duration {
-//                //                println!("Advancing, realtime: {}, last_advanced: {}, duration: {}", self.realtime_clock, self.event_clock_last_advanced, duration);
-//                self.display_event_clock += 1;
-//                self.event_clock_last_advanced = self.realtime_clock;
-//                self.time_within_event = 0.0;
-//                true
-//            } else {
-//                false
-//            };
-//            self.fract_within_event = (self.time_within_event / full_duration).min(1.0).max(0.0);
-//            //            println!("Fract within event: {:?}", self.fract_within_event);
-//            advanced
-//        } else {
-//            false
-//        }
     }
 
     pub fn at_latest_event(&self, world: &World) -> bool {
@@ -448,143 +420,15 @@ impl TacticalMode {
             mouse_game_pos: self.screen_pos_to_game_pos(self.mouse_pos)
         }
     }
+
+    fn update_world_view(&mut self, world : &World) {
+        world.update_view_to_time(&mut self.world_view, self.display_event_clock);
+    }
 }
 
 impl GameMode for TacticalMode {
     fn enter(&mut self, world: &mut World) {
-        // -------- entity data --------------
-        world.register::<TileData>();
-        world.register::<CharacterData>();
-        world.register::<CombatData>();
-        world.register::<InventoryData>();
-        world.register::<SkillData>();
-        world.register::<ItemData>();
-        world.register::<FactionData>();
-        // -------- world data ---------------
-        world.register::<MapData>();
-        world.register::<TurnData>();
 
-        world.register_index::<AxialCoord>();
-
-        world.attach_world_data(&MapData {
-            min_tile_bound: AxialCoord::new(-30, -30),
-            max_tile_bound: AxialCoord::new(30, 30),
-        });
-
-        for x in -50..50 {
-            for y in -50..50 {
-                let coord = AxialCoord::new(x, y);
-                if coord.as_cart_vec().magnitude2() < 30.0 * 30.0 {
-                    let tile = EntityBuilder::new()
-                        .with(TileData {
-                            position: coord,
-                            name: "grass",
-                            move_cost: Oct::of(1),
-                            cover: 0,
-                            occupied_by: None,
-                            elevation: 0
-                        }).create(world);
-                    world.index_entity(tile, coord);
-                }
-            }
-        }
-
-        let player_faction = EntityBuilder::new()
-            .with(FactionData {
-                name: String::from("Player"),
-                color: Color::new(1.1, 0.3, 0.3, 1.0),
-            }).create(world);
-        self.player_faction = player_faction;
-
-        world.attach_world_data(&TurnData {
-            turn_number: 0,
-            active_faction : player_faction
-        });
-
-
-        let enemy_faction = EntityBuilder::new()
-            .with(FactionData {
-                name: String::from("Enemy"),
-                color: Color::new(0.3, 0.3, 0.9, 1.0),
-
-            }).create(world);
-
-
-        let bow = EntityBuilder::new()
-            .with(ItemData {
-                primary_attack: Some(Attack {
-                    name: "bowshot",
-                    ap_cost: 4,
-                    damage_dice: DicePool {
-                        die: 8,
-                        count: 2,
-                    },
-                    damage_bonus: 1,
-                    to_hit_bonus: 3,
-                    primary_damage_type: DamageType::Piercing,
-                    secondary_damage_type: None,
-                    range: 10,
-                    min_range: 2,
-                }),
-                ..Default::default()
-            }).create(world);
-
-        let archer = EntityBuilder::new()
-            .with(CharacterData {
-                faction: player_faction,
-                position: AxialCoord::new(0, 0),
-                sprite: String::from("elf/archer"),
-                name: String::from("Archer"),
-                move_speed: Oct::of_parts(1, 2), // one and 2 eights
-                health: Reduceable::new(25),
-                ..Default::default()
-            })
-            .with(CombatData::default())
-            .with(SkillData::default())
-            .with(InventoryData::default())
-            .create(world);
-        let bow_attack_ref = AttackReference::of_attack(world.view(), archer, world.view().item(bow).primary_attack.as_ref().unwrap());
-        modify(world, archer, SetActiveAttackMod(bow_attack_ref));
-        logic::movement::place_entity_in_world(world, archer, AxialCoord::new(0,0));
-
-        logic::items::equip_item(world, archer, bow);
-
-        let create_monster_at = |world_in: &mut World, pos: AxialCoord| {
-            let monster = EntityBuilder::new()
-                .with(CharacterData {
-                    faction: enemy_faction,
-                    position: pos,
-                    sprite: String::from("void/monster"),
-                    name: String::from("Monster"),
-                    move_speed: Oct::of_rounded(0.75),
-                    action_points: Reduceable::new(6),
-                    health: Reduceable::new(22),
-                    ..Default::default()
-                })
-                .with(CombatData {
-                    natural_attacks: vec![Attack {
-                        name: "slam",
-                        damage_dice: DicePool {
-                            count: 1,
-                            die: 4,
-                        },
-                        ..Default::default()
-                    }],
-                    ..Default::default()
-                })
-                .with(SkillData::default())
-                .with(InventoryData::default())
-                .create(world_in);
-
-            logic::movement::place_entity_in_world(world_in, monster, pos);
-
-            monster
-        };
-
-        create_monster_at(world, AxialCoord::new(4, 0));
-        create_monster_at(world, AxialCoord::new(0, 4));
-
-        world.add_event(GameEvent::WorldStart);
     }
 
     fn update(&mut self, _: &mut World, _: f64) {
@@ -667,7 +511,10 @@ impl GameMode for TacticalMode {
                     let mouse_pos = self.mouse_game_pos();
                     let clicked_coord = AxialCoord::from_cartesian(&mouse_pos, self.tile_radius);
 
-                    let world_view = world.view_at_time(self.display_event_clock);
+
+                    self.update_world_view(world);
+                    let world_view = &self.world_view;
+//                    let world_view = world.view_at_time(self.display_event_clock);
 
                     let found = character_at(&world_view, clicked_coord);
                     if let Some((found_ref, target_data)) = found {

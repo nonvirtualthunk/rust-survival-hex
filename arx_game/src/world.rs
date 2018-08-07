@@ -1,6 +1,7 @@
 use std::ops;
 use std::marker::PhantomData;
 use common::hex::*;
+use common::prelude::*;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
 use std::rc::Rc;
@@ -20,6 +21,8 @@ use anymap::Map;
 use std::cell::UnsafeCell;
 use std::fmt;
 use std::fmt::Debug;
+use common::Field;
+use modifiers::*;
 
 pub static ENTITY_ID_COUNTER: AtomicUsize = ATOMIC_USIZE_INIT;
 
@@ -42,146 +45,15 @@ impl Entity {
 
 pub trait EntityData: Clone + Any + Default + Debug {}
 
-/// conceptually, we're breaking up modifiers into several broad types: permanent (movement, damage, temperature),
-/// limited (fixed duration spell, poison), and dynamic (+1 attacker per adjacent ally, -1 move at night). Permanent
-/// modifiers we can apply in order and forget about, they compact easily. Dynamic modifiers effectively need to be
-/// applied last, since they are always dependent on the most current data. Limited modifiers basically act as
-/// permanent modifiers until they run out, at which point they need to trigger a recalculation of their entity.
-/// So, we need to monitor for the most recent state of limited modifiers and see when it toggles. It might be
-/// useful to require that a Limited modifier never switches from off->on, but I think just watching for a toggle
-/// is sufficient.
-///
-/// In order to keep things from spiraling out of control, non-Dynamic modifiers will not be able to look at the
-/// current world state when determining their effects, which means that they must reify in anything that varies.
-/// I.e. a spell that gives +3 Health if in forest at time of casting or +1 Health otherwise would need to bake
-/// in whether the effect was +3 or +1 at creation time rather than looking at current world state to determine it.
-/// Anything that does depend on the current world state must necessarily be Dynamic. For general stability
-/// purposes it is recommended that Dynamic modifiers only depend on things that are unlikely to have Dynamic
-/// modifiers themselves, since ordering among Dynamics may or may not be constant.
-///
-/// We _could_ make it constant, but it would mean recalculating all of them every tick and baking them in. Every
-/// view would basically have two copies of all data, the constant/limited data and the post-dynamic data. Every
-/// tick, everything with at least one dynamic modifier would have their post-dynamic data set to a copy of the
-/// constant/limited data, then all dynamic modifiers would be applied in-order cross-world. The alternative
-/// would be to only calculate the effective post-dynamic data on-demand, when it is actually requested, but
-/// since that calculation would be occurring in isolation, every Dynamic effect would be unable to see the effects
-/// of any other, or it would have to avoid infinite loops by some other means. I think I'm in favor of the
-/// constant recalculation of the dynamic effects in views, it shouldn't be _that_ expensive unless we get a
-/// massive number of dynamic effects going on, and I think that should be avoidable except for the really
-/// interesting spells.
-///
-/// So, implementation-wise, where does that put us? We need views to maintain two copies of data
-///
-#[derive(Eq, PartialEq)]
-pub enum ModifierType {
-    Permanent,
-    Limited,
-    Dynamic
-}
-
-pub trait ConstantModifier<T: EntityData>: Sized + 'static {
-    fn modify(&self, data: &mut T);
-
-    fn apply_to(self, entity: Entity, world: &mut World) {
-        world.add_constant_modifier(entity, self);
-    }
-    fn apply_to_world(self, world : &mut World) {
-        world.add_constant_world_modifier(self);
-    }
-
-    fn wrap(self) -> Box<Modifier<T>> {
-        box ConstantModifierWrapper {
-            inner: self,
-            _ignored: PhantomData
-        }
-    }
-}
-
-struct ConstantModifierWrapper<T: EntityData, CM: ConstantModifier<T>> {
-    inner: CM,
-    _ignored: PhantomData<T>
-}
-
-impl<T: EntityData, CM: ConstantModifier<T>> Modifier<T> for ConstantModifierWrapper<T, CM> {
-    fn modify(&self, data: &mut T, world: &WorldView) {
-        self.inner.modify(data);
-    }
-
-    fn is_active(&self, world: &WorldView) -> bool {
-        true
-    }
-
-    fn modifier_type(&self) -> ModifierType {
-        ModifierType::Permanent
-    }
-}
-
-pub trait LimitedModifier<T: EntityData>: Sized + 'static {
-    fn modify(&self, data: &mut T);
-
-    fn is_active(&self, world: &WorldView) -> bool;
-}
-
-struct LimitedModifierWrapper<T: EntityData, LM: LimitedModifier<T>> {
-    inner: LM,
-    _ignored: PhantomData<T>
-}
-
-impl<T: EntityData, LM: LimitedModifier<T>> Modifier<T> for LimitedModifierWrapper<T, LM> {
-    fn modify(&self, data: &mut T, world: &WorldView) {
-        self.inner.modify(data);
-    }
-
-    fn is_active(&self, world: &WorldView) -> bool {
-        self.inner.is_active(world)
-    }
-
-    fn modifier_type(&self) -> ModifierType {
-        ModifierType::Limited
-    }
-}
-
-pub trait DynamicModifier<T: EntityData> {
-    fn modify(&self, data: &mut T, world: &WorldView);
-
-    fn is_active(&self, world: &WorldView) -> bool;
-}
-
-struct DynamicModifierWrapper<T: EntityData, DM: DynamicModifier<T>> {
-    inner: DM,
-    _ignored: PhantomData<T>
-}
-
-impl<T: EntityData, LM: DynamicModifier<T>> Modifier<T> for DynamicModifierWrapper<T, LM> {
-    fn modify(&self, data: &mut T, world: &WorldView) {
-        self.inner.modify(data, world);
-    }
-
-    fn is_active(&self, world: &WorldView) -> bool {
-        self.inner.is_active(world)
-    }
-
-    fn modifier_type(&self) -> ModifierType {
-        ModifierType::Dynamic
-    }
-}
-
-pub trait Modifier<T: EntityData> {
-    fn modify(&self, data: &mut T, world: &WorldView);
-
-    fn is_active(&self, world: &WorldView) -> bool;
-
-    fn modifier_type(&self) -> ModifierType;
-}
-
 
 type ModifierClock = usize;
 
 pub struct ModifierContainer<T: EntityData> {
-    modifier: Box<Modifier<T>>,
-    applied_at: GameEventClock,
-    modifier_index: ModifierClock,
-    entity: Entity
+    pub(crate) modifier: Box<Modifier<T>>,
+    pub(crate) applied_at: GameEventClock,
+    pub(crate) modifier_index: ModifierClock,
+    pub(crate) entity: Entity,
+    pub(crate) description: Option<Str>
 }
 
 #[derive(Clone)]
@@ -192,14 +64,13 @@ pub struct DataContainer<T: EntityData> {
 
 pub struct ModifiersContainer<T: EntityData> {
     /// All modifiers that alter data of type T and are not Dynamic, stored in chronological order
-    modifiers: Vec<ModifierContainer<T>>,
+    pub(crate) modifiers: Vec<ModifierContainer<T>>,
     /// All Dynamic modifiers, stored in chronological order
-    dynamic_modifiers: Vec<ModifierContainer<T>>,
+    pub(crate) dynamic_modifiers: Vec<ModifierContainer<T>>,
     /// Tracks what the most recent activation state was for any given Limited type modifier, can be used to determine if recalculation is necessary
-    limited_modifier_activation_states: hash_map::HashMap<Entity, bool>,
-    // map from index in `modifiers` to last activation state
+    pub(crate) limited_modifier_activation_states: hash_map::HashMap<Entity, bool>,
     /// The full set of entities that have dynamic modifiers for this data type
-    dynamic_entity_set: hash_set::HashSet<Entity>
+    pub(crate) dynamic_entity_set: hash_set::HashSet<Entity>
 }
 
 impl<T: EntityData> DataContainer<T> {
@@ -327,6 +198,10 @@ impl World {
         self.index_applications.push(IndexApplication {
             index_func : Rc::new(index_func)
         });
+    }
+
+    pub(crate) fn modifiers_container<T : EntityData>(&self) -> &ModifiersContainer<T> {
+        self.modifiers.get::<ModifiersContainer<T>>().expect("modifiers are expected to be present, you may not have registered all your entity data types")
     }
 
     pub fn register<T: EntityData>(&mut self) {
@@ -458,7 +333,7 @@ impl World {
         new_entities.iter().rev().for_each(|e| view.entities.push(e.clone()));
 
 
-        // we need to keep track of where we are in each modifier type, as well as the global modifier cursor
+        // we need to keep track of where we are in each modifier type, as well as the global modifier cursor.
         // we continuously iterate the modifier cursor, asking each to apply the active modifier cursor. At
         // each point only one will actually do so, since there is only one modifier at a given cursor point.
         // If we reach a point where none applied anything, then we can assume we have reached the end and are
@@ -554,14 +429,18 @@ impl World {
         index.index.insert(key, entity);
     }
 
-    pub fn add_modifier<T: EntityData>(&mut self, entity: Entity, modifier: Box<Modifier<T>>) {
+    pub fn modify<T: EntityData, S : Into<Option<Str>>>(&mut self, entity: Entity, modifier: Box<Modifier<T>>, description : S) {
+        self.add_modifier(entity, modifier, description);
+    }
+    pub fn add_modifier<T: EntityData, S : Into<Option<Str>>>(&mut self, entity: Entity, modifier: Box<Modifier<T>>, description : S) {
         let all_modifiers: &mut ModifiersContainer<T> = self.modifiers.get_mut::<ModifiersContainer<T>>().unwrap();
         if modifier.modifier_type() == ModifierType::Dynamic {
             all_modifiers.dynamic_modifiers.push(ModifierContainer {
                 modifier,
                 applied_at: self.current_time,
                 modifier_index: self.total_dynamic_modifier_count,
-                entity
+                entity,
+                description : description.into()
             });
             all_modifiers.dynamic_entity_set.insert(entity);
             self.total_dynamic_modifier_count += 1;
@@ -570,7 +449,8 @@ impl World {
                 modifier,
                 applied_at: self.current_time,
                 modifier_index: self.total_modifier_count,
-                entity
+                entity,
+                description : description.into()
             });
             trace!("Creating modifier with count {}, incrementing", self.total_modifier_count);
             self.total_modifier_count += 1;
@@ -579,34 +459,34 @@ impl World {
 
     pub fn add_world_modifier<T: EntityData>(&mut self, modifier: Box<Modifier<T>>) {
         let tmp = self.self_entity;
-        self.add_modifier::<T>(tmp, modifier);
+        self.add_modifier::<T,Option<Str>>(tmp, modifier, None);
     }
 
     pub fn add_constant_modifier<T: EntityData, CM: ConstantModifier<T> + 'static>(&mut self, entity: Entity, constant_modifier: CM) {
-        self.add_modifier(entity, box ConstantModifierWrapper { inner: constant_modifier, _ignored: PhantomData });
+        self.add_modifier(entity, box ConstantModifierWrapper { inner: constant_modifier, _ignored: PhantomData }, None);
     }
 
     pub fn add_limited_modifier<T: EntityData, CM: LimitedModifier<T> + 'static>(&mut self, entity: Entity, limited_modifier: CM) {
-        self.add_modifier(entity, box LimitedModifierWrapper { inner: limited_modifier, _ignored: PhantomData });
+        self.add_modifier(entity, box LimitedModifierWrapper { inner: limited_modifier, _ignored: PhantomData }, None);
     }
 
     pub fn add_dynamic_modifier<T: EntityData, CM: DynamicModifier<T> + 'static>(&mut self, entity: Entity, dynamic_modifier: CM) {
-        self.add_modifier(entity, box DynamicModifierWrapper { inner: dynamic_modifier, _ignored: PhantomData });
+        self.add_modifier(entity, box DynamicModifierWrapper { inner: dynamic_modifier, _ignored: PhantomData }, None);
     }
 
     pub fn add_constant_world_modifier<T: EntityData, CM: ConstantModifier<T> + 'static>(&mut self, constant_modifier: CM) {
         let entity = self.self_entity;
-        self.add_modifier(entity, box ConstantModifierWrapper { inner: constant_modifier, _ignored: PhantomData });
+        self.add_modifier(entity, box ConstantModifierWrapper { inner: constant_modifier, _ignored: PhantomData }, None);
     }
 
     pub fn add_limited_world_modifier<T: EntityData, CM: LimitedModifier<T> + 'static>(&mut self, limited_modifier: CM) {
         let entity = self.self_entity;
-        self.add_modifier(entity, box LimitedModifierWrapper { inner: limited_modifier, _ignored: PhantomData });
+        self.add_modifier(entity, box LimitedModifierWrapper { inner: limited_modifier, _ignored: PhantomData }, None);
     }
 
     pub fn add_dynamic_world_modifier<T: EntityData, CM: DynamicModifier<T> + 'static>(&mut self, dynamic_modifier: CM) {
         let entity = self.self_entity;
-        self.add_modifier(entity, box DynamicModifierWrapper { inner: dynamic_modifier, _ignored: PhantomData });
+        self.add_modifier(entity, box DynamicModifierWrapper { inner: dynamic_modifier, _ignored: PhantomData }, None);
     }
 
 
@@ -657,6 +537,22 @@ impl World {
         [time_bytes[0],time_bytes[1],time_bytes[2],time_bytes[3],time_bytes[4],time_bytes[5],time_bytes[6],time_bytes[7],0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,extra]
     }
 }
+
+//trait IntoOptionStr {
+//    fn to_option(self) -> Option<String>;
+//}
+//impl IntoOptionStr for String {
+//    fn to_option(self) -> Option<String> { Some(self) }
+//}
+//impl IntoOptionStr for Option<String> {
+//    fn to_option(self) -> Option<String> { self }
+//}
+//impl <T> IntoOptionStr for Option<T> {
+//    fn to_option(self) -> Option<String> { self }
+//}
+//impl IntoOptionStr for Option<Str> {
+//    fn to_option(self) -> Option<String> { Some(strf(self)) }
+//}
 
 pub struct EntityBuilder {
     initializations: Vec<Box<Fn(&mut World, Entity)>>
@@ -739,9 +635,46 @@ impl WorldView {
     }
 }
 
+impl World {
+    pub fn permanent_field_logs_for<T: EntityData>(&self, ent: Entity) -> FieldLogs<T> {
+        self.field_logs_with_condition_for::<T>(ent, |m| m.modifier.modifier_type() == ModifierType::Permanent)
+    }
+    pub fn non_permanent_field_logs_for<T: EntityData>(&self, ent: Entity) -> FieldLogs<T> {
+        self.field_logs_with_condition_for::<T>(ent, |m| m.modifier.modifier_type() != ModifierType::Permanent)
+    }
+    pub fn field_logs_for<T: EntityData>(&self, ent: Entity) -> FieldLogs<T> {
+        self.field_logs_with_condition_for::<T>(ent, |m| true)
+    }
+
+    pub fn field_logs_with_condition_for<T: EntityData>(&self, ent: Entity, condition : fn(&ModifierContainer<T>) -> bool) -> FieldLogs <T>{
+        let container = self.modifiers_container::<T>();
+        let data_container : &DataContainer<T> = self.data.get::<DataContainer<T>>().expect("Data kind must exist");
+        let raw_data = data_container.storage.get(&ent).unwrap_or_else(|| &data_container.sentinel).clone();
+        FieldLogs {
+            field_modifications: container.modifiers.iter()
+                .filter(move |m| m.entity == ent)
+                .filter(|m| (condition)(m))
+                .flat_map(|m| {
+                    let mut field_modifications = m.modifier.modified_fields();
+                    if m.description.is_some() {
+                        for field_mod in &mut field_modifications {
+                            if field_mod.description.is_none() {
+                                field_mod.description = m.description.clone();
+                            }
+                        }
+                    }
+                    field_modifications
+                })
+                .collect(),
+            base_value : raw_data
+        }
+    }
+}
+
 
 mod test {
     use super::*;
+    use modifiers::*;
 
     #[derive(Clone, Default, PartialEq, Debug)]
     struct FooData {
@@ -890,7 +823,7 @@ mod test {
         assert_that(&foo_data_1.a).is_equal_to(1);
         assert_that(&bar_data_1.x).is_equal_to(bar_data_2.x);
 
-        world.add_modifier(ent1, AddBarDataModifier { delta: 2.0 }.wrap());
+        world.add_modifier(ent1, AddBarDataModifier { delta: 2.0 }.wrap(), "test");
         world.add_event(GameEvent::TurnStart { turn_number: 1 });
 
         // show up in reverse chronological order, last created first in list

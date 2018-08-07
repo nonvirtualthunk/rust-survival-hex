@@ -80,7 +80,10 @@ pub struct AttackDetailsWidget {
     pub to_miss_details: Widget,
     pub damage_dice_details: Widget,
     pub damage_bonus_details: Widget,
-    pub damage_absorption_details: Widget
+    pub damage_absorption_details: Widget,
+
+    pub to_hit_div : Widget,
+    pub damage_div : Widget
 }
 
 impl AttackDetailsWidget {
@@ -90,36 +93,49 @@ impl AttackDetailsWidget {
     pub fn new() -> AttackDetailsWidget {
         let positive_color = AttackDetailsWidget::PositiveColor;
         let negative_color = AttackDetailsWidget::NegativeColor;
+        let neutral_color = Color::black();
 
         let body = Widget::window(Color::new(0.8, 0.8, 0.9, 1.0), 2)
             .size(Sizing::surround_children(), Sizing::surround_children())
             .margin(2.px());
 
-        let name = Widget::text("name", 14).parent(&body);
+        let name = Widget::text("name", 16).parent(&body);
         let to_hit = Widget::text("to hit", 14).below(&name, 1.px()).parent(&body);
-        let damage = Widget::text("damage", 14).right_of(&to_hit, 10.px()).y(Positioning::match_to(&to_hit)).parent(&body);
         let divider = Widget::window(Color::greyscale(0.5), 1).size(Sizing::match_parent(), Sizing::constant(3.px())).below(&to_hit, 3.px()).parent(&body);
-        let to_hit_details = Widget::text("to hit details", 12).below(&divider, 3.px()).color(positive_color).parent(&body);
-        let to_miss_details = Widget::text("to miss details", 12).below(&to_hit_details, 2.px()).color(negative_color).parent(&body);
-        let damage_dice_details = Widget::text("damage dice details", 12).below(&to_miss_details, 2.px()).color(positive_color).parent(&body);
-        let damage_bonus_details = Widget::text("damage bonus details", 12).below(&damage_dice_details, 1.px()).color(positive_color).parent(&body);
-        let damage_absorption_details = Widget::text("damage absorption", 12).below(&damage_bonus_details, 1.px()).color(negative_color).parent(&body);
 
-        AttackDetailsWidget { body, name, to_hit, damage, divider, to_hit_details, to_miss_details, damage_dice_details, damage_bonus_details, damage_absorption_details }
+        let to_hit_div = Widget::div().below(&divider, 3.px()).parent(&body);
+
+        let to_hit_details = Widget::text("to hit details", 12).color(positive_color).parent(&to_hit_div);
+        let to_miss_details = Widget::text("to miss details", 12).below(&to_hit_details, 2.px()).color(negative_color).parent(&to_hit_div);
+
+
+        let damage_div = Widget::div().right_of(&to_hit_div, 9.px()).match_y_of(&to_hit_div).parent(&body);
+        let damage_dice_details = Widget::text("damage dice details", 12).color(neutral_color).parent(&damage_div);
+        let damage_bonus_details = Widget::text("damage bonus details", 12).below(&damage_dice_details, 1.px()).color(positive_color).parent(&damage_div);
+        let damage_absorption_details = Widget::text("damage absorption", 12).below(&damage_bonus_details, 1.px()).color(negative_color).parent(&damage_div);
+
+        let damage = Widget::text("damage", 14).match_y_of(&to_hit).match_x_of(&damage_div).parent(&body);
+
+        AttackDetailsWidget { body, name, to_hit, damage, divider, to_hit_details, to_miss_details, damage_dice_details, damage_bonus_details, damage_absorption_details, to_hit_div, damage_div }
     }
 
-    pub fn update(&mut self, gui : &mut GUI, world : &WorldView, attacker : Entity, defender : Entity, attack : &Attack) {
+    pub fn update(&mut self, gui : &mut GUI, world : &World, view : &WorldView, attacker : Entity, defender : Entity, attack : &Attack) {
+        self.to_hit_div.reapply(gui);
+        self.damage_div.reapply(gui);
 
-        let attack_breakdown = combat::compute_attack_breakdown(world, attacker, defender, attack);
+        let attack_breakdown = combat::compute_attack_breakdown(world, view, attacker, defender, attack);
 
         if let Some(strike) = attack_breakdown.strikes.first() {
             self.for_all_widgets(|w| { w.set_showing(true); });
-            let components_to_str = |v : &Vec<(i32,Str)>| v.iter().filter(|t| t.0 != 0).map(|(bonus, reason)| format!("{}  {}", bonus.to_string_with_sign(), reason)).join("\n");
-            self.name.set_text(format!("{} x {}", attack.name, attack_breakdown.strikes.len()));
-            self.to_hit.set_text(format!("{}", (strike.to_hit_total() - strike.to_miss_total()).to_string_with_sign()));
+//            let components_to_str = |v : &Vec<(i32,Str)>| v.iter().filter(|t| t.0 != 0).map(|(bonus, reason)| format!("{}  {}", bonus.to_string_with_sign(), reason)).join("\n");
+            let components_to_str = |v : &Breakdown<i32>| v.components.iter().filter(|t| t.0 != "+0").map(|(bonus, description)| format!("{}  {}", bonus, description)).join("\n");
+
+            self.name.set_text(format!("{} x {}", attack.name.capitalized(), attack_breakdown.strikes.len()));
+            self.to_hit.set_text(format!("{} to hit", (strike.to_hit_total() - strike.to_miss_total()).to_string_with_sign()));
             let combined_dice_str = strike.damage_dice_total().map(|dd| dd.to_string()).join(" + ");
             let net_damage_mod = strike.damage_bonus_total() - strike.damage_absorption_total();
-            self.damage.set_text(format!("{} {} {}", combined_dice_str, net_damage_mod.sign_str(), net_damage_mod.abs()));
+            let damage_type_str = attack_breakdown.damage_types.iter().map(|dt| dt.to_string().to_lowercase()).join("/");
+            self.damage.set_text(format!("{} {} {} {}", combined_dice_str, net_damage_mod.sign_str(), net_damage_mod.abs(), damage_type_str));
             self.to_hit_details.set_text(components_to_str(&strike.to_hit_components));
             self.to_miss_details.set_text(components_to_str(&strike.to_miss_components));
             self.damage_dice_details.set_text(strike.damage_dice_components.iter().map(|(dice, reason)| format!("{}  {}", dice, reason)).join("\n"));

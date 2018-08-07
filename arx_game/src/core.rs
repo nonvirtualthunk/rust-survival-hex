@@ -16,10 +16,16 @@ pub trait ReduceableType: ops::Sub<Output=Self> + ops::Add<Output=Self> + Copy +
 
 impl<T> ReduceableType for T where T: ops::Sub<Output=T> + ops::Add<Output=T> + Copy + Default + Into<f64> + PartialOrd<Self> {}
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, PartialEq)]
 pub struct Reduceable<T: ReduceableType> {
     base_value: T,
     reduced_by: T,
+}
+
+impl <T : ReduceableType> Display for Reduceable<T> where T : Display {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        write!(f, "{}", self.cur_value())
+    }
 }
 
 impl<T: ReduceableType> Reduceable<T> {
@@ -37,6 +43,7 @@ impl<T: ReduceableType> Reduceable<T> {
     pub fn max_value(&self) -> T { self.base_value }
     pub fn cur_value(&self) -> T { self.base_value - self.reduced_by }
     pub fn reduce_by(&mut self, by: T) { self.reduced_by = self.reduced_by + by; }
+    pub fn reduced_by(&self, by : T) -> Self { Reduceable { base_value : self.base_value, reduced_by : self.reduced_by + by } }
     pub fn recover_by(&mut self, by: T) {
         self.reduced_by = self.reduced_by - by;
         let zero = T::default();
@@ -44,7 +51,16 @@ impl<T: ReduceableType> Reduceable<T> {
             self.reduced_by = zero;
         }
     }
+    pub fn recovered_by(&self, by: T) -> Self {
+        let mut new_reduced_by = self.reduced_by - by;
+        let zero = T::default();
+        if new_reduced_by < zero {
+            new_reduced_by = zero;
+        }
+        Reduceable { base_value : self.base_value, reduced_by : new_reduced_by }
+    }
     pub fn reduce_to(&mut self, to: T) { self.reduced_by = self.base_value - to; }
+    pub fn reduced_to(&self, to: T)  -> Self { Reduceable { base_value : self.base_value, reduced_by : self.base_value - to } }
     pub fn reset(&mut self) { self.reduced_by = T::default(); }
     pub fn cur_fract(&self) -> f64 { self.cur_value().into() / self.max_value().into() }
     pub fn cur_reduced_by(&self) -> T { self.reduced_by }
@@ -170,6 +186,17 @@ impl Oct {
 
     pub fn as_whole_and_parts(&self) -> (i64, i32) {
         (self.0 / 8, (self.0 % 8) as i32)
+    }
+}
+
+impl Display for Oct {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        let (whole, parts) = self.as_whole_and_parts();
+        if parts != 0 {
+            write!(f, "{} {}/8", whole, parts)
+        } else {
+            write!(f, "{}", whole)
+        }
     }
 }
 

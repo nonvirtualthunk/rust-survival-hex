@@ -9,6 +9,7 @@ pub mod skill;
 pub mod tile;
 pub mod time;
 
+pub mod fields;
 
 pub use entities::character::*;
 pub use entities::combat::*;
@@ -19,5 +20,6 @@ pub use entities::map::*;
 pub use entities::skill::*;
 pub use entities::tile::*;
 pub use entities::time::*;
+pub use entities::fields::*;
 
 pub use entities::modifiers::modify;

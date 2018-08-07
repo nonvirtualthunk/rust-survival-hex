@@ -178,6 +178,8 @@ pub trait DelegateToWidget where Self: Sized {
     fn right_of(self, other : &Widget, delta : UIUnits) -> Self {
         self.x(Positioning::right_of(other, delta))
     }
+    fn match_y_of(self, other : &Widget) -> Self { self.y(Positioning::match_to(other)) }
+    fn match_x_of(self, other : &Widget) -> Self { self.x(Positioning::match_to(other)) }
     fn surround_children(self) -> Self {
         self.size(Sizing::surround_children(), Sizing::surround_children())
     }

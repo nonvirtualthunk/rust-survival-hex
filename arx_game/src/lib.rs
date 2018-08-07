@@ -6,8 +6,11 @@
 #![feature(core_intrinsics)]
 #![allow(where_clauses_object_safety)]
 #![allow(dead_code)]
+#![allow(non_upper_case_globals)]
 
 #![feature(extern_prelude)]
+#![feature(const_fn)]
+#![feature(type_ascription)]
 
 extern crate arx_common as common;
 extern crate either;
@@ -22,6 +25,7 @@ extern crate pretty_env_logger;
 #[macro_use] extern crate log;
 #[macro_use] extern crate derive_more;
 extern crate itertools;
+#[macro_use] extern crate arx_macros;
 
 extern crate num;
 
@@ -43,10 +47,18 @@ pub mod actions;
 
 pub mod prelude;
 
+pub mod reflect;
+
+pub mod modifiers;
+
 pub use world::World;
+
+mod world_playground;
 
 pub use world::*;
 pub use core::*;
 pub use world_util::*;
 pub use actions::*;
 pub use entity_util::*;
+pub use reflect::*;
+pub use modifiers::*;

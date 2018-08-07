@@ -3,7 +3,7 @@ use world::EntityData;
 use world::WorldView;
 use enum_map::EnumMap;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PrintFields)]
 pub struct SkillData {
     pub skill_bonuses: EnumMap<Skill, u32>,
     pub skill_xp : EnumMap<Skill, u32>
@@ -24,7 +24,7 @@ impl SkillData {
     pub fn skill_level(&self, skill : Skill) -> u32 {
         self.skill_bonuses[skill] + Skill::level_for_xp(self.skill_xp[skill])
     }
-    pub fn skill_xp(&self, skill : Skill) -> u32 {
+    pub fn cur_skill_xp(&self, skill : Skill) -> u32 {
         self.skill_xp[skill]
     }
     pub fn skill_xp_up(&mut self, skill : Skill, xp : u32) {

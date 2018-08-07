@@ -4,7 +4,7 @@ use world::WorldView;
 use common::hex::AxialCoord;
 use core::*;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PrintFields)]
 pub struct InventoryData {
     pub equipped : Vec<Entity>,
     pub inventory : Vec<Entity>,

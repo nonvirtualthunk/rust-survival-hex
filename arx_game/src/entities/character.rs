@@ -7,7 +7,8 @@ use common::hex::CartVec;
 use common::Color;
 use common::prelude::*;
 
-#[derive(Clone, Debug)]
+
+#[derive(Clone, Debug, PrintFields)]
 pub struct CharacterData {
     pub faction : Entity,
     pub position: AxialCoord,

@@ -3,9 +3,9 @@ use world::EntityData;
 use world::WorldView;
 use common::hex::AxialCoord;
 use core::*;
-use world::ConstantModifier;
-use world::LimitedModifier;
-use world::DynamicModifier;
+use modifiers::ConstantModifier;
+use modifiers::LimitedModifier;
+use modifiers::DynamicModifier;
 
 use entities::*;
 use world::World;
@@ -31,6 +31,8 @@ impl ConstantModifier<SkillData> for SkillMod {
         data.skill_bonuses[self.0] += self.1;
     }
 }
+
+
 
 pub struct ReduceActionsMod(pub u32);
 impl ConstantModifier<CharacterData> for ReduceActionsMod {
@@ -115,7 +117,7 @@ impl ConstantModifier<ItemData> for ItemHeldByMod{
     }
 }
 
-pub struct SetActiveAttackMod(pub Option<AttackReference>);
+pub struct SetActiveAttackMod(pub AttackReference);
 impl ConstantModifier<CombatData> for SetActiveAttackMod {
     fn modify(&self, data: &mut CombatData) {
         data.active_attack = self.0.clone();

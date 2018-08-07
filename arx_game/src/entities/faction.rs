@@ -4,8 +4,9 @@ use world::WorldView;
 use common::hex::AxialCoord;
 use core::*;
 use common::Color;
+use common::reflect::*;
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, PrintFields)]
 pub struct FactionData {
     pub name : String,
     pub color : Color

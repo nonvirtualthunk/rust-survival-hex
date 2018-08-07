@@ -10,9 +10,9 @@ use world::EntityData;
 use world::WorldView;
 
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PrintFields)]
 pub struct CombatData {
-    pub active_attack : Option<AttackReference>,
+    pub active_attack : AttackReference,
     pub natural_attacks : Vec<Attack>,
     pub counters: Reduceable<i32>,
     pub melee_accuracy_bonus: i32,
@@ -83,58 +83,94 @@ impl Default for Attack {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Hash, Debug)]
+#[derive(Clone, PartialEq, Hash, Debug)]
 pub struct AttackReference {
     pub entity : Entity,
-    pub index : usize
+    pub index : usize,
+    pub name : String
 }
 impl AttackReference {
-    fn new (entity : Entity, index : usize) -> AttackReference {
-        AttackReference { entity, index }
+    fn new<S : Into<String>> (entity : Entity, index : usize, name : S) -> AttackReference {
+        AttackReference { entity, index, name : name.into() }
     }
 
-    pub fn of_attack(world : &WorldView, character : Entity, attack : &Attack) -> Option<AttackReference> {
+    fn none() -> AttackReference {
+        AttackReference { entity : Entity::sentinel(), index : 0, name : strf("no attack") }
+    }
+
+    fn as_option(&self) -> Option<&AttackReference> {
+        if self.is_none() {
+            None
+        } else {
+            Some(self)
+        }
+    }
+
+    pub fn of_attack(world : &WorldView, character : Entity, attack : &Attack) -> AttackReference {
         if let Some(natural_attack_index) = world.data::<CombatData>(character).natural_attacks.iter().position(|a| a == attack) {
-            Some(AttackReference::new(character, natural_attack_index))
+            AttackReference::new(character, natural_attack_index, attack.name)
         } else {
             if let Some(inv_data) = world.data_opt::<InventoryData>(character) {
                 for equipped_item in &inv_data.equipped {
                     if let Some(item_data) = world.data_opt::<ItemData>(*equipped_item) {
                         if item_data.primary_attack.as_ref() == Some(attack) {
-                            return Some(AttackReference::new(*equipped_item, 0));
+                            return AttackReference::new(*equipped_item, 0, attack.name);
                         } else if item_data.secondary_attack.as_ref() == Some(attack) {
-                            return Some(AttackReference::new(*equipped_item, 1));
+                            return AttackReference::new(*equipped_item, 1, attack.name);
                         }
                     }
                 }
             }
-            None
+            AttackReference::none()
         }
     }
 
     pub fn referenced_attack<'a,'b>(&'a self, world: &'b WorldView, character : Entity) -> Option<&'b Attack> {
-        if character == self.entity {
-            world.data::<CombatData>(character).natural_attacks.get(self.index)
+        if self.is_none() {
+            None
         } else {
+            if character == self.entity {
+                world.data::<CombatData>(character).natural_attacks.get(self.index)
+            } else {
 
-            if let Some(inv_data) = world.data_opt::<InventoryData>(character) {
-                if inv_data.equipped.contains(&self.entity) {
-                    if let Some(item_data) = world.data_opt::<ItemData>(self.entity) {
-                        match self.index {
-                            0 => return item_data.primary_attack.as_ref(),
-                            1 => return item_data.secondary_attack.as_ref(),
-                            _ => warn!("non 0/1 for index in reference to item attack")
+                if let Some(inv_data) = world.data_opt::<InventoryData>(character) {
+                    if inv_data.equipped.contains(&self.entity) {
+                        if let Some(item_data) = world.data_opt::<ItemData>(self.entity) {
+                            match self.index {
+                                0 => return item_data.primary_attack.as_ref(),
+                                1 => return item_data.secondary_attack.as_ref(),
+                                _ => warn!("non 0/1 for index in reference to item attack")
+                            }
+                        } else {
+                            warn!("attack reference neither natural nor item based");
                         }
                     } else {
-                        warn!("attack reference neither natural nor item based");
+                        warn!("attack referenced did not belong to any currently equipped entity");
                     }
-                } else {
-                    warn!("attack referenced did not belong to any currently equipped entity");
                 }
-            }
 
-            None
+                None
+            }
         }
+    }
+
+    pub fn is_none(&self) -> bool {
+        self.entity == Entity::sentinel()
+    }
+}
+
+impl Display for AttackReference {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        if self.is_none() {
+            write!(f, "no attack")
+        } else {
+            write!(f, "{}", self.name)
+        }
+    }
+}
+impl Default for AttackReference {
+    fn default() -> Self {
+        AttackReference::none()
     }
 }
 

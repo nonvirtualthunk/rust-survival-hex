@@ -136,7 +136,7 @@ impl CharacterInfoWidget {
 
                 let xp_required_for_current_level = Skill::xp_required_for_level(lvl);
                 let xp_required_for_next_level = Skill::xp_required_for_level(lvl + 1);
-                let current_xp = skills.skill_xp(skill);
+                let current_xp = skills.cur_skill_xp(skill);
 
                 let required_delta = xp_required_for_next_level - xp_required_for_current_level;
                 let actual_delta = current_xp - xp_required_for_current_level;

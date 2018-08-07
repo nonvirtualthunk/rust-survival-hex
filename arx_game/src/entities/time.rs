@@ -2,9 +2,10 @@ use world::Entity;
 use world::EntityData;
 use world::WorldView;
 
-use world::ConstantModifier;
+use modifiers::ConstantModifier;
+use common::reflect::*;
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, PrintFields)]
 pub struct TurnData {
     pub turn_number : u32,
     pub active_faction : Entity

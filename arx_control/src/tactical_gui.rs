@@ -233,7 +233,7 @@ impl TacticalGui {
                 self.action_bar.set_showing(false).as_widget().reapply(gui);
             }
 
-            self.update_attack_details(&world_view, gui, &game_state, selected);
+            self.update_attack_details(world, &world_view, gui, &game_state, selected);
         } else {
             self.character_info_widget.set_showing(false).as_widget().reapply(gui);
             self.action_bar.set_showing(false).as_widget().reapply(gui);
@@ -255,14 +255,14 @@ impl TacticalGui {
         }
     }
 
-    pub fn update_attack_details(&mut self, world : &WorldView, gui : &mut GUI, game_state : &GameState, selected : Entity) {
+    pub fn update_attack_details(&mut self, world: &World, view : &WorldView, gui : &mut GUI, game_state : &GameState, selected : Entity) {
         use game::logic::*;
-        if let Some(hovered_char) = world.tile_opt(game_state.hovered_hex_coord).and_then(|e| e.occupied_by) {
-            if ! game_state.animating && factions::is_enemy(world, selected, hovered_char) {
-                if let Some(attack) = combat::primary_attack(world, selected) {
+        if let Some(hovered_char) = view.tile_opt(game_state.hovered_hex_coord).and_then(|e| e.occupied_by) {
+            if ! game_state.animating && factions::is_enemy(view, selected, hovered_char) {
+                if let Some(attack) = combat::primary_attack(view, selected) {
                     self.attack_details_widget.set_position(Positioning::constant((game_state.mouse_pixel_pos.x + 20.0).px()), Positioning::constant((game_state.mouse_pixel_pos.y + 20.0).px()));
                     self.attack_details_widget.set_showing(true);
-                    self.attack_details_widget.update(gui, world, selected, hovered_char, &attack);
+                    self.attack_details_widget.update(gui, world, view, selected, hovered_char, &attack);
                 }
                 return;
             }

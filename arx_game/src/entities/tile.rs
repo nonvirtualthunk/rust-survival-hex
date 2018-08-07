@@ -6,7 +6,7 @@ use std::ops::Deref;
 use common::prelude::*;
 use common::hex::*;
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, PrintFields)]
 pub struct TileData {
     pub name : Str,
     pub position: AxialCoord,

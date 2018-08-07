@@ -18,6 +18,13 @@ use logic::combat;
 use logic::experience::level_curve;
 use core::DicePool;
 use common::prelude::*;
+use reflect::ReduceableField;
+use reflect::SettableField;
+use std::ops;
+use world::EntityData;
+use modifiers::FieldLogs;
+use std::fmt::Display;
+use common::reflect::Field;
 
 pub enum StrikeIndex {
     Strike(usize),
@@ -28,7 +35,8 @@ pub enum StrikeIndex {
 pub struct AttackBreakdown {
     pub strikes : Vec<StrikeBreakdown>,
     pub counters : Vec<StrikeBreakdown>,
-    pub ordering : Vec<StrikeIndex>
+    pub ordering : Vec<StrikeIndex>,
+    pub damage_types : Vec<DamageType>
 }
 impl AttackBreakdown {
     pub fn add_strike(&mut self, strike : StrikeBreakdown) {
@@ -40,25 +48,70 @@ impl AttackBreakdown {
         self.ordering.push(StrikeIndex::Counter(self.counters.len() - 1));
     }
 }
+//
+//pub struct BreakdownComponent<T> {
+//    contribution : T,
+//    description : Str,
+//    details : Vec<String>
+//}
+#[derive(Default)]
+pub struct Breakdown<T : Default> {
+    pub total : T,
+    pub components : Vec<(String, String)>
+}
+impl <T : Default> Breakdown<T> where T : ops::Add<Output=T> + Copy + ToStringWithSign {
+    pub fn add_field<S1 : Into<String>, E : EntityData, U : ToStringWithSign + Clone>(&mut self, net_value : T, logs : &FieldLogs<E>, field : &'static Field<E,U>, descriptor : S1) {
+        self.total = self.total + net_value;
+        let base_value = (field.getter)(&logs.base_value);
+        let base_value_str = base_value.to_string_with_sign();
+        self.components.push((base_value_str, format!("base {}", descriptor.into())));
+        for field_mod in logs.modifications_for(field) {
+            let mut modification_str = field_mod.modification.clone();
+            modification_str.retain(|c| ! c.is_whitespace());
+            self.components.push((modification_str, strf(field_mod.description.unwrap_or(""))))
+        }
+    }
+
+    pub fn add<S1 : Into<String>>(&mut self, value : T, descriptor : S1) {
+        self.total = self.total + value;
+        self.components.push((value.to_string_with_sign(), descriptor.into()));
+    }
+
+}
 
 #[derive(Default)]
 pub struct StrikeBreakdown {
-    pub to_hit_components : Vec<(i32, Str)>,
-    pub to_miss_components: Vec<(i32, Str)>,
-    pub damage_bonus_components : Vec<(i32, Str)>,
-    pub damage_resistance_components : Vec<(f32, Str)>,
-    pub damage_absorption_components: Vec<(i32, Str)>,
+    pub to_hit_components : Breakdown<i32>,
+    pub to_miss_components: Breakdown<i32>,
+    pub damage_bonus_components : Breakdown<i32>,
+    pub damage_resistance_components : Breakdown<f32>,
+    pub damage_absorption_components: Breakdown<i32>,
 //    pub dice_count_components: Vec<(i32, Str)>,
 //    pub die_components: Vec<(i32, Str)>,
     pub damage_dice_components: Vec<(DicePool, Str)>,
-    pub ap_cost_components: Vec<(i32, Str)>
+    pub ap_cost_components: Breakdown<i32>
 }
 impl StrikeBreakdown {
-    pub fn to_hit_total(&self) -> i32 { self.to_hit_components.iter().map(|c| c.0).sum() }
-    pub fn to_miss_total(&self) -> i32 { self.to_miss_components.iter().map(|c| c.0).sum() }
-    pub fn damage_bonus_total(&self) -> i32 { self.damage_bonus_components.iter().map(|c| c.0).sum() }
-    pub fn damage_resistance_total(&self) -> f32 { self.damage_resistance_components.iter().map(|c| c.0).sum() }
-    pub fn damage_absorption_total(&self) -> i32 { self.damage_absorption_components.iter().map(|c| c.0).sum() }
+//    pub fn to_hit_total(&self) -> i32 { self.to_hit_components.iter().map(|c| c.0).sum() }
+//    pub fn to_miss_total(&self) -> i32 { self.to_miss_components.iter().map(|c| c.0).sum() }
+//    pub fn damage_bonus_total(&self) -> i32 { self.damage_bonus_components.iter().map(|c| c.0).sum() }
+//    pub fn damage_resistance_total(&self) -> f32 { self.damage_resistance_components.iter().map(|c| c.0).sum() }
+//    pub fn damage_absorption_total(&self) -> i32 { self.damage_absorption_components.iter().map(|c| c.0).sum() }
+//    pub fn damage_dice_total<'a>(&'a self) -> impl Iterator<Item = DicePool> + 'a {
+////        let dice_count : i32 = self.dice_count_components.iter().map(|c| c.0).sum();
+////        let die : i32 = self.die_components.iter().map(|c| c.0).sum();
+////        DicePool::of(dice_count.as_u32_or_0(), die.as_u32_or_0())
+//        self.damage_dice_components.iter().map(|dd| dd.0)
+//    }
+//    pub fn ap_cost_total(&self) -> u32 {
+//        let cost : i32 = self.ap_cost_components.iter().map(|c| c.0).sum();
+//        cost.as_u32_or_0()
+//    }
+pub fn to_hit_total(&self) -> i32 { self.to_hit_components.total }
+    pub fn to_miss_total(&self) -> i32 { self.to_miss_components.total }
+    pub fn damage_bonus_total(&self) -> i32 { self.damage_bonus_components.total }
+    pub fn damage_resistance_total(&self) -> f32 { self.damage_resistance_components.total }
+    pub fn damage_absorption_total(&self) -> i32 { self.damage_absorption_components.total }
     pub fn damage_dice_total<'a>(&'a self) -> impl Iterator<Item = DicePool> + 'a {
 //        let dice_count : i32 = self.dice_count_components.iter().map(|c| c.0).sum();
 //        let die : i32 = self.die_components.iter().map(|c| c.0).sum();
@@ -66,16 +119,21 @@ impl StrikeBreakdown {
         self.damage_dice_components.iter().map(|dd| dd.0)
     }
     pub fn ap_cost_total(&self) -> u32 {
-        let cost : i32 = self.ap_cost_components.iter().map(|c| c.0).sum();
+        let cost : i32 = self.ap_cost_components.total;
         cost.as_u32_or_0()
     }
 }
 
 
-pub fn compute_attack_breakdown(world_view : &WorldView, attacker : Entity, defender : Entity, attack : &Attack) -> AttackBreakdown {
+pub fn compute_attack_breakdown(world : &World, world_view : &WorldView, attacker : Entity, defender : Entity, attack : &Attack) -> AttackBreakdown {
+
     let mut attack_breakdown = AttackBreakdown::default();
 
     let attacker_data = world_view.character(attacker);
+    attack_breakdown.damage_types.push(attack.primary_damage_type);
+    if let Some(secondary_damage_type) = attack.secondary_damage_type {
+        attack_breakdown.damage_types.push(secondary_damage_type);
+    }
 
     let mut attacker_strikes = attacker_data.action_points.cur_value() / attack.ap_cost as i32;
     let (defender_counter_attack, mut defender_counters) =
@@ -84,10 +142,10 @@ pub fn compute_attack_breakdown(world_view : &WorldView, attacker : Entity, defe
     let mut attacker_turn = true;
     while attacker_strikes > 0 || defender_counters > 0 {
         if attacker_turn && attacker_strikes > 0 {
-            attack_breakdown.add_strike(compute_strike_breakdown(world_view, attacker, defender, attack));
+            attack_breakdown.add_strike(compute_strike_breakdown(world, world_view, attacker, defender, attack));
             attacker_strikes -= 1;
         } else if ! attacker_turn && defender_counters > 0 {
-            attack_breakdown.add_counter(compute_strike_breakdown(world_view, defender, attacker, &defender_counter_attack));
+            attack_breakdown.add_counter(compute_strike_breakdown(world, world_view, defender, attacker, &defender_counter_attack));
             defender_counters -= 1;
         }
         attacker_turn = ! attacker_turn;
@@ -96,13 +154,14 @@ pub fn compute_attack_breakdown(world_view : &WorldView, attacker : Entity, defe
     attack_breakdown
 }
 
-pub fn compute_strike_breakdown(view : &WorldView, attacker_ref : Entity, defender_ref : Entity, attack : &Attack) -> StrikeBreakdown {
+pub fn compute_strike_breakdown(world : &World, view : &WorldView, attacker_ref : Entity, defender_ref : Entity, attack : &Attack) -> StrikeBreakdown {
     let mut ret = StrikeBreakdown::default();
 
-    ret.ap_cost_components.push((attack.ap_cost as i32, "weapon ap cost"));
+    ret.ap_cost_components.add(attack.ap_cost as i32, "weapon ap cost");
 
     let attacker = view.character(attacker_ref);
     let attacker_combat = view.combat(attacker_ref);
+    let attacker_combat_field_log = world.field_logs_for::<CombatData>(attacker_ref);
     let attacker_skills = view.skills(attacker_ref);
     let defender = view.character(defender_ref);
     let defender_combat = view.combat(defender_ref);
@@ -112,15 +171,22 @@ pub fn compute_strike_breakdown(view : &WorldView, attacker_ref : Entity, defend
     let defender_tile : &TileData = view.tile(defender.position);
 
     match attack.range {
-        i if i <= 1 => ret.to_hit_components.push((attacker_combat.melee_accuracy_bonus, "base melee accuracy")),
-        _ => ret.to_hit_components.push((attacker_combat.ranged_accuracy_bonus, "base ranged accuracy"))
+        i if i <= 1 => {
+            ret.to_hit_components.add_field(attacker_combat.melee_accuracy_bonus, &attacker_combat_field_log, &CombatData::melee_accuracy_bonus, "melee accuracy");
+//            ret.to_hit_components.push((attacker_combat_field_log.base_value.melee_accuracy_bonus, "base melee accuracy"));
+//            for field_mod in attacker_combat_field_log.modifications_for(&CombatData::melee_accuracy_bonus) {
+//                ret.to_hit_components.push((field_mod.modification, field_mod.description.unwrap_or("")))
+//            }
+        },
+        _ => ret.to_hit_components.add_field(attacker_combat.ranged_accuracy_bonus, &attacker_combat_field_log, &CombatData::ranged_accuracy_bonus, "ranged accuracy")
+            //ret.to_hit_components.add(attacker_combat.ranged_accuracy_bonus, "base ranged accuracy")
     }
 
-    ret.to_miss_components.push((defender_combat.dodge_bonus, "dodge"));
+    ret.to_miss_components.add(defender_combat.dodge_bonus, "dodge");
 
-    ret.to_hit_components.push((attack.to_hit_bonus, "weapon accuracy"));
+    ret.to_hit_components.add(attack.to_hit_bonus, "weapon accuracy");
 
-    ret.to_miss_components.push((defender_tile.cover as i32, "terrain defense"));
+    ret.to_miss_components.add(defender_tile.cover as i32, "terrain defense");
 
 //    ret.dice_count_components.push((attack.damage_dice.count as i32, "weapon dice"));
 //    ret.die_components.push((attack.damage_dice.die as i32, "weapon die size"));
@@ -128,10 +194,10 @@ pub fn compute_strike_breakdown(view : &WorldView, attacker_ref : Entity, defend
 
 
     match attack.range {
-        i if i <= 1 => ret.damage_bonus_components.push((attacker_combat.melee_damage_bonus, "base melee damage bonus")),
-        _ => ret.damage_bonus_components.push((attacker_combat.ranged_damage_bonus, "base ranged damage bonus"))
+        i if i <= 1 => ret.damage_bonus_components.add(attacker_combat.melee_damage_bonus, "base melee damage bonus"),
+        _ => ret.damage_bonus_components.add(attacker_combat.ranged_damage_bonus, "base ranged damage bonus")
     }
-    ret.damage_bonus_components.push((attack.damage_bonus, "weapon damage bonus"));
+    ret.damage_bonus_components.add(attack.damage_bonus, "weapon damage bonus");
 
     ret
 }
@@ -139,7 +205,7 @@ pub fn compute_strike_breakdown(view : &WorldView, attacker_ref : Entity, defend
 pub fn handle_attack(world : &mut World, attacker_ref : Entity, defender_ref : Entity, attack : &Attack) {
     let world_view = world.view();
 
-    let attack_breakdown = compute_attack_breakdown(world_view, attacker_ref, defender_ref, attack);
+    let attack_breakdown = compute_attack_breakdown(world, world_view, attacker_ref, defender_ref, attack);
 
     for strike_index in attack_breakdown.ordering {
         match strike_index {
@@ -183,7 +249,7 @@ pub fn handle_strike(world : &mut World, attacker_ref : Entity, defender_ref : E
     }
 
     // reduce the actions available to the attacker by the cost of the attack, regardless of how the attack goes
-    world.add_constant_modifier(attacker_ref, ReduceActionsMod(strike.ap_cost_total()));
+    world.add_modifier(attacker_ref, CharacterData::action_points.reduce_by(strike.ap_cost_total() as i32), "attack");
 
     let to_miss_total = strike.to_miss_total();
     let to_hit_total = strike.to_hit_total();
@@ -202,8 +268,8 @@ pub fn handle_strike(world : &mut World, attacker_ref : Entity, defender_ref : E
         let damage_dice = strike.damage_dice_total();
         let damage_total = damage_dice.map(|dd| dd.roll(&mut rng).total_result).sum();
 
-        modify(world, defender_ref, DamageMod(damage_total as i32));
-        modify(world, attacker_ref, EndMoveMod);
+        world.modify(defender_ref, CharacterData::health.reduce_by(damage_total as i32), "attack damage");
+        world.modify(attacker_ref, CharacterData::moves.set_to(Oct::of(0)), None);
 
         let killing_blow = !view.data::<CharacterData>(defender_ref).is_alive();
 
@@ -294,7 +360,7 @@ pub fn default_attack(world : &WorldView, attacker : Entity) -> Option<Attack> {
 
 pub fn primary_attack(world : &WorldView, attacker : Entity) -> Option<Attack> {
     let combat_data = world.data::<CombatData>(attacker);
-    if let Some(attack) = combat_data.active_attack.and_then(|ar| ar.referenced_attack(world, attacker)) {
+    if let Some(attack) = combat_data.active_attack.referenced_attack(world, attacker) {
         Some(attack.clone())
     } else {
         default_attack(world, attacker)
