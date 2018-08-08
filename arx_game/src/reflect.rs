@@ -1,6 +1,6 @@
 use common::prelude::*;
 use prelude::*;
-use world::EntityData;
+use entity::EntityData;
 use modifiers::ConstantModifier;
 use std::fmt::Debug;
 use std::fmt::Formatter;

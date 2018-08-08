@@ -6,10 +6,12 @@ use itertools::Itertools;
 use std::fmt::Display;
 use std::fmt::Error;
 use std::fmt::Formatter;
+use std::u64;
 
 //use num;
 
 pub type GameEventClock = u64;
+pub const MAX_GAME_EVENT_CLOCK : GameEventClock = u64::MAX;
 
 
 pub trait ReduceableType: ops::Sub<Output=Self> + ops::Add<Output=Self> + Copy + Default + Into<f64> + PartialOrd<Self> {}

@@ -16,23 +16,30 @@ extern crate lazy_static;
 extern crate image;
 extern crate vecmath;
 extern crate arx_common as common;
-extern crate arx_game as game;
+extern crate samvival_game as game;
+extern crate arx_graphics as graphics;
 #[macro_use] extern crate itertools;
 extern crate rusttype;
 
-pub mod core;
-pub use core::*;
+//pub mod core;
+//pub use core::*;
+//
+//pub mod camera;
+//pub use camera::*;
 
-pub mod camera;
-pub use camera::*;
+pub mod renderers;
+pub use renderers::*;
 
-pub mod animation;
-pub use animation::*;
+//pub mod animation;
+//pub use animation::*;
+//
+//pub mod interpolation;
+//pub use interpolation::*;
+//
+//pub mod text;
+//pub use text::*;
+//
+//mod resources;
 
-pub mod interpolation;
-pub use interpolation::*;
-
-pub mod text;
-pub use text::*;
-
-mod resources;
+// re-export all of the core graphics
+pub use graphics::*;

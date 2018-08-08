@@ -32,8 +32,8 @@ pub struct WorldView {
 
 mod world_mk3 {
     use world::EntityContainer;
-    use world::Entity;
-    use world::EntityData;
+    use entity::Entity;
+    use entity::EntityData;
     use anymap::Map;
     use anymap::any::CloneAny;
 
@@ -62,8 +62,9 @@ mod test {
     use common::prelude::*;
     use common::reflect::*;
     use prelude::*;
-    use world::EntityData;
+    use entity::EntityData;
     use spectral::assert_that;
+    use events::CoreEvent;
 
     #[derive(Clone,Default,Debug)]
     struct Nested {
@@ -111,26 +112,26 @@ mod test {
             .create(&mut world);
 
         world.add_modifier(ent, FieldModifier::permanent(&TestData::foo, transformations::SetTo(7i32)), "Test 1");
-        world.add_event(GameEvent::WorldStart);
+        world.add_event(CoreEvent::TimePassed);
         assert_that(&view.data::<TestData>(ent).foo).is_equal_to(&7);
 
         world.add_modifier(ent, TestData::foo.set_to(9), "Test 2");
-        world.add_event(GameEvent::WorldStart);
+        world.add_event(CoreEvent::TimePassed);
         assert_that(&view.data::<TestData>(ent).foo).is_equal_to(&9);
 
         world.add_modifier(ent, TestData::foo.add(1), "Test 3");
-        world.add_event(GameEvent::WorldStart);
+        world.add_event(CoreEvent::TimePassed);
         assert_that(&view.data::<TestData>(ent).foo).is_equal_to(&10);
 
 
         let data = view.data::<TestData>(ent);
         assert_that(&data.bar).is_equal_to(&Reduceable::new(3));
         world.add_modifier(ent, FieldModifier::permanent(&TestData::bar, transformations::ReduceBy(1)), "Test 4");
-        world.add_event(GameEvent::WorldStart);
+        world.add_event(CoreEvent::TimePassed);
         assert_that(&data.bar.cur_value()).is_equal_to(&2);
 
         world.add_modifier(ent, TestData::bar.recover_by(1), "Test 5");
-        world.add_event(GameEvent::WorldStart);
+        world.add_event(CoreEvent::TimePassed);
         assert_that(&data.bar.cur_value()).is_equal_to(&3);
 
         assert_eq!(TestData::foo, TestData::foo);

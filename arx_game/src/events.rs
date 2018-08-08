@@ -1,24 +1,26 @@
 use core::GameEventClock;
 
-use world::Entity;
-use entities::*;
+use prelude::*;
 use common::hex::AxialCoord;
+use std::fmt::Debug;
 
 #[derive(Clone,Copy)]
-pub struct GameEventWrapper {
+pub struct GameEventWrapper<E : GameEventType> {
     pub occurred_at : GameEventClock,
-    pub data : GameEvent
+    pub data : E
 }
 
-#[derive(Clone,Copy, Debug)]
-pub enum GameEvent {
-    Move { character : Entity, from : AxialCoord, to : AxialCoord },
-    EntityAppears { character : Entity, at : AxialCoord },
-    Strike { attacker : Entity, defender : Entity, damage_done : u32, hit : bool, killing_blow : bool },
-    Attack { attacker : Entity, defender : Entity },
-    Equip { character : Entity, item : Entity },
-    TurnStart { turn_number : u32 },
-    FactionTurnStart { turn_number : u32, faction : Entity },
-    FactionTurnEnd { turn_number : u32, faction : Entity },
-    WorldStart
+pub trait GameEventType : Clone + Copy + Debug {}
+
+
+
+#[derive(Clone,Copy,Debug)]
+pub enum CoreEvent {
+    WorldInitialized,
+    EffectEnded,
+    TimePassed,
+    EntityAdded(Entity),
+    EntityRemoved(Entity),
 }
+
+impl GameEventType for CoreEvent {}

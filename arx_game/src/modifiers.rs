@@ -1,4 +1,4 @@
-use world::EntityData;
+use entity::EntityData;
 use prelude::*;
 use common::prelude::*;
 use std::marker::PhantomData;

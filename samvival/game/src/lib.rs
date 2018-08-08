@@ -11,7 +11,6 @@
 #![feature(extern_prelude)]
 #![feature(const_fn)]
 #![feature(type_ascription)]
-#![feature(nll)]
 
 extern crate arx_common as common;
 extern crate either;
@@ -27,40 +26,43 @@ extern crate pretty_env_logger;
 #[macro_use] extern crate derive_more;
 extern crate itertools;
 #[macro_use] extern crate arx_macros;
+extern crate arx_game as game;
 
 extern crate num;
 
-pub mod world;
-pub use world::*;
-
-pub mod entity;
-pub use entity::*;
-
-//pub mod entities;
-
+pub mod entities;
+pub mod world_util;
+//
 pub mod events;
+pub use events::*;
+//
+//pub mod core;
+//
+//pub mod world_util;
+//
+pub mod logic;
+//
+pub mod entity_util;
+//
+pub mod actions;
+//
+//pub mod prelude;
+//
+//pub mod reflect;
+//
+//pub mod modifiers;
+//
+//pub use game::world::World;
+//
+//mod world_playground;
 
-pub mod core;
-pub use core::*;
+//pub use game::world::*;
+//pub use game::core::*;
+pub use world_util::*;
+pub use actions::*;
+pub use entity_util::*;
+//pub use reflect::*;
+//pub use modifiers::*;
 
 
-//pub mod logic;
-
-//pub mod entity_util;
-
-//pub mod actions;
-
-pub mod prelude;
-
-pub mod reflect;
-pub use reflect::*;
-
-pub mod modifiers;
-pub use modifiers::*;
-
-mod world_playground;
-
-
-//pub use actions::*;
-//pub use entity_util::*;
-
+pub use game::*;

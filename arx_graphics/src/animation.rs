@@ -2,8 +2,7 @@ use common::prelude::*;
 
 use core::*;
 use game::world::WorldView;
-use game::world::Entity;
-use game::entities::*;
+use game::Entity;
 
 use game::core::GameEventClock;
 use core::GraphicsWrapper;

@@ -1,0 +1,42 @@
+[package]
+name = "samvival_game"
+version = "0.1.0"
+authors = ["Sam Bock <nonvirtualthunk@gmail.com>"]
+
+[lib]
+name = "samvival_game"
+
+[dependencies]
+find_folder = "*"
+cgmath = "*"
+lazy_static = "*"
+image = "0.19.0"
+either = "*"
+enum-map = "*"
+rand = "*"
+noisy_float = "*"
+pathfinding = "*"
+anymap = "*"
+spectral = "*"
+log = "*"
+pretty_env_logger = "*"
+dimensioned = "*"
+derive_more = "0.11.0"
+num = "0.2.0"
+itertools = "0.7.3"
+quote = "0.6"
+
+[dependencies.arx_common]
+path = "../../arx_common"
+version = "0.1.0"
+
+[dependencies.arx_game]
+path = "../../arx_game"
+version = "0.1.0"
+
+[dependencies.arx_macros]
+path = "../../arx_macros"
+version = "0.1.0"
+
+[dependencies.vecmath]
+git = "https://github.com/PistonDevelopers/vecmath"

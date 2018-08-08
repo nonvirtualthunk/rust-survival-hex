@@ -32,8 +32,8 @@ pretty_env_logger = "0.2"
 git = "https://github.com/PistonDevelopers/vecmath"
 
 
-[dependencies.arx_game]
-path = "../arx_game"
+[dependencies.samvival_game]
+path = "../samvival/game"
 version = "0.1.0"
 
 [dependencies.arx_graphics]
@@ -41,8 +41,8 @@ path = "../arx_graphics"
 version = "0.1.0"
 
 
-[dependencies.arx_control]
-path = "../arx_control"
+[dependencies.samvival_control]
+path = "../samvival/control"
 version = "0.1.0"
 
 [dependencies.arx_gui]
