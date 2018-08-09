@@ -41,7 +41,7 @@ impl ConstantModifier<CharacterData> for ReduceActionsMod {
     }
 }
 
-pub struct ReduceStaminaMod(pub Oct);
+pub struct ReduceStaminaMod(pub Sext);
 impl ConstantModifier<CharacterData> for ReduceStaminaMod {
     fn modify(&self, data: &mut CharacterData) {
         data.stamina.reduce_by(self.0);
@@ -55,7 +55,7 @@ impl ConstantModifier<CharacterData> for DamageMod {
     }
 }
 
-pub struct ReduceMoveMod(pub Oct);
+pub struct ReduceMoveMod(pub Sext);
 impl ConstantModifier<CharacterData> for ReduceMoveMod {
     fn modify(&self, data: &mut CharacterData) {
         data.moves = data.moves - self.0;
@@ -65,14 +65,14 @@ impl ConstantModifier<CharacterData> for ReduceMoveMod {
 pub struct EndMoveMod;
 impl ConstantModifier<CharacterData> for EndMoveMod {
     fn modify(&self, data: &mut CharacterData) {
-        data.moves = Oct::zero();
+        data.moves = Sext::zero();
     }
 }
 
 pub struct ResetCharacterTurnMod;
 impl ConstantModifier<CharacterData> for ResetCharacterTurnMod {
     fn modify(&self, data: &mut CharacterData) {
-        data.moves = Oct::zero();
+        data.moves = Sext::zero();
         data.action_points.reset();
         data.stamina.recover_by(data.stamina_recovery);
     }
@@ -84,12 +84,6 @@ impl ConstantModifier<CombatData> for ResetCombatTurnMod {
     }
 }
 
-pub struct ChangePositionMod(pub AxialCoord);
-impl ConstantModifier<CharacterData> for ChangePositionMod {
-    fn modify(&self, data: &mut CharacterData) {
-        data.position = self.0;
-    }
-}
 
 pub struct SetHexOccupantMod(pub Option<Entity>);
 impl ConstantModifier<TileData> for SetHexOccupantMod {

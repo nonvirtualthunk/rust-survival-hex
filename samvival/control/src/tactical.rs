@@ -257,14 +257,14 @@ impl TacticalMode {
         let closest_enemy = world_view.entities_with_data::<CharacterData>().iter()
             .filter(|&(_, c)| c.is_alive())
             .filter(|&(cref, _)| is_enemy(world_view, *ai_ref, *cref))
-            .min_by_key(|t| t.1.position.distance(&ai.position));
+            .min_by_key(|t| world_view.data::<PositionData>(*t.0).hex.distance(&ai.position.hex));
 
         if let Some(closest) = closest_enemy {
             let enemy_ref: &Entity = closest.0;
-            let enemy_data: &CharacterData = closest.1;
+            let enemy_data = world_view.character(*closest.0);
 
             if enemy_data.position.distance(&ai.position) >= r32(1.5) {
-                if let Some(path) = path_any_v(world_view, *ai_ref, ai.position, &enemy_data.position.neighbors(), enemy_data.position) {
+                if let Some(path) = path_any_v(world_view, *ai_ref, ai.position.hex, &enemy_data.position.hex.neighbors(), enemy_data.position.hex) {
                     movement::handle_move(world, *ai_ref, path.0.as_slice())
                 } else {
                     println!("No move towards closest enemy, stalling");
@@ -278,7 +278,7 @@ impl TacticalMode {
                 }
             }
         } else {
-            if let Some(path) = self.path(cdata.position, cdata.position.neighbor(0)) {
+            if let Some(path) = self.path(ai.position.hex, ai.position.hex.neighbor(0)) {
                 logic::movement::handle_move(world, *ai_ref, path.0.as_slice());
             }
         }
@@ -387,8 +387,8 @@ impl TacticalMode {
                 let mut draw_list = DrawList::of_quad(Quad::new_cart(String::from("ui/hoverHex"), hovered_hex.as_cart_vec()).centered());
 
                 if let Some(selected) = self.selected_character {
-                    let sel_c = world_in.view().data::<CharacterData>(selected);
-                    if let Some(path_result) = self.path(sel_c.position, hovered_hex) {
+                    let sel_c = world_in.view().character(selected);
+                    if let Some(path_result) = self.path(sel_c.position.hex, hovered_hex) {
                         let path = path_result.0;
                         for hex in path {
                             draw_list = draw_list.add_quad(Quad::new_cart(String::from("ui/feet"), hex.as_cart_vec()).centered());
@@ -547,7 +547,7 @@ impl GameMode for TacticalMode {
                             if let Some(hovered_) = self.hovered_tile(world.view()) {
                                 let cur_sel_data = world_view.character(sel_c);
                                 if cur_sel_data.faction == self.player_faction {
-                                    let start_pos = world_view.character(sel_c).position;
+                                    let start_pos = world_view.character(sel_c).position.hex;
                                     if let Some(path_result) = self.path(start_pos, clicked_coord) {
                                         let path = path_result.0;
                                         logic::movement::handle_move(world, sel_c, path.as_slice());

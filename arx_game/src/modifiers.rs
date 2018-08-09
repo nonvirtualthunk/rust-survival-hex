@@ -3,6 +3,13 @@ use prelude::*;
 use common::prelude::*;
 use std::marker::PhantomData;
 use common::reflect::Field;
+//use anymap::any::*;
+use std::fmt;
+use std::fmt::Formatter;
+use std::fmt::Error;
+use std::any::TypeId;
+use std::any::Any;
+use std::collections::VecDeque;
 
 /// conceptually, we're breaking up modifiers into several broad types: permanent (movement, damage, temperature),
 /// limited (fixed duration spell, poison), and dynamic (+1 attacker per adjacent ally, -1 move at night). Permanent
@@ -38,7 +45,7 @@ use common::reflect::Field;
 pub enum ModifierType {
     Permanent,
     Limited,
-    Dynamic
+    Dynamic,
 }
 
 pub trait ConstantModifier<T: EntityData>: Sized + 'static {
@@ -47,21 +54,21 @@ pub trait ConstantModifier<T: EntityData>: Sized + 'static {
     fn apply_to(self, entity: Entity, world: &mut World) {
         world.add_constant_modifier(entity, self);
     }
-    fn apply_to_world(self, world : &mut World) {
+    fn apply_to_world(self, world: &mut World) {
         world.add_constant_world_modifier(self);
     }
 
     fn wrap(self) -> Box<Modifier<T>> {
         box ConstantModifierWrapper {
             inner: self,
-            _ignored: PhantomData
+            _ignored: PhantomData,
         }
     }
 }
 
 pub(crate) struct ConstantModifierWrapper<T: EntityData, CM: ConstantModifier<T>> {
     pub(crate) inner: CM,
-    pub(crate) _ignored: PhantomData<T>
+    pub(crate) _ignored: PhantomData<T>,
 }
 
 impl<T: EntityData, CM: ConstantModifier<T>> Modifier<T> for ConstantModifierWrapper<T, CM> {
@@ -86,7 +93,7 @@ pub trait LimitedModifier<T: EntityData>: Sized + 'static {
 
 pub(crate) struct LimitedModifierWrapper<T: EntityData, LM: LimitedModifier<T>> {
     pub(crate) inner: LM,
-    pub(crate) _ignored: PhantomData<T>
+    pub(crate) _ignored: PhantomData<T>,
 }
 
 impl<T: EntityData, LM: LimitedModifier<T>> Modifier<T> for LimitedModifierWrapper<T, LM> {
@@ -111,7 +118,7 @@ pub trait DynamicModifier<T: EntityData> {
 
 pub(crate) struct DynamicModifierWrapper<T: EntityData, DM: DynamicModifier<T>> {
     pub(crate) inner: DM,
-    pub(crate) _ignored: PhantomData<T>
+    pub(crate) _ignored: PhantomData<T>,
 }
 
 impl<T: EntityData, LM: DynamicModifier<T>> Modifier<T> for DynamicModifierWrapper<T, LM> {
@@ -128,11 +135,178 @@ impl<T: EntityData, LM: DynamicModifier<T>> Modifier<T> for DynamicModifierWrapp
     }
 }
 
+pub enum Transformation {
+    Add(Box<Any>),
+    Mul(Box<Any>),
+    Div(Box<Any>),
+    Set(Box<Any>),
+    Reduce(Box<Any>),
+    Recover(Box<Any>),
+    Custom(Str),
+}
+
+//pub trait CloneToAny {
+//    fn clone_to_any(&self) -> Box<Any>;
+//    fn clone_to_clone_any(&self) -> Box<CloneToAny>;
+//}
+//impl <T> CloneToAny for T where T : Any + Clone {
+//    fn clone_to_any(&self) -> Box<Any> {
+//        box self.clone()
+//    }
+//    fn clone_to_clone_any(&self) -> Box<CloneToAny> {
+//        box self.clone()
+//    }
+//}
+
+
+//trait Downcastable {
+//    fn downcast_ref<T : 'static>(&self) -> Option<&T>;
+//}
+//
+//impl Downcastable for Box<Any> {
+//    fn downcast_ref<T : 'static>(&self) -> Option<&T> {
+//        let reference : &Any = self;
+//        println!("TypeId is : {:?}, Box<Any> is: {:?}", reference.get_type_id(), TypeId::of::<Box<Any>>());
+//        if TypeId::of::<T>() == reference.get_type_id() {
+//            Some(unsafe { self.downcast_ref_unchecked::<T>() })
+////            let raw : &Any = self;
+////            unsafe { Some(&*(raw as *const Any as *const T)) }
+//        } else {
+//            None
+//        }
+//    }
+//}
+
+
+impl Transformation {
+    pub fn as_string(a: &Box<Any>, include_sign: bool, invert: bool) -> String {
+        if let Some(a) = a.downcast_ref::<i32>() {
+            let a = if invert { -a } else { *a };
+            if include_sign { a.to_string_with_sign() } else { a.to_string() }
+        } else if let Some(a) = a.downcast_ref::<f32>() {
+            let a = if invert { -a } else { *a };
+            if include_sign { a.to_string_with_sign() } else { a.to_string() }
+        } else if let Some(a) = a.downcast_ref::<f64>() {
+            let a = if invert { -a } else { *a };
+            if include_sign { a.to_string_with_sign() } else { a.to_string() }
+        } else if let Some(a) = a.downcast_ref::<u32>() {
+            if invert { format!("don't use u32 -{}", a.to_string()) } else { a.to_string() }
+        } else {
+            strf("cannot represent")
+        }
+    }
+
+
+    pub fn combine_boxed_values(a: &Box<Any>, b: &Box<Any>, negate: bool) -> Option<Box<Any>> {
+        if let Some(a) = a.downcast_ref::<i32>() {
+            if let Some(b) = b.downcast_ref::<i32>() {
+                if negate { return Some(box (a - b)); } else { return Some(box (a + b)); }
+            }
+        } else if let Some(a) = a.downcast_ref::<f32>() {
+            if let Some(b) = b.downcast_ref::<f32>() {
+                if negate { return Some(box (a - b)); } else { return Some(box (a + b)); }
+            }
+        } else if let Some(a) = a.downcast_ref::<i64>() {
+            if let Some(b) = b.downcast_ref::<i64>() {
+                if negate { return Some(box (a - b)); } else { return Some(box (a + b)); }
+            }
+        } else if let Some(a) = a.downcast_ref::<f64>() {
+            if let Some(b) = b.downcast_ref::<f64>() {
+                if negate { return Some(box (a - b)); } else { return Some(box (a + b)); }
+            }
+        } else if let Some(a) = a.downcast_ref::<Sext>() {
+            if let Some(b) = b.downcast_ref::<Sext>() {
+                if negate { return Some(box (*a - *b)); } else { return Some(box (*a + *b)); }
+            }
+        }
+
+        None
+    }
+
+    pub fn can_combine_with(&self, other: &Transformation) -> bool {
+        match other {
+            Transformation::Add(b) => {
+                if let Transformation::Add(a) = self {
+                    true
+                } else {
+                    false
+                }
+            }
+            Transformation::Set(_) => true,
+            _ => false
+        }
+    }
+
+    pub fn is_set(&self) -> bool {
+        match self {
+            Transformation::Set(_) => true,
+            _ => false
+        }
+    }
+
+    pub fn combine(self, other: Transformation) -> Transformation {
+        match &other {
+            Transformation::Add(b) => {
+                if let Transformation::Add(a) = &self {
+                    if let Some(combined) = Transformation::combine_boxed_values(a, b, false) {
+                        return Transformation::Add(combined);
+                    }
+                }
+            }
+            Transformation::Set(_) => return other,
+            _ => ()
+        }
+        error!("Attempted to combine two transformation types that could not be combined");
+        self
+    }
+}
+
+impl fmt::Display for Transformation {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        match self {
+            Transformation::Add(a) => write!(f, "{}", Transformation::as_string(a, true, false)),
+            Transformation::Mul(a) => write!(f, "*{}", Transformation::as_string(a, false, false)),
+            Transformation::Div(a) => write!(f, "/{}", Transformation::as_string(a, false, false)),
+            Transformation::Set(a) => write!(f, "={}", Transformation::as_string(a, false, false)),
+            Transformation::Recover(a) => write!(f, "recovered {}", Transformation::as_string(a, false, false)),
+            Transformation::Reduce(a) => write!(f, "reduced {}", Transformation::as_string(a, false, false)),
+            Transformation::Custom(s) => write!(f, "{}", s),
+        }
+    }
+}
 
 pub struct FieldModification {
-    pub field : Str,
-    pub modification : String,
-    pub description : Option<Str>
+    pub field: Str,
+    pub modification: Transformation,
+    pub description: Option<Str>,
+}
+
+impl FieldModification {
+    pub fn new(field: Str, modification: Transformation, description: Option<Str>) -> FieldModification {
+        FieldModification { field, modification, description }
+    }
+    pub fn squash(mut transformations: VecDeque<FieldModification>) -> VecDeque<FieldModification> {
+        let mut new_vec = VecDeque::new();
+        while !transformations.is_empty() {
+            if let Some(cur_t) = transformations.pop_front() {
+                let (mut can_combine, rest): (VecDeque<FieldModification>, VecDeque<FieldModification>) =
+                    transformations.into_iter().partition(
+                        |ot| ot.field == cur_t.field && ot.description.is_some() && ot.description == cur_t.description && cur_t.modification.can_combine_with(&ot.modification));
+                let mut t = cur_t;
+                while !can_combine.is_empty() {
+                    if let Some(next) = can_combine.pop_front() {
+                        t = FieldModification { field: t.field, modification: Transformation::combine(t.modification, next.modification), description: t.description };
+                    }
+                }
+
+                transformations = rest;
+                new_vec.push_back(t);
+            }
+        }
+
+
+        new_vec
+    }
 }
 
 pub trait Modifier<T: EntityData> {
@@ -148,17 +322,80 @@ pub trait Modifier<T: EntityData> {
 }
 
 
-
-
-
-pub struct FieldLogs<T : EntityData> {
-    pub base_value : T,
-    pub field_modifications : Vec<FieldModification>
+pub struct FieldLogs<T: EntityData> {
+    pub base_value: T,
+    pub field_modifications: Vec<FieldModification>,
 }
-impl <E : EntityData> FieldLogs<E> {
-    pub fn modifications_for<'a, T : Clone + 'static>(&'a self, field : &'static Field<E,T>) -> impl Iterator<Item=&FieldModification> + 'a {
+
+impl<E: EntityData> FieldLogs<E> {
+    pub fn modifications_for<'a, T: Clone + 'static>(&'a self, field: &'static Field<E, T>) -> impl Iterator<Item=&FieldModification> + 'a {
         let name = field.name;
         self.field_modifications.iter().filter(move |m| m.field == name)
     }
 }
 
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use spectral::prelude::*;
+
+    #[test]
+    pub fn test_field_modification_squashing() {
+        let field_modifications = vec![FieldModification::new("A", Transformation::Add(box 2i32), Some("A")),
+                                       FieldModification::new("B", Transformation::Add(box 1i32), None),
+                                       FieldModification::new("A", Transformation::Add(box 3i32), Some("A"))];
+
+        let squashed = FieldModification::squash(VecDeque::from(field_modifications));
+
+        assert_that(&squashed.len()).is_equal_to(&2);
+
+        let value_0 = if let Transformation::Add(a) = &squashed[0].modification {
+            a.downcast_ref::<i32>()
+        } else {
+            None
+        };
+        assert_that(&value_0).is_equal_to(&Some(&5i32));
+
+        let value_1 = if let Transformation::Add(a) = &squashed[1].modification {
+            a.downcast_ref::<i32>()
+        } else {
+            None
+        };
+        assert_that(&value_1).is_equal_to(&Some(&1i32));
+    }
+
+    #[test]
+    pub fn test_field_modification_squashing_with_set() {
+        let field_modifications = vec![FieldModification::new("A", Transformation::Add(box 2i32), Some("A")),
+                                       FieldModification::new("B", Transformation::Add(box 1i32), None),
+                                       FieldModification::new("A", Transformation::Add(box 3i32), Some("A")),
+                                       FieldModification::new("A", Transformation::Set(box 9i32), Some("A")),
+                                       FieldModification::new("A", Transformation::Add(box 5i32), Some("Different Desc"))];
+
+        let squashed = FieldModification::squash(VecDeque::from(field_modifications));
+
+        assert_that(&squashed.len()).is_equal_to(&3);
+
+        let value_0 = if let Transformation::Set(a) = &squashed[0].modification {
+            a.downcast_ref::<i32>()
+        } else {
+            None
+        };
+        assert_that(&value_0).is_equal_to(&Some(&9i32));
+
+        let value_1 = if let Transformation::Add(a) = &squashed[1].modification {
+            a.downcast_ref::<i32>()
+        } else {
+            None
+        };
+        assert_that(&value_1).is_equal_to(&Some(&1i32));
+
+        let value_2 = if let Transformation::Add(a) = &squashed[2].modification {
+            a.downcast_ref::<i32>()
+        } else {
+            None
+        };
+        assert_that(&value_2).is_equal_to(&Some(&5i32));
+    }
+}

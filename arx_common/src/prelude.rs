@@ -99,6 +99,23 @@ impl ToStringWithSign for f64 {
         }
     }
 }
+impl ToStringWithSign for f32 {
+    fn to_string_with_sign(&self) -> String {
+        if *self < 0.0 {
+            self.to_string()
+        } else {
+            format!("+{}", self.to_string())
+        }
+    }
+
+    fn sign_str(&self) -> Str {
+        if *self < 0.0 {
+            "-"
+        } else {
+            "+"
+        }
+    }
+}
 
 pub trait RichString {
     fn capitalized(&self) -> String;

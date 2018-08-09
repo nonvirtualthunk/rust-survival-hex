@@ -549,22 +549,22 @@ impl World {
 
 impl World {
     pub fn permanent_field_logs_for<T: EntityData>(&self, ent: Entity) -> FieldLogs<T> {
-        self.field_logs_with_condition_for::<T>(ent, |m| m.modifier.modifier_type() == ModifierType::Permanent)
+        self.field_logs_with_condition_for::<T>(ent, |m| m.modifier.modifier_type() == ModifierType::Permanent, self.current_time)
     }
     pub fn non_permanent_field_logs_for<T: EntityData>(&self, ent: Entity) -> FieldLogs<T> {
-        self.field_logs_with_condition_for::<T>(ent, |m| m.modifier.modifier_type() != ModifierType::Permanent)
+        self.field_logs_with_condition_for::<T>(ent, |m| m.modifier.modifier_type() != ModifierType::Permanent, self.current_time)
     }
     pub fn field_logs_for<T: EntityData>(&self, ent: Entity) -> FieldLogs<T> {
-        self.field_logs_with_condition_for::<T>(ent, |m| true)
+        self.field_logs_with_condition_for::<T>(ent, |m| true, self.current_time)
     }
 
-    pub fn field_logs_with_condition_for<T: EntityData>(&self, ent: Entity, condition : fn(&ModifierContainer<T>) -> bool) -> FieldLogs <T>{
+    pub fn field_logs_with_condition_for<T: EntityData>(&self, ent: Entity, condition : fn(&ModifierContainer<T>) -> bool, at_time : GameEventClock) -> FieldLogs <T>{
         let container = self.modifiers_container::<T>();
         let data_container : &DataContainer<T> = self.data.get::<DataContainer<T>>().expect("Data kind must exist");
         let raw_data = data_container.storage.get(&ent).unwrap_or_else(|| &data_container.sentinel).clone();
         FieldLogs {
             field_modifications: container.modifiers.iter()
-                .filter(move |m| m.entity == ent)
+                .filter(move |m| m.is_active_at_time(at_time) && m.entity == ent)
                 .filter(|m| (condition)(m))
                 .flat_map(|m| {
                     let mut field_modifications = m.modifier.modified_fields();

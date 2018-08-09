@@ -13,7 +13,7 @@ use rand::StdRng;
 use entities::Attack;
 use noisy_float::prelude::*;
 use noisy_float;
-use game::core::Oct;
+use game::core::Sext;
 use logic::combat;
 use logic::experience::level_curve;
 use game::core::DicePool;
@@ -67,7 +67,7 @@ impl <T : Default> Breakdown<T> where T : ops::Add<Output=T> + Copy + ToStringWi
         let base_value_str = base_value.to_string_with_sign();
         self.components.push((base_value_str, format!("base {}", descriptor.into())));
         for field_mod in logs.modifications_for(field) {
-            let mut modification_str = field_mod.modification.clone();
+            let mut modification_str = field_mod.modification.to_string();
             modification_str.retain(|c| ! c.is_whitespace());
             self.components.push((modification_str, strf(field_mod.description.unwrap_or(""))))
         }
@@ -168,8 +168,8 @@ pub fn compute_strike_breakdown(world : &World, view : &WorldView, attacker_ref 
     let defender_combat = view.combat(defender_ref);
     let defender_skills = view.skills(defender_ref);
 
-    let _attacker_tile : &TileData = view.tile(attacker.position);
-    let defender_tile : &TileData = view.tile(defender.position);
+    let _attacker_tile : &TileData = view.tile(attacker.position.hex);
+    let defender_tile : &TileData = view.tile(defender.position.hex);
 
     match attack.range {
         i if i <= 1 => {
@@ -220,7 +220,7 @@ pub fn handle_attack(world : &mut World, attacker_ref : Entity, defender_ref : E
         _ => Skill::Ranged
     };
     modify(world, attacker_ref, SkillXPMod(attack_skill_type, 1));
-    modify(world, attacker_ref, ReduceStaminaMod(Oct::of(1)));
+    modify(world, attacker_ref, ReduceStaminaMod(Sext::of(1)));
 
     world.add_event(GameEvent::Attack { attacker : attacker_ref, defender : defender_ref });
 }
@@ -270,7 +270,7 @@ pub fn handle_strike(world : &mut World, attacker_ref : Entity, defender_ref : E
         let damage_total = damage_dice.map(|dd| dd.roll(&mut rng).total_result).sum();
 
         world.modify(defender_ref, CharacterData::health.reduce_by(damage_total as i32), "attack damage");
-        world.modify(attacker_ref, CharacterData::moves.set_to(Oct::of(0)), None);
+        world.modify(attacker_ref, CharacterData::moves.set_to(Sext::of(0)), None);
 
         let killing_blow = !view.data::<CharacterData>(defender_ref).is_alive();
 
@@ -314,7 +314,7 @@ pub fn counters_for(world_view : &WorldView, defender_ref : Entity, countering_r
     let countering = world_view.character(countering_ref);
 
     // can't counter on ranged attacks
-    if defender.position.distance(&countering.position) > 1.0 {
+    if defender.position.hex.distance(&countering.position.hex) > 1.0 {
         (Attack::default(), 0)
     } else {
         let possible_attacks = possible_attacks(world_view, defender_ref);
@@ -371,7 +371,7 @@ pub fn primary_attack(world : &WorldView, attacker : Entity) -> Option<Attack> {
 pub fn valid_attacks<'a, 'b>(world_view: &'a WorldView, attacker : Entity, attacks: &'b Vec<Attack>, defender : Entity) -> Vec<&'b Attack> {
     let attacker = world_view.character(attacker);
     let defender = world_view.character(defender);
-    let dist = attacker.position.distance(&defender.position).raw() as u32;
+    let dist = attacker.position.hex.distance(&defender.position.hex).raw() as u32;
 
     let mut ret = vec![];
     for attack in attacks {

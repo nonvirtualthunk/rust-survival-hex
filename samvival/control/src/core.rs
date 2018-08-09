@@ -99,6 +99,8 @@ impl Game {
         world.register::<SkillData>();
         world.register::<ItemData>();
         world.register::<FactionData>();
+        world.register::<PositionData>();
+        world.register::<GraphicsData>();
         // -------- world data ---------------
         world.register::<MapData>();
         world.register::<TurnData>();
@@ -120,7 +122,7 @@ impl Game {
                         .with(TileData {
                             position: coord,
                             name: "grass",
-                            move_cost: Oct::of(1),
+                            move_cost: Sext::of(1),
                             cover: 0,
                             occupied_by: None,
                             elevation: 0,
@@ -172,10 +174,9 @@ impl Game {
         let archer = EntityBuilder::new()
             .with(CharacterData {
                 faction: player_faction,
-                position: AxialCoord::new(0, 0),
                 sprite: String::from("elf/archer"),
                 name: String::from("Archer"),
-                move_speed: Oct::of_parts(1, 2), // one and 2 eights
+                move_speed: Sext::of_parts(1, 2), // one and 2 sixths
                 health: Reduceable::new(25),
                 ..Default::default()
             })
@@ -185,6 +186,8 @@ impl Game {
             })
             .with(SkillData::default())
             .with(InventoryData::default())
+            .with(PositionData::default())
+            .with(GraphicsData::default())
             .create(world);
         let bow_attack_ref = AttackReference::of_attack(world.view(), archer, world.view().item(bow).primary_attack.as_ref().unwrap());
         world.modify(archer, CombatData::active_attack.set_to(bow_attack_ref), "equipped");
@@ -200,13 +203,15 @@ impl Game {
             let monster = EntityBuilder::new()
                 .with(CharacterData {
                     faction: enemy_faction,
-                    position: pos,
                     sprite: String::from("void/monster"),
                     name: String::from("Monster"),
-                    move_speed: Oct::of_rounded(0.75),
+                    move_speed: Sext::of_rounded(0.75),
                     action_points: Reduceable::new(6),
                     health: Reduceable::new(22),
                     ..Default::default()
+                })
+                .with(PositionData {
+                    hex : pos
                 })
                 .with(CombatData {
                     natural_attacks: vec![Attack {
@@ -221,6 +226,7 @@ impl Game {
                 })
                 .with(SkillData::default())
                 .with(InventoryData::default())
+                .with(GraphicsData::default())
                 .create(world_in);
 
             logic::movement::place_entity_in_world(world_in, monster, pos);

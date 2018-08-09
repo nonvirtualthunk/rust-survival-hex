@@ -11,16 +11,18 @@ use entities::CharacterStore;
 
 pub fn character_at(view : &WorldView, coord : AxialCoord) -> Option<(Entity, &CharacterData)> {
     for (cref, cdata) in view.entities_with_data::<CharacterData>() {
-        if cdata.position == coord && cdata.is_alive() {
+        let character = view.character(*cref);
+        if character.position.hex == coord && cdata.is_alive() {
             return Some((*cref, cdata));
         }
     }
     None
 }
 
+
 pub fn path(world : &WorldView, mover : Entity, from: AxialCoord, to: AxialCoord) -> Option<(Vec<AxialCoord>, R32)> {
     let mover = world.character(mover);
-    astar(&from, |c| c.neighbors().into_iter().map(|c| (c, r32(move_cost_to(world, mover, c)))), |c| c.distance(&to), |c| *c == to)
+    astar(&from, |c| c.neighbors().into_iter().map(|c| (c, r32(move_cost_to(world, &mover, c)))), |c| c.distance(&to), |c| *c == to)
 }
 
 pub fn path_any_v(world : &WorldView, mover : Entity, from: AxialCoord, to: &Vec<AxialCoord>, heuristical_center : AxialCoord) -> Option<(Vec<AxialCoord>, R32)> {
@@ -31,7 +33,7 @@ pub fn path_any_v(world : &WorldView, mover : Entity, from: AxialCoord, to: &Vec
 
 pub fn path_any(world : &WorldView, mover : Entity, from: AxialCoord, to: &HashSet<AxialCoord>, heuristical_center : AxialCoord) -> Option<(Vec<AxialCoord>, R32)> {
     let mover = world.character(mover);
-    astar(&from, |c| c.neighbors().into_iter().map(|c| (c, r32(move_cost_to(world, mover, c)))), |c| c.distance(&heuristical_center), |c| to.contains(c))
+    astar(&from, |c| c.neighbors().into_iter().map(|c| (c, r32(move_cost_to(world, &mover, c)))), |c| c.distance(&heuristical_center), |c| to.contains(c))
 }
 
 

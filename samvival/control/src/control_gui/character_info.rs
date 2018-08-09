@@ -59,7 +59,7 @@ impl CharacterInfoWidget {
             CharacterStat::new_reduceable("HP", |cdata| &cdata.health, "Health, characters fall unconscious if this reaches 0"),
             CharacterStat::new("AP", |cdata| cdata.action_points.cur_value(), |cdata| cdata.action_points.max_value(),
                                "Action Points, represents how much more this character can do this turn. Moving and using actions consume AP, AP resets every turn"),
-            CharacterStat::cur_only("Move Speed", |cdata| cdata.move_speed.as_f64(),
+            CharacterStat::cur_only("Move Speed", |cdata| cdata.move_speed,
                                     "How fast this character moves per action point spent at a normal pace. Max movement at a \
                                     normal pace is therefore AP * Move Speed"),
             CharacterStat::new("Stamina", |cdata| cdata.stamina.cur_value().as_i32(), |cdata| cdata.stamina.max_value().as_i32(),

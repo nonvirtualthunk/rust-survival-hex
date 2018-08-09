@@ -33,6 +33,8 @@ impl UnitRenderer {
                 continue;
             }
 
+            let c = world.character(*id);
+
             // Top half of selection indicator
             if *id == selected_character {
                 let color = world.faction(c.faction).color;
@@ -41,9 +43,8 @@ impl UnitRenderer {
             }
 
             // Main unit display
-            let cartesian_pos = c.position.as_cart_vec();
-            let pos = c.graphical_position.unwrap_or_else(|| cartesian_pos);
-            let quad = Quad::new(format!("entities/{}", c.sprite), pos.0).centered().color(c.graphical_color);
+            let pos = c.effective_graphical_pos();
+            let quad = Quad::new(format!("entities/{}", c.sprite), pos.0).centered().color(c.graphics.color);
             quads.push(quad);
 
             // Health bar
@@ -71,7 +72,7 @@ impl UnitRenderer {
 //
 //            let mut wheel_pos = pos + CartVec::new(0.9,0.75);
 //            for portion in stam_wheels {
-//                quads.push(Quad::new(format!("ui/oct/oct_{}", portion), wheel_pos.0)
+//                quads.push(Quad::new(format!("ui/Sext/Sext_{}", portion), wheel_pos.0)
 //                    .size(v2(STAMINA_WHEEL_WIDTH, STAMINA_WHEEL_WIDTH))
 //                    .color(Color::new(0.1, 0.7, 0.2, 1.0))
 //                );

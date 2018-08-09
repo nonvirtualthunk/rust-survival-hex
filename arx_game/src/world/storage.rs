@@ -11,6 +11,7 @@ use events::GameEventType;
 use anymap::Map;
 use anymap::any::CloneAny;
 use std::iter;
+use core::MAX_GAME_EVENT_CLOCK;
 
 pub type ModifierClock = usize;
 
@@ -72,6 +73,12 @@ pub struct ModifierContainer<T: EntityData> {
     pub(crate) modifier_index: ModifierClock,
     pub(crate) entity: Entity,
     pub(crate) description: Option<Str>
+}
+
+impl <T: EntityData> ModifierContainer<T> {
+    pub fn is_active_at_time(&self, time : GameEventClock) -> bool {
+        self.applied_at <= time && self.disabled_at.unwrap_or(MAX_GAME_EVENT_CLOCK) >= time
+    }
 }
 
 pub struct ModifiersContainer<T: EntityData> {

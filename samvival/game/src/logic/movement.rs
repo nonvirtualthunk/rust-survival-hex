@@ -1,6 +1,6 @@
 use common::flood_search;
 use common::hex::*;
-use game::core::Oct;
+use game::core::Sext;
 use entities::*;
 use entities::Attack;
 use entities::Skill;
@@ -18,10 +18,11 @@ use game::world::World;
 use game::world::WorldView;
 use logic::movement;
 use events::GameEvent;
+use game::SettableField;
 
 pub struct MovementTarget {
     hex : AxialCoord,
-    move_cost : Oct
+    move_cost : Sext
 }
 
 
@@ -29,13 +30,13 @@ pub fn move_cost(world_view : &WorldView, from : &AxialCoord, to : &AxialCoord) 
     world_view.tile_opt(*to).map(|t| t.move_cost.as_f64()).unwrap_or(100000.0)
 }
 
-pub fn hexes_in_range(world_view : &WorldView, mover : Entity, range : Oct) -> HashMap<AxialCoord, f64> {
-    let start_position = world_view.character(mover).position;
+pub fn hexes_in_range(world_view : &WorldView, mover : Entity, range : Sext) -> HashMap<AxialCoord, f64> {
+    let start_position = world_view.character(mover).position.hex;
     flood_search(start_position, range.as_f64(), |from, to| move_cost(world_view, from, to), |&from| from.neighbors())
 }
 
 pub fn path_to(world_view: &WorldView, mover : Entity, to : AxialCoord) -> Option<(Vec<AxialCoord>, f64)> {
-    let from = world_view.character(mover).position;
+    let from = world_view.character(mover).position.hex;
     astar(&from, |c| c.neighbors().into_iter().map(|c| (c, r32(move_cost(world_view, &c, &c) as f32))), |c| c.distance(&to), |c| *c == to)
         .map(|(vec, cost)| (vec, cost.raw() as f64))
 }
@@ -56,7 +57,7 @@ pub fn hex_ap_cost(world : &WorldView, mover : Entity, hex : AxialCoord) -> u32 
 
 pub fn handle_move(world : &mut World, mover : Entity, path : &[AxialCoord]) {
     let view = world.view();
-    let start_pos = view.character(mover).position;
+    let start_pos = view.character(mover).position.hex;
     let mut prev_hex = start_pos;
     let mut prev_hex_ent = view.entity_by_key(&start_pos).expect("hex must exist");
     for hex in path {
@@ -71,7 +72,7 @@ pub fn handle_move(world : &mut World, mover : Entity, path : &[AxialCoord]) {
                 let net_moves_lost = hex_cost - moves_converted;
                 modify(world, mover, ReduceActionsMod(ap_required));
                 modify(world, mover, ReduceMoveMod(net_moves_lost));
-                modify(world, mover, ChangePositionMod(hex));
+                world.modify(mover, PositionData::hex.set_to(hex), "movement");
                 modify(world, prev_hex_ent, SetHexOccupantMod(None));
                 modify(world, hex_ent, SetHexOccupantMod(Some(mover)));
 
@@ -93,7 +94,7 @@ pub fn place_entity_in_world(world: &mut World, character : Entity, pos : AxialC
     if let Some(tile) = view.tile_ent_opt(pos) {
         if tile.occupied_by.is_none() {
             modify(world, tile.entity, SetHexOccupantMod(Some(character)));
-            modify(world, character, ChangePositionMod(pos));
+            world.modify(character, PositionData::hex.set_to(pos), "placement");
 
             world.add_event(GameEvent::EntityAppears { character, at : pos });
 

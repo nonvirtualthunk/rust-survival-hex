@@ -11,6 +11,7 @@ use common::prelude::v2;
 
 use game::entities::CharacterStore;
 use game::entities::CharacterData;
+use game::entities::GraphicsData;
 use game::Entity;
 use game::entity::EntityData;
 use common::color::Color;
@@ -45,7 +46,7 @@ fn animate_move(world_view : &WorldView, character : Entity, from : AxialCoord, 
     vec![box EntityFieldAnimation::new(
         character,
         Interpolation::linear_from_endpoints(from_pos, to_pos),
-        |data : &mut CharacterData, new_value| data.graphical_position = Some(new_value),
+        |data : &mut GraphicsData, new_value| data.graphical_position = Some(new_value),
         0.3
     )]
 }
@@ -54,15 +55,15 @@ fn animate_attack(world_view: &WorldView, attacker : Entity, defender: Entity, d
     let attacker_data = world_view.character(attacker);
     let defender_data = world_view.character(defender);
 
-    let defender_pos = defender_data.position.as_cart_vec();
-    let attacker_pos = attacker_data.position.as_cart_vec();
+    let defender_pos = defender_data.position.hex.as_cart_vec();
+    let attacker_pos = attacker_data.position.hex.as_cart_vec();
 
     let delta : CartVec = (defender_pos - attacker_pos).normalize() * 0.5;
 
     let swing_at_enemy = EntityFieldAnimation::new(
         attacker,
         Interpolation::linear_from_delta(attacker_pos, delta).circular(),
-        |data:&mut CharacterData,new_value| { data.graphical_position = Some(new_value) },
+        |data:&mut GraphicsData,new_value| { data.graphical_position = Some(new_value) },
         0.5
     );
     let damage_anim_start_point = swing_at_enemy.raw_duration() / 2.0;
@@ -78,12 +79,12 @@ fn animate_attack(world_view: &WorldView, attacker : Entity, defender: Entity, d
             |data : &mut CharacterData, new_value : f32| { data.health.reduce_to(new_value.floor() as i32); },
             0.5);
 
-        let start_color = defender_data.graphical_color;
+        let start_color = defender_data.graphics.color;
         let end_color = Color::new(1f32, 0.1f32, 0.1f32, 1f32);
         let red_tint_animation = EntityFieldAnimation::new(
             defender,
             Interpolation::linear_from_endpoints(start_color, end_color).circular(),
-            |data:&mut CharacterData,new_value| { data.graphical_color = new_value; },
+            |data:&mut GraphicsData,new_value| { data.color = new_value; },
             0.5
         );
 

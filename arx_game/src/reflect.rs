@@ -11,6 +11,7 @@ use modifiers::FieldModification;
 use std::fmt::Display;
 use std::ops;
 use common::reflect::Field;
+use modifiers::Transformation;
 
 
 pub trait SettableField<E : EntityData, T: 'static> {
@@ -35,7 +36,7 @@ pub trait SubableField<E : EntityData, T: 'static> {
     fn sub(&'static self, new_value: T) -> Box<FieldModifier<E, T>>;
     fn sub_while<C: ModifierCondition + 'static>(&'static self, new_value: T, condition: C) -> Box<FieldModifier<E, T>>;
 }
-impl<E, T: 'static> SubableField<E,T> for Field<E, T> where E: EntityData, T: Clone + Display + ops::Sub<Output=T> {
+impl<E, T: 'static> SubableField<E,T> for Field<E, T> where E: EntityData, T: Clone + Display + ops::Sub<Output=T> + ops::Neg<Output=T> {
     fn sub(&'static self, amount: T) -> Box<FieldModifier<E, T>> { FieldModifier::permanent(self, transformations::Sub(amount)) }
     fn sub_while<C: ModifierCondition + 'static>(&'static self, amount: T, condition: C) -> Box<FieldModifier<E, T>> { FieldModifier::limited(self, transformations::Sub(amount), condition) }
 }
@@ -87,7 +88,7 @@ pub trait ModifierCondition {
 
 pub trait FieldTransformation<T> {
     fn apply(&self, current: &T) -> T;
-    fn description(&self) -> String;
+    fn description(&self) -> Transformation;
 }
 
 pub mod transformations {
@@ -95,59 +96,65 @@ pub mod transformations {
 
     pub struct SetTo<T: Clone>(pub T);
 
-    impl<T: Clone> FieldTransformation<T> for SetTo<T> where T: Display {
+    impl<T: Clone + 'static> FieldTransformation<T> for SetTo<T> where T: Display {
         fn apply(&self, current: &T) -> T { self.0.clone() }
-        fn description(&self) -> String { format!("= {}", self.0) }
+        fn description(&self) -> Transformation {
+            let cloned = self.0.clone();
+            Transformation::Set(box self.0.clone())
+        }
     }
 
     pub struct Add<T: Clone + ops::Add<Output=T>>(pub T);
 
-    impl<T: Clone + ops::Add<Output=T>> FieldTransformation<T> for Add<T> where T: Display {
+    impl<T: Clone + ops::Add<Output=T> + 'static> FieldTransformation<T> for Add<T> where T: Display {
         fn apply(&self, current: &T) -> T { current.clone() + self.0.clone() }
-        fn description(&self) -> String { format!("+ {}", self.0) }
+        fn description(&self) -> Transformation { Transformation::Add(box self.0.clone()) }
     }
 
     pub struct Sub<T: Clone + ops::Sub<Output=T>>(pub T);
 
-    impl<T: Clone + ops::Sub<Output=T>> FieldTransformation<T> for Sub<T> where T: Display {
+    impl<T: Clone + ops::Sub<Output=T> + ops::Neg<Output=T> + 'static> FieldTransformation<T> for Sub<T> where T: Display {
         fn apply(&self, current: &T) -> T { current.clone() - self.0.clone() }
-        fn description(&self) -> String { format!("- {}", self.0) }
+        fn description(&self) -> Transformation { Transformation::Add(box (-self.0.clone())) }
     }
 
     pub struct Mul<T: Clone + ops::Mul<Output=T>>(pub T);
 
-    impl<T: Clone + ops::Mul<Output=T>> FieldTransformation<T> for Mul<T> where T: Display {
+    impl<T: Clone + ops::Mul<Output=T> + 'static> FieldTransformation<T> for Mul<T> where T: Display {
         fn apply(&self, current: &T) -> T { current.clone() * self.0.clone() }
-        fn description(&self) -> String { format!("* {}", self.0) }
+        fn description(&self) -> Transformation { Transformation::Mul(box self.0.clone()) }
     }
 
-    pub struct Div<T: Clone + ops::Div<Output=T>>(pub T);
+    pub struct Div<T: Clone + ops::Div<Output=T> + 'static>(pub T);
 
     impl<T: Clone + ops::Div<Output=T>> FieldTransformation<T> for Div<T> where T: Display {
         fn apply(&self, current: &T) -> T { current.clone() / self.0.clone() }
-        fn description(&self) -> String { format!("/ {}", self.0) }
+        fn description(&self) -> Transformation { Transformation::Div(box self.0.clone()) }
     }
 
-    pub struct ReduceBy<R: ReduceableType>(pub R);
+    pub struct ReduceBy<R: ReduceableType + 'static>(pub R);
 
     impl<R: ReduceableType> FieldTransformation<Reduceable<R>> for ReduceBy<R> where R: Display {
         fn apply(&self, current: &Reduceable<R>) -> Reduceable<R> { current.reduced_by(self.0.clone()) }
-        fn description(&self) -> String { format!("reduced by {}", self.0) }
+        fn description(&self) -> Transformation { Transformation::Reduce(box self.0.clone()) }
     }
 
-    pub struct ReduceTo<R: ReduceableType>(pub R);
+    pub struct ReduceTo<R: ReduceableType + 'static>(pub R);
 
     impl<R: ReduceableType> FieldTransformation<Reduceable<R>> for ReduceTo<R> where R: Display {
         fn apply(&self, current: &Reduceable<R>) -> Reduceable<R> { current.reduced_to(self.0.clone()) }
-        fn description(&self) -> String { format!("reduced to {}", self.0) }
+        fn description(&self) -> Transformation {
+            let cloned = self.0.clone();
+            Transformation::Set(box self.0.clone())
+        }
     }
 
 
-    pub struct RecoverBy<R: ReduceableType>(pub R);
+    pub struct RecoverBy<R: ReduceableType + 'static>(pub R);
 
     impl<R: ReduceableType> FieldTransformation<Reduceable<R>> for RecoverBy<R> where R: Display {
         fn apply(&self, current: &Reduceable<R>) -> Reduceable<R> { current.recovered_by(self.0.clone()) }
-        fn description(&self) -> String { format!("recovered by {}", self.0) }
+        fn description(&self) -> Transformation { Transformation::Recover(box self.0.clone()) }
     }
 }
 

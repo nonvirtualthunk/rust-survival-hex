@@ -8,6 +8,7 @@ use prelude::*;
 use noisy_float::prelude::R32;
 
 use datastructures::PerfectHashable;
+use std::fmt;
 
 
 const AXIAL_DELTAS: [AxialCoord; 6] =
@@ -26,6 +27,11 @@ pub fn axial_delta(n: usize) -> &'static AxialCoord {
 pub struct AxialCoord {
     pub q: i32,
     pub r: i32
+}
+impl fmt::Display for AxialCoord {
+    fn fmt(&self, f: & mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "({},{})", self.q, self.r)
+    }
 }
 
 #[derive(Copy,Clone,PartialEq,Debug,Add,Sub,Mul)]

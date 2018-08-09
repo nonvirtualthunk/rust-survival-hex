@@ -35,7 +35,7 @@ use itertools::Itertools;
 use common::AxialCoord;
 use game::logic::movement;
 use game::logic::combat;
-use game::Oct;
+use game::Sext;
 use std::collections::HashMap;
 use noisy_float::types::r32;
 use gui::WidgetContainer;
@@ -119,7 +119,7 @@ impl TacticalGui {
             }
 
             let range = cdata.max_moves_remaining(1.0);
-            let current_position = cdata.position;
+            let current_position = cdata.position.hex;
 
             let mut draw_list = DrawList::none();
 
@@ -141,7 +141,7 @@ impl TacticalGui {
                     };
 
                     for (hex,cost) in &hexes {
-                        if hex != &current_position {
+                        if hex != &current_position{
                             if let Some(tile) = view.entity_by_key(hex) {
                                 let strikes_in_this_tile = strikes_at_cost(cost);
                                 let neighbors = hex.neighbors();
@@ -161,9 +161,10 @@ impl TacticalGui {
 
                     if attack.range > 1 {
                         for (entity, cdata) in view.entities_with_data::<CharacterData>() {
-                            if cdata.is_alive() && cdata.position.distance(&current_position) < r32(attack.range as f32) {
+                            let character = view.character(*entity);
+                            if cdata.is_alive() && character.position.hex.distance(&current_position) < r32(attack.range as f32) {
                                 if is_enemy(view, *entity, selected) {
-                                    let hex = cdata.position;
+                                    let hex = character.position.hex;
                                     for q in 0 .. 6 {
                                         draw_list = draw_list.add_quad(Quad::new(format!("ui/hex/hex_edge_{}", q), hex.as_cart_vec().0).color(Color::new(0.7,0.1,0.1,0.75)).centered());
                                     }
@@ -201,7 +202,7 @@ impl TacticalGui {
         }
     }
 
-    fn draw_boundary_at_hex_range(&self, view : &WorldView, selected : Entity, current_position : AxialCoord, range : Oct, mut draw_list : DrawList, selector : &EntitySelector) -> DrawList {
+    fn draw_boundary_at_hex_range(&self, view : &WorldView, selected : Entity, current_position : AxialCoord, range : Sext, mut draw_list : DrawList, selector : &EntitySelector) -> DrawList {
         let hexes = hexes_in_range(view, selected, range);
         for (hex,cost) in &hexes {
             if hex != &current_position {

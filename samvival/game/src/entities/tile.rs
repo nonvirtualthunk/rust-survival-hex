@@ -10,7 +10,7 @@ use common::hex::*;
 pub struct TileData {
     pub name : Str,
     pub position: AxialCoord,
-    pub move_cost: Oct,
+    pub move_cost: Sext,
     pub cover: i8,
     pub occupied_by : Option<Entity>,
     pub elevation: i8

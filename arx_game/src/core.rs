@@ -142,11 +142,11 @@ pub struct Oct(i64);
 
 impl Oct {
     pub fn of_rounded<T: num::Float>(n: T) -> Oct {
-        let f = n.to_f64().expect("somehow, used \"of\" to create an Oct with a type that didn't support it");
+        let f = n.to_f64().expect("somehow, used \"of\" to create an Sext with a type that didn't support it");
         Oct((f * 8.0).round() as i64)
     }
     pub fn of<T: num::Integer + num::ToPrimitive>(n: T) -> Oct {
-        Oct(n.to_i64().expect("could not create oct from value") * 8)
+        Oct(n.to_i64().expect("could not create Sext from value") * 8)
     }
     pub fn of_parts(full: i32, eights: i32) -> Oct {
         Oct((full * 8 + eights) as i64)
@@ -222,6 +222,98 @@ impl Into<f64> for Oct {
         self.as_f64()
     }
 }
+
+
+
+#[derive(Clone, Copy, Debug, Add, Sub, Div, AddAssign, SubAssign, MulAssign, PartialOrd, Ord, PartialEq, Eq, Hash, Default)]
+pub struct Sext(i64);
+
+impl Sext {
+    pub fn of_rounded<T: num::Float>(n: T) -> Sext {
+        let f = n.to_f64().expect("somehow, used \"of\" to create an Sext with a type that didn't support it");
+        Sext((f * 6.0).round() as i64)
+    }
+    pub fn of<T: num::Integer + num::ToPrimitive>(n: T) -> Sext {
+        Sext(n.to_i64().expect("could not create Sext from value") * 6)
+    }
+    pub fn of_parts(full: i32, eights: i32) -> Sext {
+        Sext((full * 6 + eights) as i64)
+    }
+    pub fn part(eights: i32) -> Sext {
+        Sext(eights as i64)
+    }
+
+
+    pub fn zero() -> Sext {
+        Sext::of(0)
+    }
+
+    pub fn as_f32(&self) -> f32 {
+        (self.0 as f32) / 6.0
+    }
+
+    pub fn as_f64(&self) -> f64 {
+        (self.0 as f64) / 6.0
+    }
+
+    pub fn as_u32_or_0(&self) -> u32 {
+        self.floor().max(0.0) as u32
+    }
+
+    pub fn round(&self) -> i32 {
+        ((self.0 as f64) / 6.0).round() as i32
+    }
+
+    pub fn floor(&self) -> f64 {
+        ((self.0 as f64) / 6.0).floor()
+    }
+
+    pub fn as_i32(&self) -> i32 {
+        self.floor() as i32
+    }
+
+    pub fn ceil(&self) -> i32 { self.as_f32().ceil() as i32 }
+
+    pub fn as_whole_and_parts(&self) -> (i64, i32) {
+        (self.0 / 6, (self.0 % 6) as i32)
+    }
+}
+
+impl Display for Sext {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        let (whole, parts) = self.as_whole_and_parts();
+        if parts != 0 {
+            write!(f, "{} and {}/6", whole, parts)
+        } else {
+            write!(f, "{}", whole)
+        }
+    }
+}
+
+impl<T: num::Integer + num::ToPrimitive> ops::Mul<T> for Sext {
+    type Output = Sext;
+    fn mul(self, rhs: T) -> Self::Output {
+        Sext(self.0 * rhs.to_i64().expect("expected to be able to convert RHS to i64"))
+    }
+}
+
+impl ops::Mul<Sext> for Sext {
+    type Output = Sext;
+    fn mul(self, rhs: Sext) -> Self::Output {
+        Sext((self.0 * rhs.0) / 6)
+    }
+}
+
+
+impl Into<f64> for Sext {
+    fn into(self) -> f64 {
+        self.as_f64()
+    }
+}
+
+
+
+
 
 #[derive(Default)]
 pub struct Progress<T: PartialOrd + Default + Clone> {
