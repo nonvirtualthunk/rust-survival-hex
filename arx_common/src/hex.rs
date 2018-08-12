@@ -67,9 +67,13 @@ impl AxialCoord {
     pub fn neighbor(&self, n: usize) -> AxialCoord {
         self + axial_delta(n)
     }
-    pub fn neighbors(&self) -> Vec<AxialCoord> {
+    pub fn neighbors_vec(&self) -> Vec<AxialCoord> {
         vec![AxialCoord { q: self.q + 1, r: self.r }, AxialCoord { q: self.q + 1, r: self.r -1 }, AxialCoord { q: self.q, r: self.r-1 },
         AxialCoord { q: self.q -1, r: self.r }, AxialCoord { q: self.q-1, r: self.r+1 }, AxialCoord { q: self.q, r: self.r+1 }]
+    }
+    pub fn neighbors(&self) -> [AxialCoord; 6] {
+        [AxialCoord { q: self.q + 1, r: self.r }, AxialCoord { q: self.q + 1, r: self.r -1 }, AxialCoord { q: self.q, r: self.r-1 },
+             AxialCoord { q: self.q -1, r: self.r }, AxialCoord { q: self.q-1, r: self.r+1 }, AxialCoord { q: self.q, r: self.r+1 }]
     }
     pub fn distance(&self, other: &AxialCoord) -> R32 {
         R32::from_f32(((self.q - other.q).abs()

@@ -148,6 +148,7 @@ impl<T: Default + WidgetContainer> ListWidget<T> {
         while data.len() < self.children.len() {
             let child = self.children.pop().expect("children can't be empty, that would indicate that data.len() < 0");
             self.children_to_remove.push(child);
+            self.child_structs.pop();
         }
 
         self

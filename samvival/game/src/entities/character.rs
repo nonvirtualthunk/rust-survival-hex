@@ -8,18 +8,8 @@ use common::Color;
 use common::prelude::*;
 use std::ops::Deref;
 use noisy_float::types::R32;
-
-#[derive(Default, Clone, Debug, PrintFields)]
-pub struct PositionData {
-    pub hex: AxialCoord,
-}
-impl EntityData for PositionData {}
-
-impl PositionData {
-    pub fn distance(&self, other : &PositionData) -> R32 {
-        self.hex.distance(&other.hex)
-    }
-}
+use entities::common::PositionData;
+use entities::common::ActionData;
 
 
 #[derive(Default, Clone, Debug, PrintFields)]
@@ -45,12 +35,26 @@ pub struct CharacterData {
 
 impl EntityData for CharacterData {}
 
+//pub trait AsCharacterData<'a> {
+//    fn resolve(&self, view : &'a WorldView) -> &'a CharacterData;
+//}
+//impl <'a> AsCharacterData<'a> for Entity {
+//    fn resolve(&self, view: &'a WorldView) -> &'a CharacterData {
+//        view.data::<CharacterData>(*self)
+//    }
+//}
+//impl <'a> AsCharacterData<'a> for &'a CharacterData {
+//    fn resolve(&self, view: &'a WorldView) -> &'a CharacterData {
+//        self
+//    }
+//}
 
 pub struct Character<'a> {
     pub entity: Entity,
     character: &'a CharacterData,
     pub position: &'a PositionData,
-    pub graphics: &'a GraphicsData
+    pub graphics: &'a GraphicsData,
+    pub action: &'a ActionData
 }
 
 impl<'a> Deref for Character<'a> {
@@ -74,7 +78,8 @@ impl CharacterStore for WorldView {
             entity: ent,
             character: self.data::<CharacterData>(ent),
             position: self.data::<PositionData>(ent),
-            graphics: self.data::<GraphicsData>(ent)
+            graphics: self.data::<GraphicsData>(ent),
+            action: self.data::<ActionData>(ent)
         }
     }
 }

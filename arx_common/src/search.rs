@@ -43,7 +43,7 @@ pub fn flood_search<
 
 
     let zero_hack = (cost_func)(&start, &start) - (cost_func)(&start, &start);
-    heap.push(NodeAndCost(start, zero_hack));
+    heap.push(NodeAndCost(start.clone(), zero_hack));
 
     while !heap.is_empty() {
         match heap.pop() {

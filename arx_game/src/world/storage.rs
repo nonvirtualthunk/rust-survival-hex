@@ -12,29 +12,39 @@ use anymap::Map;
 use anymap::any::CloneAny;
 use std::iter;
 use core::MAX_GAME_EVENT_CLOCK;
+use events::GameEventState;
+use world::world::World;
 
 pub type ModifierClock = usize;
-
+pub type EventCallback<E> = fn(&mut World, &GameEventWrapper<E>);
 
 
 pub(crate) struct MultiTypeEventContainer {
     pub(crate) event_containers : Map<CloneAny>,
-    pub(crate) clone_up_to_time_funcs : Vec<fn(&mut MultiTypeEventContainer, &MultiTypeEventContainer, GameEventClock)>
+    pub(crate) clone_up_to_time_funcs : Vec<fn(&mut MultiTypeEventContainer, &MultiTypeEventContainer, GameEventClock)>,
+    pub(crate) update_to_time_funcs : Vec<fn(&mut MultiTypeEventContainer, &MultiTypeEventContainer, GameEventClock)>,
 }
 
 #[derive(Clone)]
 pub(crate) struct EventContainer<E : GameEventType> {
-    pub(crate) events: Vec<GameEventWrapper<E>>
+    pub(crate) events: Vec<GameEventWrapper<E>>,
+    pub(crate) default: GameEventWrapper<E>,
+    pub(crate) event_listeners: Vec<EventCallback<E>>
 }
 impl <E : GameEventType> Default for EventContainer<E> {
-    fn default() -> Self { EventContainer { events : vec![] } }
+    fn default() -> Self { EventContainer {
+        events : vec![],
+        default : GameEventWrapper { event : E::beginning_of_time_event(), occurred_at : 0, state : GameEventState::Ended },
+        event_listeners : vec![]
+    } }
 }
 
 impl MultiTypeEventContainer {
     pub(crate) fn new() -> MultiTypeEventContainer {
         MultiTypeEventContainer {
             event_containers : Map::new(),
-            clone_up_to_time_funcs: Vec::new()
+            clone_up_to_time_funcs: Vec::new(),
+            update_to_time_funcs: Vec::new()
         }
     }
     pub(crate) fn register_event_type<E : GameEventType + 'static>(&mut self) {
@@ -47,12 +57,46 @@ impl MultiTypeEventContainer {
             mte.event_containers.get_mut::<EventContainer<E>>().expect("just created, can't not exist").events =
                 from.events::<E>().filter(|e| e.occurred_at <= time).cloned().collect();
         });
+
+        self.update_to_time_funcs.push(|mte : &mut MultiTypeEventContainer, from : &MultiTypeEventContainer, end_time : GameEventClock| {
+            let cur_high_time = mte.event_containers.get::<EventContainer<E>>().expect("event type must be registered").events
+                .last()
+                .map(|ec| ec.occurred_at)
+                .unwrap_or(0);
+
+            // events are stored in order oldest to newest, so we start from the back, taking newest to oldest, ignore all that are newer
+            // than our target time, take all that are newer than our start time, now we have all new events ordered newest to oldest. Take
+            // that and reverse it and we can tack it onto the end.
+            let mut new_events = from.event_containers.get::<EventContainer<E>>().expect("other must have event type registered").events.iter()
+                .rev()
+                .skip_while(|ec| ec.occurred_at > end_time)
+                .take_while(|ec| ec.occurred_at > cur_high_time)
+                .cloned()
+                .collect_vec();
+            new_events.reverse();
+
+            mte.event_containers.get_mut::<EventContainer<E>>().expect("event type must be registered").events.extend(new_events);
+        });
     }
-    pub(crate) fn push_event<E : GameEventType + 'static>(&mut self, evt : GameEventWrapper<E>) {
-        self.event_containers.get_mut::<EventContainer<E>>().expect("attempted to push event of non-recognized event type").events.push(evt);
+    pub(crate) fn add_callback<E : GameEventType + 'static>(&mut self, callback : EventCallback<E>) {
+        let event_container = self.event_containers.get_mut::<EventContainer<E>>().expect("attempted to push event of non-recognized event type");
+        event_container.event_listeners.push(callback);
+    }
+    pub(crate) fn push_event<E : GameEventType + 'static>(&mut self, evt : GameEventWrapper<E>) -> Vec<EventCallback<E>> {
+        let event_container = self.event_containers.get_mut::<EventContainer<E>>().expect("attempted to push event of non-recognized event type");
+        event_container.events.push(evt);
+        event_container.event_listeners.clone()
+
     }
     pub (crate) fn events<E : GameEventType + 'static>(&self) -> impl Iterator<Item=&GameEventWrapper<E>> {
         self.event_containers.get::<EventContainer<E>>().map(|e| e.events.iter()).expect("attempted to retrieve events of a non-recognized event type")
+    }
+    pub (crate) fn revents<E : GameEventType + 'static>(&self) -> impl Iterator<Item=&GameEventWrapper<E>> {
+        self.event_containers.get::<EventContainer<E>>().map(|e| e.events.iter().rev()).expect("attempted to retrieve events of a non-recognized event type")
+    }
+    pub (crate) fn most_recent_event<E : GameEventType + 'static>(&self) -> &GameEventWrapper<E> {
+        let container = self.event_containers.get::<EventContainer<E>>().expect("attempted to retrieve most recent event of a non-recognized event type");
+        container.events.iter().rev().next().unwrap_or(&container.default)
     }
 
     pub (crate) fn clone_events_up_to(&self, at_time : GameEventClock) -> MultiTypeEventContainer {
@@ -63,6 +107,12 @@ impl MultiTypeEventContainer {
         }
 
         ret
+    }
+
+    pub (crate) fn update_events_to(&mut self, from : &MultiTypeEventContainer, at_time : GameEventClock) {
+        for func in self.clone_up_to_time_funcs.clone() {
+            (func)(self, from, at_time);
+        }
     }
 }
 

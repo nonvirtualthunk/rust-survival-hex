@@ -80,7 +80,7 @@ impl ConstantModifier<CharacterData> for ResetCharacterTurnMod {
 pub struct ResetCombatTurnMod;
 impl ConstantModifier<CombatData> for ResetCombatTurnMod {
     fn modify(&self, data: &mut CombatData) {
-        data.counters = Reduceable::new(0);
+        data.counters_remaining = Reduceable::new(0);
     }
 }
 
@@ -101,6 +101,15 @@ pub struct EquipItemMod(pub Entity);
 impl ConstantModifier<InventoryData> for EquipItemMod {
     fn modify(&self, data: &mut InventoryData) {
         data.equipped.push(self.0);
+    }
+}
+
+pub struct UnequipItemMod(pub Entity);
+impl ConstantModifier<InventoryData> for UnequipItemMod {
+    fn modify(&self, data: &mut InventoryData) {
+        if let Some(index) = data.equipped.iter().position(|i| i == &self.0) {
+            data.equipped.remove(index);
+        }
     }
 }
 

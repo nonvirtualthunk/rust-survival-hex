@@ -19,25 +19,24 @@ use game::world::WorldView;
 use logic::movement;
 use events::GameEvent;
 use game::SettableField;
-
-pub struct MovementTarget {
-    hex : AxialCoord,
-    move_cost : Sext
-}
+use std::collections::HashSet;
 
 
-pub fn move_cost(world_view : &WorldView, from : &AxialCoord, to : &AxialCoord) -> f64 {
-    world_view.tile_opt(*to).map(|t| t.move_cost.as_f64()).unwrap_or(100000.0)
+pub fn max_moves_remaining(world_view : &WorldView, mover : Entity, multiplier: f64) -> Sext {
+    let cd = world_view.data::<CharacterData>(mover);
+    cd.moves + Sext::of_rounded(cd.move_speed.as_f64() * cd.action_points.cur_value() as f64 * multiplier)
 }
 
 pub fn hexes_in_range(world_view : &WorldView, mover : Entity, range : Sext) -> HashMap<AxialCoord, f64> {
-    let start_position = world_view.character(mover).position.hex;
-    flood_search(start_position, range.as_f64(), |from, to| move_cost(world_view, from, to), |&from| from.neighbors())
+    let mover_c = world_view.character(mover);
+    let start_position = mover_c.position.hex;
+    flood_search(start_position, range.as_f64(), |from, to| move_cost_to(world_view, &mover_c, to) as f64, |&from| from.neighbors_vec())
 }
 
 pub fn path_to(world_view: &WorldView, mover : Entity, to : AxialCoord) -> Option<(Vec<AxialCoord>, f64)> {
-    let from = world_view.character(mover).position.hex;
-    astar(&from, |c| c.neighbors().into_iter().map(|c| (c, r32(move_cost(world_view, &c, &c) as f32))), |c| c.distance(&to), |c| *c == to)
+    let mover_c = world_view.character(mover);
+    let from = mover_c.position.hex;
+    astar(&from, |c| c.neighbors_vec().into_iter().map(|c| (c, r32(move_cost_to(world_view, &mover_c, &c) as f32))), |c| c.distance(&to), |c| *c == to)
         .map(|(vec, cost)| (vec, cost.raw() as f64))
 }
 
@@ -96,7 +95,7 @@ pub fn place_entity_in_world(world: &mut World, character : Entity, pos : AxialC
             modify(world, tile.entity, SetHexOccupantMod(Some(character)));
             world.modify(character, PositionData::hex.set_to(pos), "placement");
 
-            world.add_event(GameEvent::EntityAppears { character, at : pos });
+            world.add_event(GameEvent::EntityAppears { entity: character, at : pos });
 
             return true;
         }
@@ -104,3 +103,42 @@ pub fn place_entity_in_world(world: &mut World, character : Entity, pos : AxialC
     false
 }
 
+pub fn remove_entity_from_world(world: &mut World, entity : Entity) {
+    let view = world.view();
+    if let Some(cur_pos) = view.data_opt::<PositionData>(entity) {
+        if let Some(tile) = view.tile_ent_opt(cur_pos.hex) {
+            world.modify(tile.entity, TileData::occupied_by.set_to(None), "entity removed");
+        }
+    }
+}
+
+
+
+pub fn path(world : &WorldView, mover : Entity, from: AxialCoord, to: AxialCoord) -> Option<(Vec<AxialCoord>, R32)> {
+    let mover = world.character(mover);
+    astar(&from, |c| c.neighbors_vec().into_iter().map(|c| (c, r32(move_cost_to(world, &mover, &c)))), |c| c.distance(&to), |c| *c == to)
+}
+
+pub fn path_any_v(world : &WorldView, mover : Entity, from: AxialCoord, to: &Vec<AxialCoord>, heuristical_center : AxialCoord) -> Option<(Vec<AxialCoord>, R32)> {
+    let mut set = HashSet::new();
+    set.extend(to.iter());
+    path_any(world, mover, from, &set, heuristical_center)
+}
+
+pub fn path_any(world : &WorldView, mover : Entity, from: AxialCoord, to: &HashSet<AxialCoord>, heuristical_center : AxialCoord) -> Option<(Vec<AxialCoord>, R32)> {
+    let mover = world.character(mover);
+    astar(&from, |c| c.neighbors_vec().into_iter().map(|c| (c, r32(move_cost_to(world, &mover, &c)))), |c| c.distance(&heuristical_center), |c| to.contains(c))
+}
+
+
+pub fn move_cost_to(world: &WorldView, mover : &Character, to: &AxialCoord) -> f32 {
+    if let Some(tile) = world.tile_opt(*to) {
+        if tile.occupied_by.is_none() {
+            tile.move_cost.as_f32()
+        } else {
+            10000000.0
+        }
+    } else {
+        10000000.0
+    }
+}

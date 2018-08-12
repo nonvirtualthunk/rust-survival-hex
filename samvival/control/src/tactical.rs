@@ -1,7 +1,5 @@
-use game::World;
-use game::world::WorldView;
+use game::prelude::*;
 use game::entities::*;
-use game::EntityBuilder;
 
 use noisy_float::prelude::*;
 use itertools::Itertools;
@@ -39,8 +37,7 @@ use std::cmp::*;
 use cgmath::num_traits::Zero;
 use std::ops::Add;
 
-use graphics::renderers::TerrainRenderer;
-use graphics::renderers::UnitRenderer;
+use graphics::renderers::*;
 
 use tactical_gui::TacticalGui;
 use tactical_gui;
@@ -61,7 +58,7 @@ use gui::Wid;
 use gui::MouseButton;
 use gui::Key;
 
-use game::logic::factions::is_enemy;
+use game::logic::faction::is_enemy;
 
 #[derive(PartialOrd, PartialEq, Copy, Clone)]
 pub struct Cost(pub R32);
@@ -122,8 +119,10 @@ pub struct TacticalMode {
     pub viewport: Viewport,
     pub terrain_renderer: TerrainRenderer,
     pub unit_renderer: UnitRenderer,
+    pub item_renderer: ItemRenderer,
     pub display_event_clock: GameEventClock,
     pub realtime_clock: f64,
+    pub realtime_clock_speed: f64,
     pub last_realtime_clock: f64,
     pub time_within_event: f64,
     pub fract_within_event: f64,
@@ -133,7 +132,8 @@ pub struct TacticalMode {
     pub player_faction: Entity,
     pub minimum_active_event_clock: GameEventClock,
     event_start_times: Vec<f64>,
-    pub victory: Option<bool>,
+    pub victory_time: Option<GameEventClock>,
+    pub defeat_time: Option<GameEventClock>,
     animation_elements: Vec<AnimationElementWrapper>,
     gui: TacticalGui,
     world_view: WorldView
@@ -159,9 +159,11 @@ impl TacticalMode {
             },
             terrain_renderer: TerrainRenderer::default(),
             unit_renderer: UnitRenderer {},
+            item_renderer: ItemRenderer::new(),
             display_event_clock: 0,
             last_realtime_clock: 0.0,
             realtime_clock: 0.0,
+            realtime_clock_speed: 1.0,
             time_within_event: 0.0,
             fract_within_event: 0.0,
             event_clock_last_advanced: 0.0,
@@ -170,7 +172,8 @@ impl TacticalMode {
             player_faction,
             minimum_active_event_clock: 0,
             event_start_times: vec![0.0],
-            victory: None,
+            victory_time: None,
+            defeat_time: None,
             animation_elements: vec![],
             gui: TacticalGui::new(gui),
         }
@@ -211,10 +214,6 @@ impl TacticalMode {
         Quad::new(texture_identifier, pos).centered().color(color)
     }
 
-    pub fn path(&self, from: AxialCoord, to: AxialCoord) -> Option<(Vec<AxialCoord>, Cost)> {
-        astar(&from, |c| c.neighbors().into_iter().map(|c| (c, Cost::new(1.0))), |c| Cost(c.distance(&to)), |c| *c == to)
-    }
-
     fn blocking_animations_active(&self) -> bool {
         self.animation_elements.iter().any(|e| e.blocking_pcnt_elapsed(self.realtime_clock) < 1.0)
     }
@@ -224,7 +223,7 @@ impl TacticalMode {
         //        println!("Advancing event clock by {}", dt);
         self.last_time = Instant::now();
         self.last_realtime_clock = self.realtime_clock;
-        self.realtime_clock += dt;
+        self.realtime_clock += dt * self.realtime_clock_speed;
 
         // max_event_clock          the world time the next event will be added at when made
         // max_event_clock-1        the world time of the latest event in the world so far
@@ -264,7 +263,7 @@ impl TacticalMode {
             let enemy_data = world_view.character(*closest.0);
 
             if enemy_data.position.distance(&ai.position) >= r32(1.5) {
-                if let Some(path) = path_any_v(world_view, *ai_ref, ai.position.hex, &enemy_data.position.hex.neighbors(), enemy_data.position.hex) {
+                if let Some(path) = logic::movement::path_any_v(world_view, *ai_ref, ai.position.hex, &enemy_data.position.hex.neighbors_vec(), enemy_data.position.hex) {
                     movement::handle_move(world, *ai_ref, path.0.as_slice())
                 } else {
                     println!("No move towards closest enemy, stalling");
@@ -272,13 +271,13 @@ impl TacticalMode {
             }
 
             if enemy_data.position.distance(&ai.position) < r32(1.5) {
-                let all_possible_attacks = possible_attacks(world_view, *ai_ref);
+                let all_possible_attacks = possible_attack_refs(world_view, *ai_ref);
                 if let Some(attack) = all_possible_attacks.first() {
                     logic::combat::handle_attack(world, *ai_ref, *enemy_ref, attack);
                 }
             }
         } else {
-            if let Some(path) = self.path(ai.position.hex, ai.position.hex.neighbor(0)) {
+            if let Some(path) = logic::movement::path(world_view, *ai_ref, ai.position.hex, ai.position.hex.neighbor(0)) {
                 logic::movement::handle_move(world, *ai_ref, path.0.as_slice());
             }
         }
@@ -293,8 +292,8 @@ impl TacticalMode {
         for (faction, faction_data) in world_view.entities_with_data::<FactionData>() {
             if faction != &self.player_faction {
                 SetActiveFactionMod(*faction).apply_to_world(world);
-                world.add_event(GameEvent::FactionTurnEnd { turn_number : current_turn, faction : prev_faction });
-                world.add_event(GameEvent::FactionTurnStart { turn_number : current_turn, faction : *faction });
+                world.end_event(GameEvent::FactionTurn { turn_number : current_turn, faction : prev_faction });
+                world.start_event(GameEvent::FactionTurn { turn_number : current_turn, faction : *faction });
 
                 prev_faction = *faction;
 
@@ -323,8 +322,8 @@ impl TacticalMode {
 
         // back to the player's turn
         SetActiveFactionMod(self.player_faction).apply_to_world(world);
-        world.add_event(GameEvent::FactionTurnEnd { turn_number : current_turn, faction : prev_faction });
-        world.add_event(GameEvent::FactionTurnStart { turn_number : current_turn, faction : self.player_faction });
+        world.end_event(GameEvent::FactionTurn { turn_number : current_turn, faction : prev_faction });
+        world.start_event(GameEvent::FactionTurn { turn_number : current_turn, faction : self.player_faction });
 
         let mut living_enemy = false;
         let mut living_ally = false;
@@ -339,9 +338,9 @@ impl TacticalMode {
             }
         }
         if !living_enemy {
-            self.victory = Some(true);
+            self.victory_time = Some(world.current_time);
         } else if !living_ally {
-            self.victory = Some(false);
+            self.defeat_time = Some(world.current_time);
         }
     }
 
@@ -367,9 +366,9 @@ impl TacticalMode {
 
     fn create_animations_if_necessary(&mut self, world_in: &World, world_view: &WorldView) {
         if !self.blocking_animations_active() && !self.at_latest_event(world_in) {
-            if let Some(new_event) = world_in.event_at(self.display_event_clock + 1) {
-                trace!("Advanced event, new event is {:?}", new_event);
-                for elem in tactical_event_handler::animation_elements_for_new_event(&world_view, new_event) {
+            if let Some(event_wrapper) = world_in.event_at(self.display_event_clock + 1) {
+                trace!("Advanced event, new event is {:?}", event_wrapper.event);
+                for elem in tactical_event_handler::animation_elements_for_new_event(&world_view, event_wrapper) {
                     self.add_animation_element(elem)
                 }
             };
@@ -382,13 +381,14 @@ impl TacticalMode {
             DrawList::none()
         } else {
             if let Some(hovered_tile) = self.hovered_tile(world_in.view()) {
+                let world_view = world_in.view();
                 let hovered_hex = hovered_tile.position;
 
                 let mut draw_list = DrawList::of_quad(Quad::new_cart(String::from("ui/hoverHex"), hovered_hex.as_cart_vec()).centered());
 
                 if let Some(selected) = self.selected_character {
                     let sel_c = world_in.view().character(selected);
-                    if let Some(path_result) = self.path(sel_c.position.hex, hovered_hex) {
+                    if let Some(path_result) = logic::movement::path(world_view, selected, sel_c.position.hex, hovered_hex) {
                         let path = path_result.0;
                         for hex in path {
                             draw_list = draw_list.add_quad(Quad::new_cart(String::from("ui/feet"), hex.as_cart_vec()).centered());
@@ -412,7 +412,8 @@ impl TacticalMode {
         tactical_gui::GameState {
             display_event_clock: self.display_event_clock,
             selected_character: self.selected_character,
-            victory: self.victory,
+            victory_time: self.victory_time,
+            defeat_time: self.defeat_time,
             player_faction: self.player_faction,
             hovered_hex_coord : AxialCoord::from_cartesian(&self.mouse_game_pos(), self.tile_radius),
             animating: !self.at_latest_event(world),
@@ -428,7 +429,11 @@ impl TacticalMode {
 
 impl GameMode for TacticalMode {
     fn enter(&mut self, world: &mut World) {
-
+        world.add_callback(|world, event| {
+            for (ent,act_data) in world.view().entities_with_data::<ActionData>() {
+                (act_data.active_reaction.on_event)(world, *ent, event);
+            }
+        });
     }
 
     fn update(&mut self, _: &mut World, _: f64) {
@@ -483,6 +488,8 @@ impl GameMode for TacticalMode {
 
         // draw list for the map tiles
         let terrain_draw_list = self.terrain_renderer.render_tiles(&world_view, self.display_event_clock, culling_rect);
+        // draw list for items on the map
+        let item_draw_list = self.item_renderer.render_items(&world_view, culling_rect);
         // draw list for the units and built-in unit UI elements
         let unit_draw_list = self.unit_renderer.render_units(&world_view, self.display_event_clock, self.selected_character);
         // draw list for hover hex and foot icons
@@ -491,6 +498,7 @@ impl GameMode for TacticalMode {
         let ui_draw_list = self.gui.draw(&world_view, self.current_game_state(world_in));
 
         self.render_draw_list(terrain_draw_list, g);
+        self.render_draw_list(item_draw_list, g);
         self.render_draw_list(ui_draw_list, g);
         self.render_draw_list(movement_ui_draw_list, g);
         self.render_draw_list(unit_draw_list, g);
@@ -513,26 +521,39 @@ impl GameMode for TacticalMode {
 
 
                     self.update_world_view(world);
-                    let world_view = &self.world_view;
+                    let display_world_view = &self.world_view;
+                    let main_world_view = world.view();
 //                    let world_view = world.view_at_time(self.display_event_clock);
 
-                    let found = character_at(&world_view, clicked_coord);
+                    let found = character_at(display_world_view, clicked_coord);
                     if let Some((found_ref, target_data)) = found {
                         match self.selected_character {
                             Some(prev_sel) if prev_sel == found_ref => self.selected_character = None,
                             Some(cur_sel) => {
-                                let sel_data = world.view().data::<CharacterData>(cur_sel);
+                                let sel_data = main_world_view.character(cur_sel);
                                 if target_data.faction != self.player_faction &&
                                     sel_data.faction == self.player_faction {
-                                    if sel_data.can_act() {
-                                        let all_possible_attacks = possible_attacks(&world_view, cur_sel);
-                                        if let Some(attack) = all_possible_attacks.first() {
-                                            logic::combat::handle_attack(world, cur_sel, found_ref, attack);
+                                    if let Some(attack_ref) = logic::combat::primary_attack_ref(main_world_view, cur_sel) {
+                                        if let Some(attack) = attack_ref.referenced_attack(main_world_view, cur_sel) {
+                                            if logic::combat::can_attack(main_world_view, cur_sel, found_ref, &attack, None, None) {
+                                                logic::combat::handle_attack(world, cur_sel, found_ref, &attack_ref);
+                                            } else if let Some((attack_from, cost_to)) = logic::combat::closest_attack_location_with_cost(main_world_view, cur_sel, found_ref, &attack) {
+                                                if let Some((path, cost)) = logic::movement::path_to(main_world_view, cur_sel, attack_from) {
+                                                    logic::movement::handle_move(world, cur_sel, &path);
+                                                    if logic::combat::can_attack(main_world_view, cur_sel, found_ref, &attack, None, None) {
+                                                        println!("Can attack from new position, attacking");
+                                                        logic::combat::handle_attack(world, cur_sel, found_ref, &attack_ref);
+                                                    } else {
+                                                        println!("Could not attack from new position :(");
+                                                    }
+                                                }
+                                            }
                                         } else {
-                                            warn!("Cannot attack, there are no attacks to use!");
+                                            warn!("Attack referenced by primary attack ref did not exist, clearing");
+                                            world.modify(cur_sel, CombatData::active_attack.set_to(AttackReference::none()), "cleared because previous ref was dead");
                                         }
                                     } else {
-                                        warn!("Cannot attack, no actions remaining");
+                                        warn!("Cannot attack, there are no attacks to use!");
                                     }
                                 } else {
                                     self.selected_character = Some(found_ref);
@@ -545,10 +566,10 @@ impl GameMode for TacticalMode {
                     } else {
                         if let Some(sel_c) = self.selected_character {
                             if let Some(hovered_) = self.hovered_tile(world.view()) {
-                                let cur_sel_data = world_view.character(sel_c);
+                                let cur_sel_data = display_world_view.character(sel_c);
                                 if cur_sel_data.faction == self.player_faction {
-                                    let start_pos = world_view.character(sel_c).position.hex;
-                                    if let Some(path_result) = self.path(start_pos, clicked_coord) {
+                                    let start_pos = display_world_view.character(sel_c).position.hex;
+                                    if let Some(path_result) = logic::movement::path(display_world_view, sel_c, start_pos, clicked_coord) {
                                         let path = path_result.0;
                                         logic::movement::handle_move(world, sel_c, path.as_slice());
                                     }
@@ -566,6 +587,7 @@ impl GameMode for TacticalMode {
                     Key::Up => self.camera.move_delta.y = 1.0,
                     Key::Down => self.camera.move_delta.y = -1.0,
                     Key::Z => self.camera.zoom += 0.1,
+                    Key::LShift => self.realtime_clock_speed = 3.0,
                     _ => ()
                 }
             },
@@ -577,6 +599,7 @@ impl GameMode for TacticalMode {
                     Key::Down => self.camera.move_delta.y = 0.0,
                     Key::Return => self.end_turn(world),
                     Key::Escape => self.selected_character = None,
+                    Key::LShift => self.realtime_clock_speed = 1.0,
                     _ => ()
                 }
             },
@@ -585,7 +608,7 @@ impl GameMode for TacticalMode {
     }
 
 
-    fn on_event<'a, 'b, 'c>(&'a mut self, world: &'b mut World, gui: &'c mut GUI, event: &UIEvent) {
+    fn on_event(&mut self, world: &mut World, gui: &mut GUI, event: &UIEvent) {
         gui.handle_ui_event_2(event, self, world);
     }
 }

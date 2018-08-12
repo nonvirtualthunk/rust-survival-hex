@@ -142,6 +142,8 @@ pub enum Transformation {
     Set(Box<Any>),
     Reduce(Box<Any>),
     Recover(Box<Any>),
+    SetKey(Box<Any>, Box<Any>),
+    RemoveKey(Box<Any>),
     Custom(Str),
 }
 
@@ -191,6 +193,10 @@ impl Transformation {
             if include_sign { a.to_string_with_sign() } else { a.to_string() }
         } else if let Some(a) = a.downcast_ref::<u32>() {
             if invert { format!("don't use u32 -{}", a.to_string()) } else { a.to_string() }
+        } else if let Some(s) = a.downcast_ref::<Str>() {
+            strf(s)
+        } else if let Some(s) = a.downcast_ref::<String>() {
+            s.clone()
         } else {
             strf("cannot represent")
         }
@@ -254,6 +260,13 @@ impl Transformation {
                 }
             }
             Transformation::Set(_) => return other,
+            Transformation::SetKey(bk, _) => {
+                if let Transformation::SetKey(ak, _) = &self {
+                    if Transformation::as_string(ak, false, false) == Transformation::as_string(bk, false, false) {
+                        return other;
+                    }
+                }
+            }
             _ => ()
         }
         error!("Attempted to combine two transformation types that could not be combined");
@@ -271,6 +284,8 @@ impl fmt::Display for Transformation {
             Transformation::Recover(a) => write!(f, "recovered {}", Transformation::as_string(a, false, false)),
             Transformation::Reduce(a) => write!(f, "reduced {}", Transformation::as_string(a, false, false)),
             Transformation::Custom(s) => write!(f, "{}", s),
+            Transformation::SetKey(_, v) => write!(f, "{}", Transformation::as_string(v, true, false)),
+            Transformation::RemoveKey(_) => write!(f, "removed")
         }
     }
 }

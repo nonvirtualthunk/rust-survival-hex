@@ -66,7 +66,7 @@ mod test {
     use spectral::assert_that;
     use events::CoreEvent;
 
-    #[derive(Clone,Default,Debug)]
+    #[derive(Clone,Default,Debug, PrintFields)]
     struct Nested {
         a : f32,
         b : f32
@@ -81,13 +81,9 @@ mod test {
     }
 
     impl EntityData for TestData {}
-
-    impl TestData {
-        const foo: Field<TestData, i32> = Field::new(stringify!( foo ), |t| &t.foo, |t, v| { t.foo = v; });
-        const bar: Field<TestData, Reduceable<i32>> = Field::new(stringify!( bar ), |t| &t.bar, |t, v| { t.bar = v; });
-        const name: Field<TestData, String> = Field::new(stringify!( name ), |t| &t.name, |t, v| { t.name = v; });
-        const nested: Field<TestData, Vec<Nested>> = Field::new(stringify!( nested ), |t| &t.nested, |t, v| { t.nested = v; });
-    }
+    
+    impl Nested { pub const a : Field < Nested , f32 > = Field :: new ( stringify ! ( a ) , | t | & t . a , | t | & mut t . a , | t , v | { t . a = v ; } ) ; pub const b : Field < Nested , f32 > = Field :: new ( stringify ! ( b ) , | t | & t . b , | t | & mut t . b , | t , v | { t . b = v ; } ) ; }
+    impl TestData { pub const foo : Field < TestData , i32 > = Field :: new ( stringify ! ( foo ) , | t | & t . foo , | t | & mut t . foo , | t , v | { t . foo = v ; } ) ; pub const bar : Field < TestData , Reduceable < i32 > > = Field :: new ( stringify ! ( bar ) , | t | & t . bar , | t | & mut t . bar , | t , v | { t . bar = v ; } ) ; pub const name : Field < TestData , String > = Field :: new ( stringify ! ( name ) , | t | & t . name , | t | & mut t . name , | t , v | { t . name = v ; } ) ; pub const nested : Field < TestData , Vec < Nested > > = Field :: new ( stringify ! ( nested ) , | t | & t . nested , | t | & mut t . nested , | t , v | { t . nested = v ; } ) ; }
 
 
     #[test]

@@ -9,6 +9,7 @@ use gui::*;
 use std::fmt;
 use tactical_gui::GameState;
 use control_gui::attack_descriptions::*;
+use tactical_gui::ControlContext;
 
 
 pub struct CharacterInfoWidget {
@@ -100,7 +101,7 @@ impl CharacterInfoWidget {
         }
     }
 
-    pub fn update(&mut self, world_view: & WorldView, gui: &mut GUI, game_state: &GameState) {
+    pub fn update(&mut self, world_view: & WorldView, gui: &mut GUI, game_state: &GameState, control: ControlContext) {
         if let Some(selected) = game_state.selected_character {
             let character = world_view.character(selected);
             let skills = world_view.skills(selected);
@@ -146,7 +147,7 @@ impl CharacterInfoWidget {
                 skill_w.xp_bar_full.set_parent(&skill_w.xp_bar_empty).set_width(Sizing::PcntOfParent(xp_pcnt as f32));
             }).reapply(gui);
 
-            self.attack_descriptions.update(gui, world_view, selected);
+            self.attack_descriptions.update(gui, world_view, selected, control);
         }
     }
 }

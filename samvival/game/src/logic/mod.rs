@@ -1,5 +1,6 @@
 pub mod combat;
 pub mod movement;
-pub mod items;
-pub mod factions;
+pub mod item;
+pub mod faction;
 pub mod experience;
+pub mod character;

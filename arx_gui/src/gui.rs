@@ -12,6 +12,7 @@ use std::ops::Deref;
 use std::ops::DerefMut;
 use graphics::Text;
 use std::collections::HashSet;
+use std::collections::BTreeSet;
 use piston_window::Viewport;
 use graphics::DEFAULT_FONT_IDENTIFIER;
 use num::Float;
@@ -135,7 +136,7 @@ impl WidgetReification {
 
 pub struct GUI {
     pub(crate) widget_reifications: HashMap<Wid, WidgetReification>,
-    pub(crate) top_level_widgets: HashSet<Wid>,
+    pub(crate) top_level_widgets: BTreeSet<Wid>,
     pub(crate) gui_size: Vec2f,
     pub(crate) viewport: Viewport,
     pub(crate) modified_set: HashSet<Wid>,
@@ -156,7 +157,7 @@ impl GUI {
     pub fn new() -> GUI {
         GUI {
             widget_reifications: HashMap::new(),
-            top_level_widgets: HashSet::new(),
+            top_level_widgets: BTreeSet::new(),
             gui_size: v2(100.0, 100.0),
             viewport: Viewport { window_size: [256, 256], draw_size: [256, 256], rect: [0, 0, 256, 256] },
             modified_set: HashSet::new(),
@@ -284,7 +285,7 @@ impl GUI {
                         UIEvent::HoverEnd { .. } => ctxt.alter_widget(tdw_id, |w| { w.set_showing(false); }),
                         _ => ()
                     }
-                }).and_consume(EventConsumption::EventTypes(HOVER_START.bit_flag | HOVER_END.bit_flag));
+                }).add_consumption(EventConsumption::EventTypes(HOVER_START.bit_flag | HOVER_END.bit_flag));
 
                 Some(tdw)
             }
@@ -316,6 +317,14 @@ impl GUI {
             }
             self.remove_widget_by_id(widget.id());
 
+            if let Some(parent_id) = existing_state.widget.parent_id {
+                let mut parent_state = self.widget_reifications.remove(&parent_id).expect("Trying to remove child after parent has been removed (or never existed)");
+                if let Some(index_in_parent) = parent_state.children.iter().position(|c| c == &widget.id()) {
+                    parent_state.children.remove(index_in_parent);
+                }
+                self.widget_reifications.insert(parent_id, parent_state);
+            }
+
             widget.clear_id();
         } else {
             warn!("Attempted to remove widget that had never been added, that's...fine, but weird");
@@ -323,7 +332,7 @@ impl GUI {
     }
 
     pub fn remove_widget_by_id(&mut self, wid : Wid) {
-        info!("Removing widget by id: {}", wid);
+        debug!("Removing widget by id: {}", wid);
         self.widget_reifications.remove(&wid);
         self.events_by_widget.remove(&wid);
         if self.focused_widget == Some(wid) {

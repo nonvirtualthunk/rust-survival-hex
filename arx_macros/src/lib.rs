@@ -51,7 +51,7 @@ fn internal_derive_entity_data_fields(input: DeriveInput) -> TokenStream {
 
                         quote! {
                             pub const #field_name : Field<#struct_name, #field_type> =
-                                Field::new(stringify!(#field_name), |t| &t.#field_name, |t,v| { t.#field_name = v; });
+                                Field::new(stringify!(#field_name), |t| &t.#field_name, |t| &mut t.#field_name, |t,v| { t.#field_name = v; });
                         }
                     }).collect()
                 },

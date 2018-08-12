@@ -31,6 +31,7 @@ use entity::ENTITY_ID_COUNTER;
 use storage::MultiTypeEventContainer;
 use events::GameEventType;
 use events::CoreEvent;
+use events::GameEventState;
 
 pub struct ModifiersApplication {
     disable_func: fn(&mut World, ModifierReference),
@@ -43,7 +44,7 @@ pub struct IndexApplication {
     index_func: Rc<Fn(&World, &mut WorldView)>
 }
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct ModifierReference(TypeId, bool, usize);
 
 pub struct World {
@@ -58,7 +59,7 @@ pub struct World {
     pub view: UnsafeCell<WorldView>,
     pub modifier_application_by_type: hash_map::HashMap<TypeId, ModifiersApplication>,
     pub entity_indices: Map<CloneAny>,
-    pub index_applications: Vec<IndexApplication>
+    pub index_applications: Vec<IndexApplication>,
 }
 
 
@@ -318,7 +319,7 @@ impl World {
             return;
         }
 
-        // TODO: deal with events
+        view.events.update_events_to(&self.events, at_time);
 
         let new_entities: Vec<EntityContainer> = self.entities.iter().take_while(|e| e.1 <= at_time).cloned().collect();
         new_entities.iter().rev().for_each(|e| view.entities.push(e.clone()));
@@ -429,7 +430,8 @@ impl World {
         self.add_modifier(entity, modifier, description)
     }
     pub fn add_modifier<T: EntityData, S : Into<Option<Str>>>(&mut self, entity: Entity, modifier: Box<Modifier<T>>, description : S) -> ModifierReference {
-        let all_modifiers: &mut ModifiersContainer<T> = self.modifiers.get_mut::<ModifiersContainer<T>>().unwrap();
+        let all_modifiers: &mut ModifiersContainer<T> = self.modifiers.get_mut::<ModifiersContainer<T>>()
+            .unwrap_or_else(||panic!(format!("attempted to add a modifier for an unregistered kind of data")));
         if modifier.modifier_type() == ModifierType::Dynamic {
             let index = all_modifiers.dynamic_entity_set.len();
             all_modifiers.dynamic_modifiers.push(ModifierContainer {
@@ -496,18 +498,42 @@ impl World {
         self.add_modifier(entity, box DynamicModifierWrapper { inner: dynamic_modifier, _ignored: PhantomData }, None);
     }
 
-
-    pub fn add_event<E : GameEventType + 'static>(&mut self, event: E) {
-        self.events.push_event(GameEventWrapper {
-            data: event,
-            occurred_at: self.current_time
-        });
-        self.current_time += 1;
-        self.update_view_to_time(self.mut_view(), self.current_time);
+    pub fn add_callback<E : GameEventType + 'static>(&mut self, event_callback : EventCallback<E>) {
+        self.events.add_callback(event_callback);
     }
 
-    pub fn event_at<E : GameEventType + 'static>(&self, time : GameEventClock) -> Option<E> {
-        self.events.events::<E>().find(|e| e.occurred_at == time).map(|e| e.data)
+    pub fn push_event<E : GameEventType + 'static>(&mut self, event: E, state : GameEventState) {
+        let wrapper = GameEventWrapper {
+            event: event,
+            occurred_at: self.current_time,
+            state
+        };
+
+        let callbacks = self.events.push_event(wrapper.clone());
+        self.current_time += 1;
+        self.update_view_to_time(self.mut_view(), self.current_time);
+
+        for callback in callbacks {
+            callback(self, &wrapper);
+        }
+    }
+
+    pub fn add_event<E : GameEventType + 'static>(&mut self, event: E) {
+        self.push_event(event.clone(), GameEventState::Started);
+        self.push_event(event, GameEventState::Ended);
+    }
+    pub fn start_event<E : GameEventType + 'static>(&mut self, event: E) {
+        self.push_event(event, GameEventState::Started);
+    }
+    pub fn end_event<E : GameEventType + 'static>(&mut self, event: E) {
+        self.push_event(event, GameEventState::Ended);
+    }
+    pub fn continue_event<E : GameEventType + 'static>(&mut self, event: E) {
+        self.push_event(event, GameEventState::Continuing);
+    }
+
+    pub fn event_at<E : GameEventType + 'static>(&self, time : GameEventClock) -> Option<&GameEventWrapper<E>> {
+        self.events.events::<E>().find(|e| e.occurred_at == time)
     }
 
     pub fn attach_data<T: EntityData>(&mut self, entity: Entity, data: &T) {

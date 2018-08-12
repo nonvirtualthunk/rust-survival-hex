@@ -10,18 +10,39 @@ use game::entity::EntityData;
 use game::world::WorldView;
 
 
-#[derive(Clone, Debug, Default, PrintFields)]
+#[derive(Clone, Debug, PrintFields)]
 pub struct CombatData {
     pub active_attack : AttackReference,
     pub natural_attacks : Vec<Attack>,
-    pub counters: Reduceable<i32>,
+    pub counters_remaining: Reduceable<i32>,
+    pub counters_per_event: i32,
     pub melee_accuracy_bonus: i32,
     pub ranged_accuracy_bonus: i32,
     pub melee_damage_bonus: i32,
     pub ranged_damage_bonus: i32,
     pub dodge_bonus: i32,
+    pub defense_bonus: i32,
+    pub block_bonus: i32
 }
 impl EntityData for CombatData {}
+
+impl Default for CombatData {
+    fn default() -> Self {
+        CombatData {
+            active_attack : AttackReference::none(),
+            natural_attacks : Vec::new(),
+            counters_remaining: Reduceable::new(0),
+            counters_per_event: 1,
+            melee_accuracy_bonus : 0,
+            ranged_accuracy_bonus : 0,
+            melee_damage_bonus : 0,
+            ranged_damage_bonus : 0,
+            dodge_bonus: 0,
+            defense_bonus: 0,
+            block_bonus: 0
+        }
+    }
+}
 
 pub trait CombatDataStore {
     fn combat(&self, ent : Entity) -> &CombatData;
@@ -51,12 +72,31 @@ impl Display for DamageType {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum AttackType {
+    Projectile,
+    Thrown,
+    Melee,
+    Reach
+}
+impl Display for AttackType {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        (self as &std::fmt::Debug).fmt(f)
+    }
+}
+impl Default for AttackType {
+    fn default() -> Self {
+        AttackType::Melee
+    }
+}
+
 
 
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Attack {
     pub name : Str,
+    pub attack_type : AttackType,
     pub ap_cost : u32, // represents how many ap it costs to perform this attack
     pub damage_dice : DicePool,
     pub damage_bonus : i32,
@@ -72,6 +112,7 @@ impl Default for Attack {
         Attack {
             name : "Nameless attack",
             ap_cost : 1,
+            attack_type : AttackType::Melee,
             damage_dice : DicePool::default(),
             damage_bonus : 0,
             to_hit_bonus: 0,
@@ -90,15 +131,15 @@ pub struct AttackReference {
     pub name : String
 }
 impl AttackReference {
-    fn new<S : Into<String>> (entity : Entity, index : usize, name : S) -> AttackReference {
+    pub fn new<S : Into<String>> (entity : Entity, index : usize, name : S) -> AttackReference {
         AttackReference { entity, index, name : name.into() }
     }
 
-    fn none() -> AttackReference {
+    pub fn none() -> AttackReference {
         AttackReference { entity : Entity::sentinel(), index : 0, name : strf("no attack") }
     }
 
-    fn as_option(&self) -> Option<&AttackReference> {
+    pub fn as_option(&self) -> Option<&AttackReference> {
         if self.is_none() {
             None
         } else {
@@ -113,16 +154,27 @@ impl AttackReference {
             if let Some(inv_data) = world.data_opt::<InventoryData>(character) {
                 for equipped_item in &inv_data.equipped {
                     if let Some(item_data) = world.data_opt::<ItemData>(*equipped_item) {
-                        if item_data.primary_attack.as_ref() == Some(attack) {
-                            return AttackReference::new(*equipped_item, 0, attack.name);
-                        } else if item_data.secondary_attack.as_ref() == Some(attack) {
-                            return AttackReference::new(*equipped_item, 1, attack.name);
+                        if let Some(pos) = item_data.attacks.iter().position(|a| a == attack) {
+                            return AttackReference::new(*equipped_item, pos, attack.name);
                         }
                     }
                 }
             }
             AttackReference::none()
         }
+    }
+
+    pub fn of_primary_from(world : &WorldView, entity : Entity) -> AttackReference {
+        if let Some(combat) = world.data_opt::<CombatData>(entity) {
+            if let Some(attack) = combat.natural_attacks.first() {
+                return AttackReference::new(entity, 0, attack.name);
+            }
+        } else if let Some(item) = world.data_opt::<ItemData>(entity) {
+            if let Some(attack) = item.attacks.first() {
+                return AttackReference::new(entity, 0, attack.name);
+            }
+        }
+        AttackReference::none()
     }
 
     pub fn referenced_attack<'a,'b>(&'a self, world: &'b WorldView, character : Entity) -> Option<&'b Attack> {
@@ -136,11 +188,7 @@ impl AttackReference {
                 if let Some(inv_data) = world.data_opt::<InventoryData>(character) {
                     if inv_data.equipped.contains(&self.entity) {
                         if let Some(item_data) = world.data_opt::<ItemData>(self.entity) {
-                            match self.index {
-                                0 => return item_data.primary_attack.as_ref(),
-                                1 => return item_data.secondary_attack.as_ref(),
-                                _ => warn!("non 0/1 for index in reference to item attack")
-                            }
+                            return item_data.attacks.get(self.index);
                         } else {
                             warn!("attack reference neither natural nor item based");
                         }
@@ -154,9 +202,14 @@ impl AttackReference {
         }
     }
 
+    pub fn is_melee(&self, world: &WorldView, character : Entity) -> bool {
+        self.referenced_attack(world, character).map(|a| a.attack_type == AttackType::Melee).unwrap_or(false)
+    }
+
     pub fn is_none(&self) -> bool {
         self.entity == Entity::sentinel()
     }
+    pub fn is_some(&self) -> bool { ! self.is_none() }
 }
 
 impl Display for AttackReference {

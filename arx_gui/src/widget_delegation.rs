@@ -225,7 +225,11 @@ pub trait DelegateToWidget where Self: Sized {
         self.as_widget().event_consumption = consumption;
         self
     }
-    fn and_consume(&mut self, consumption: EventConsumption) -> &mut Self {
+    fn and_consume(mut self, consumption: EventConsumption) -> Self {
+        self.add_consumption(consumption);
+        self
+    }
+    fn add_consumption(&mut self, consumption: EventConsumption) -> &mut Self {
         let new_consumption = {
             let old_consumption = &self.as_widget().event_consumption;
             old_consumption.and(&consumption)

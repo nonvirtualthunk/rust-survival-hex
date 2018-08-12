@@ -20,8 +20,8 @@ mod test {
         x: f32
     }
 
-    impl FooData { pub const a : Field < FooData , i32 > = Field :: new ( stringify ! ( a ) , | t | & t . a , | t , v | { t . a = v ; } ) ; pub const b : Field < FooData , Vec < f32 > > = Field :: new ( stringify ! ( b ) , | t | & t . b , | t , v | { t . b = v ; } ) ; }
-    impl BarData { pub const x : Field < BarData , f32 > = Field :: new ( stringify ! ( x ) , | t | & t . x , | t , v | { t . x = v ; } ) ; }
+    impl FooData { pub const a : Field < FooData , i32 > = Field :: new ( stringify ! ( a ) , | t | & t . a , | t | &mut t . a, | t , v | { t . a = v ; } ) ; pub const b : Field < FooData , Vec < f32 > > = Field :: new ( stringify ! ( b ) , | t | & t . b , | t | &mut t . b, | t , v | { t . b = v ; } ) ; }
+    impl BarData { pub const x : Field < BarData , f32 > = Field :: new ( stringify ! ( x ) , | t | & t . x , | t | &mut t . x, | t , v | { t . x = v ; } ) ; }
 
 
     impl EntityData for FooData {}

@@ -8,6 +8,9 @@ pub mod modifiers;
 pub mod skill;
 pub mod tile;
 pub mod time;
+pub mod common;
+pub mod actions;
+pub mod reactions;
 
 pub mod fields;
 
@@ -21,5 +24,6 @@ pub use entities::skill::*;
 pub use entities::tile::*;
 pub use entities::time::*;
 pub use entities::fields::*;
+pub use entities::common::*;
 
 pub use entities::modifiers::modify;

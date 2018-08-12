@@ -1,8 +1,7 @@
 use gui::*;
-use game::ActionType;
+use game::entities::actions::*;
 use common::color::Color;
 use game::Entity;
-use game::action_types;
 use std::collections::HashMap;
 use tactical_gui::GameState;
 use tactical_gui::ControlContext;

@@ -61,7 +61,7 @@ impl GUI {
             let pixels_per_ux = self.pixels_per_ux();
 
             if (parent_bounding_box.is_some() || widget.ignores_parent_bounds) && widget.showing {
-                let parent_bounding_box = parent_bounding_box.unwrap();
+                let parent_bounding_box = parent_bounding_box.unwrap_or_else(|| Rect::new(0.0,0.0,100000.0,100000.0));
                 for axis in 0..2 {
                     let anchor_pos = match widget.position[axis] {
                         Positioning::DeltaOfWidget(other_wid, _, _) => self.widget_reifications.get(&other_wid).expect("dependent wid must exist").position[axis],

@@ -7,6 +7,7 @@ use std::fmt::Display;
 use std::fmt::Error;
 use std::fmt::Formatter;
 use std::u64;
+use std::fmt::Debug;
 
 //use num;
 
@@ -63,6 +64,8 @@ impl<T: ReduceableType> Reduceable<T> {
     }
     pub fn reduce_to(&mut self, to: T) { self.reduced_by = self.base_value - to; }
     pub fn reduced_to(&self, to: T)  -> Self { Reduceable { base_value : self.base_value, reduced_by : self.base_value - to } }
+    pub fn increase_by(&mut self, by : T) { self.base_value = self.base_value + by; }
+    pub fn decrease_by(&mut self, by : T) { self.base_value = self.base_value - by; }
     pub fn reset(&mut self) { self.reduced_by = T::default(); }
     pub fn cur_fract(&self) -> f64 { self.cur_value().into() / self.max_value().into() }
     pub fn cur_reduced_by(&self) -> T { self.reduced_by }
@@ -122,6 +125,10 @@ impl DicePool {
             die_results: res,
             total_result: total,
         }
+    }
+
+    pub fn avg_roll(&self) -> f32 {
+        ((self.die + 1) as f32) * 0.5 * self.count as f32
     }
 
     pub fn to_d20_string(&self) -> String {
@@ -312,16 +319,19 @@ impl Into<f64> for Sext {
 }
 
 
-
-
-
 #[derive(Default)]
-pub struct Progress<T: PartialOrd + Default + Clone> {
+pub struct IntFract(i64, i64);
+
+
+
+
+#[derive(Default, Clone, Debug)]
+pub struct Progress<T: PartialOrd + Default + Clone + Debug> {
     pub current: T,
     pub required: T,
 }
 
-impl<T: PartialOrd + Default + Clone> Progress<T> {
+impl<T: PartialOrd + Default + Clone + Debug> Progress<T> {
     pub fn is_complete(&self) -> bool {
         !(self.current < self.required)
     }

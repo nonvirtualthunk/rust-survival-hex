@@ -7,10 +7,8 @@ use common::AxialCoord;
 
 #[derive(Clone, Default, Debug, PrintFields)]
 pub struct ItemData {
-    pub primary_attack : Option<Attack>,
-    pub secondary_attack : Option<Attack>,
-    pub held_by : Option<Entity>,
-    pub position : Option<AxialCoord>
+    pub attacks : Vec<Attack>,
+    pub held_by : Option<Entity>
 }
 
 impl EntityData for ItemData {}

@@ -14,6 +14,8 @@ use gui::WidgetType;
 use gui::Sizing;
 use gui::UIEvent;
 use common::Color;
+use game::entities::actions::action_types;
+use game::entities::reactions::reaction_types;
 
 
 use game::prelude::*;
@@ -23,6 +25,8 @@ use game::logic;
 use game::reflect::*;
 use game::GameEvent;
 use cgmath::InnerSpace;
+use game::archetypes::*;
+use game::entities::taxonomy;
 
 //use graphics::core::Context as ArxContext;
 use graphics::core::GraphicsResources;
@@ -101,6 +105,9 @@ impl Game {
         world.register::<FactionData>();
         world.register::<PositionData>();
         world.register::<GraphicsData>();
+        world.register::<IdentityData>();
+        world.register::<ActionData>();
+        world.register::<ModifierTrackingData>();
         // -------- world data ---------------
         world.register::<MapData>();
         world.register::<TurnData>();
@@ -152,26 +159,17 @@ impl Game {
             }).create(world);
 
 
-        let bow = EntityBuilder::new()
-            .with(ItemData {
-                primary_attack: Some(Attack {
-                    name: "bowshot",
-                    ap_cost: 4,
-                    damage_dice: DicePool {
-                        die: 8,
-                        count: 2,
-                    },
-                    damage_bonus: 1,
-                    to_hit_bonus: 3,
-                    primary_damage_type: DamageType::Piercing,
-                    secondary_damage_type: None,
-                    range: 10,
-                    min_range: 2,
-                }),
-                ..Default::default()
-            }).create(world);
+        let weapon_archetypes = weapon_archetypes();
 
-        let archer = EntityBuilder::new()
+        let character_archetypes = character_archetypes();
+
+        let bow = weapon_archetypes.with_name("longbow").create(world);
+
+
+        let  char_base = |name : Str| character_archetypes.with_name("human").clone()
+            .with(IdentityData::new(name, taxonomy::Person));
+
+        let archer = char_base("gunnar")
             .with(CharacterData {
                 faction: player_faction,
                 sprite: String::from("elf/archer"),
@@ -181,23 +179,85 @@ impl Game {
                 ..Default::default()
             })
             .with(CombatData {
-                ranged_accuracy_bonus : 2,
+                ranged_accuracy_bonus: 2,
+                natural_attacks: vec![
+                    Attack {
+                        name: "punch",
+                        attack_type: AttackType::Melee,
+                        ap_cost: 3,
+                        damage_dice: DicePool {
+                            die: 1,
+                            count: 1,
+                        },
+                        damage_bonus: 0,
+                        to_hit_bonus: 0,
+                        primary_damage_type: DamageType::Bludgeoning,
+                        secondary_damage_type: None,
+                        range: 1,
+                        min_range: 0,
+                    }],
                 ..Default::default()
             })
-            .with(SkillData::default())
-            .with(InventoryData::default())
-            .with(PositionData::default())
-            .with(GraphicsData::default())
+            .with(ActionData {
+                active_reaction : reaction_types::Dodge.clone(),
+                ..Default::default()
+            })
             .create(world);
-        let bow_attack_ref = AttackReference::of_attack(world.view(), archer, world.view().item(bow).primary_attack.as_ref().unwrap());
-        world.modify(archer, CombatData::active_attack.set_to(bow_attack_ref), "equipped");
+
+        logic::item::equip_item(world, archer, bow, true);
 
         world.modify(archer, CombatData::ranged_accuracy_bonus.add(1), "well rested");
         world.modify(archer, CombatData::ranged_accuracy_bonus.add(3), "careful aim");
 
         logic::movement::place_entity_in_world(world, archer, AxialCoord::new(0, 0));
 
-        logic::items::equip_item(world, archer, bow);
+
+
+
+        let spearman = char_base("haftdar")
+            .with(CharacterData {
+                faction: player_faction,
+                sprite: String::from("human/spearman"),
+                name: String::from("Spearman"),
+                move_speed: Sext::of_parts(1, 2), // one and 2 sixths
+                health: Reduceable::new(45),
+                ..Default::default()
+            })
+            .with(CombatData {
+                ranged_accuracy_bonus: 0,
+                melee_accuracy_bonus: 1,
+                melee_damage_bonus: 1,
+                natural_attacks: vec![
+                    Attack {
+                        name: "punch",
+                        attack_type: AttackType::Melee,
+                        ap_cost: 3,
+                        damage_dice: DicePool {
+                            die: 1,
+                            count: 1,
+                        },
+                        damage_bonus: 0,
+                        to_hit_bonus: 0,
+                        primary_damage_type: DamageType::Bludgeoning,
+                        secondary_damage_type: None,
+                        range: 1,
+                        min_range: 0,
+                    }],
+                ..Default::default()
+            })
+            .with(ActionData {
+                active_reaction : reaction_types::Counterattack.clone(),
+                ..Default::default()
+            })
+            .create(world);
+
+        let spear = weapon_archetypes.with_name("longspear").create(world);
+        let spear_throw = world.view().data::<ItemData>(spear).attacks.last().unwrap();
+        logic::item::equip_item(world, spearman, spear, true);
+        world.modify(spearman, CombatData::active_attack.set_to(AttackReference::of_attack(world.view(), spearman, spear_throw)), "switch to throw");
+        logic::movement::place_entity_in_world(world, spearman, AxialCoord::new(1,-1));
+
+
 
         let create_monster_at = |world_in: &mut World, pos: AxialCoord| {
             let monster = EntityBuilder::new()
@@ -211,7 +271,7 @@ impl Game {
                     ..Default::default()
                 })
                 .with(PositionData {
-                    hex : pos
+                    hex: pos
                 })
                 .with(CombatData {
                     natural_attacks: vec![Attack {
@@ -227,6 +287,7 @@ impl Game {
                 .with(SkillData::default())
                 .with(InventoryData::default())
                 .with(GraphicsData::default())
+                .with(IdentityData::of_kind(taxon("mud monster", &taxonomy::Monster)))
                 .create(world_in);
 
             logic::movement::place_entity_in_world(world_in, monster, pos);

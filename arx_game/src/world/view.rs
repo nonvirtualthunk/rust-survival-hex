@@ -10,6 +10,12 @@ use std::rc::Rc;
 use core::GameEventClock;
 use world::storage::*;
 use events::GameEventType;
+use events::GameEventState;
+
+
+/// world views are views into the data of a world. The world itself is the ledger of changes, the view is a way of looking at it at a specific time.
+/// world views can be made counter-factual by layering modifications on top of them, or by modifying their data directly in place. Once they have been
+///
 
 pub struct WorldView {
     pub(crate) entities: Vec<EntityContainer>,
@@ -20,8 +26,11 @@ pub struct WorldView {
     pub(crate) modifier_cursor: ModifierClock,
     pub(crate) modifier_indices: HashMap<TypeId, usize>,
     pub(crate) events: MultiTypeEventContainer,
-    pub entity_indices: Map<CloneAny>
+    pub entity_indices: Map<CloneAny>,
+
+
 }
+
 
 
 
@@ -75,5 +84,12 @@ impl WorldView {
 
     pub fn events<E : GameEventType + 'static>(&self) -> impl Iterator<Item=&GameEventWrapper<E>> {
         self.events.events::<E>()
+    }
+    pub fn events_most_recent_first<E: GameEventType + 'static>(&self) -> impl Iterator<Item=&GameEventWrapper<E>> {
+        self.events.revents::<E>()
+    }
+
+    pub fn most_recent_event<E: GameEventType + 'static>(&self) -> &GameEventWrapper<E> {
+        self.events.most_recent_event::<E>()
     }
 }

@@ -4,14 +4,18 @@ use entities::*;
 use entities::CharacterData;
 use entities::TileData;
 use entity_util::*;
-use EntitySelectors::*;
 use game::Entity;
 use game::world::WorldView;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::fmt::Error;
+use std::hash::Hash;
+use std::hash::Hasher;
+use logic;
+use entities::actions::EntitySelectors::*;
 
 
+#[derive(Clone, Debug)]
 pub struct Action {
     pub action_type : ActionType,
     pub ap : Progress<u32>,
@@ -62,7 +66,7 @@ impl EntitySelectors {
                     world.character(of).faction == world.character(entity).faction,
             InMoveRange { hex_range, of } => {
                 if let Some(end_point) = position_of(entity, world) {
-                    if let Some((_, cost)) = super::logic::movement::path_to(world, of, end_point) {
+                    if let Some((_, cost)) = logic::movement::path_to(world, of, end_point) {
                         return cost < hex_range as f64
                     }
                 }
@@ -85,9 +89,15 @@ impl PartialEq<ActionType> for ActionType {
         self.name == other.name
     }
 }
+impl Eq for ActionType {}
 impl Debug for ActionType {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         write!(f, "ActionType({})", self.name)
+    }
+}
+impl Hash for ActionType {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write(self.name.as_bytes());
     }
 }
 
@@ -118,3 +128,8 @@ pub mod action_types {
         costs : "2 {Stamina}, all remaining {AP}"
     };
 }
+
+
+
+
+

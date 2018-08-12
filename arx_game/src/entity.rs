@@ -3,6 +3,7 @@ use std::any::Any;
 use std::fmt;
 use world::World;
 use std::sync::atomic::{ATOMIC_USIZE_INIT, AtomicUsize, Ordering};
+use std::rc::Rc;
 
 pub static ENTITY_ID_COUNTER: AtomicUsize = ATOMIC_USIZE_INIT;
 
@@ -26,8 +27,9 @@ impl Entity {
 pub trait EntityData: Clone + Any + Default + Debug {}
 
 
+#[derive(Clone)]
 pub struct EntityBuilder {
-    initializations: Vec<Box<Fn(&mut World, Entity)>>
+    initializations: Vec<Rc<Fn(&mut World, Entity)>>
 }
 
 impl EntityBuilder {
@@ -38,16 +40,16 @@ impl EntityBuilder {
     }
 
     pub fn with<T: EntityData>(mut self, new_data: T) -> Self {
-        self.initializations.push(box move |world: &mut World, entity: Entity| {
+        self.initializations.push(Rc::new(move |world: &mut World, entity: Entity| {
             world.attach_data(entity, &new_data)
-        });
+        }));
         self
     }
 
-    pub fn create(self, world: &mut World) -> Entity {
+    pub fn create(&self, world: &mut World) -> Entity {
         let entity = World::create_entity();
-        for initialization in self.initializations {
-            initialization(world, entity);
+        for initialization in &self.initializations {
+            (initialization)(world, entity);
         }
         entity
     }
