@@ -90,23 +90,16 @@ impl ConstantModifier<TileData> for SetHexOccupantMod {
     fn modify(&self, data: &mut TileData) { data.occupied_by = self.0; }
 }
 
-pub struct CarryItemMod(pub Entity);
-impl ConstantModifier<InventoryData> for CarryItemMod {
-    fn modify(&self, data: &mut InventoryData) {
-        data.inventory.push(self.0);
-    }
-}
-
 pub struct EquipItemMod(pub Entity);
-impl ConstantModifier<InventoryData> for EquipItemMod {
-    fn modify(&self, data: &mut InventoryData) {
+impl ConstantModifier<EquipmentData> for EquipItemMod {
+    fn modify(&self, data: &mut EquipmentData) {
         data.equipped.push(self.0);
     }
 }
 
 pub struct UnequipItemMod(pub Entity);
-impl ConstantModifier<InventoryData> for UnequipItemMod {
-    fn modify(&self, data: &mut InventoryData) {
+impl ConstantModifier<EquipmentData> for UnequipItemMod {
+    fn modify(&self, data: &mut EquipmentData) {
         if let Some(index) = data.equipped.iter().position(|i| i == &self.0) {
             data.equipped.remove(index);
         }
@@ -116,7 +109,7 @@ impl ConstantModifier<InventoryData> for UnequipItemMod {
 pub struct ItemHeldByMod(pub Option<Entity>);
 impl ConstantModifier<ItemData> for ItemHeldByMod{
     fn modify(&self, data: &mut ItemData) {
-        data.held_by = self.0;
+        data.in_inventory_of = self.0;
     }
 }
 

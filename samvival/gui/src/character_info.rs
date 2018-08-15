@@ -7,9 +7,9 @@ use game::WorldView;
 use game::entities::*;
 use gui::*;
 use std::fmt;
-use tactical_gui::GameState;
-use control_gui::attack_descriptions::*;
-use tactical_gui::ControlContext;
+use state::GameState;
+use attack_descriptions::*;
+use state::ControlContext;
 
 
 pub struct CharacterInfoWidget {
@@ -145,7 +145,7 @@ impl CharacterInfoWidget {
 
                 skill_w.xp_bar_empty.set_y(Positioning::DeltaOfWidget(skill_w.text.id(), 4.px(), Alignment::Bottom));
                 skill_w.xp_bar_full.set_parent(&skill_w.xp_bar_empty).set_width(Sizing::PcntOfParent(xp_pcnt as f32));
-            }).reapply(gui);
+            }).reapply_all(gui);
 
             self.attack_descriptions.update(gui, world_view, selected, control);
         }
@@ -153,7 +153,7 @@ impl CharacterInfoWidget {
 }
 
 
-#[derive(WidgetContainer)]
+#[derive(WidgetContainer, Clone)]
 pub struct SkillWidget {
     text: Widget,
     xp_bar_empty: Widget,

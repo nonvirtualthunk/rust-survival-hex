@@ -1418,10 +1418,8 @@ name = "samvival_control"
 version = "0.1.0"
 dependencies = [
  "arx_common 0.1.0",
- "arx_gui 0.1.0",
  "arx_gui_macros 0.1.0",
  "cgmath 0.16.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "conrod 0.60.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "dimensioned 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "find_folder 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "gfx 0.17.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1439,6 +1437,7 @@ dependencies = [
  "pretty_env_logger 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "samvival_game 0.1.0",
  "samvival_graphics 0.1.0",
+ "samvival_gui 0.1.0",
  "vecmath 0.3.1 (git+https://github.com/PistonDevelopers/vecmath)",
 ]
 
@@ -1484,14 +1483,44 @@ dependencies = [
  "image 0.19.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "itertools 0.7.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "piston 0.37.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "piston2d-gfx_graphics 0.51.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "piston2d-graphics 0.26.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "piston2d-opengl_graphics 0.51.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "piston_window 0.80.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pistoncore-glutin_window 0.47.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pretty_env_logger 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "rusttype 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "samvival_game 0.1.0",
+ "vecmath 0.3.1 (git+https://github.com/PistonDevelopers/vecmath)",
+]
+
+[[package]]
+name = "samvival_gui"
+version = "0.1.0"
+dependencies = [
+ "arx_common 0.1.0",
+ "arx_gui 0.1.0",
+ "arx_gui_macros 0.1.0",
+ "cgmath 0.16.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dimensioned 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "find_folder 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "gfx 0.17.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "gfx_device_gl 0.15.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "image 0.19.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "interpolation 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "itertools 0.7.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lazy_static 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "noisy_float 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pathfinding 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "piston 0.37.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "piston2d-gfx_graphics 0.51.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "piston_window 0.80.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pretty_env_logger 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "samvival_game 0.1.0",
+ "samvival_graphics 0.1.0",
  "vecmath 0.3.1 (git+https://github.com/PistonDevelopers/vecmath)",
 ]
 

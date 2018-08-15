@@ -29,10 +29,25 @@ impl ItemRenderer {
     fn identify_relevant_entities(&mut self, world : &WorldView) {
         self.items_to_draw.clear();
         for (id, item_data) in world.entities_with_data::<ItemData>() {
-            // it must not be held by anyone, and it must have a position in the world
-            if item_data.held_by.is_none() && world.has_data::<PositionData>(*id) {
+            // draw it if either it is in the inventory of a hex (meaning it's on the hex) or it has no holder and it does have position data
+            // so it is acting as an entity of its own
+            if let Some(in_inventory) = item_data.in_inventory_of {
+                if world.has_data::<TileData>(in_inventory) {
+                    self.items_to_draw.push(*id);
+                }
+            } else if world.has_data::<PositionData>(*id) {
                 self.items_to_draw.push(*id);
             }
+        }
+    }
+
+    pub fn draw_at(world: &WorldView, item : Entity) -> Option<AxialCoord> {
+        if let Some(hex) = world.data_opt::<ItemData>(item).and_then(|item_data| item_data.in_inventory_of).and_then(|inv| world.data_opt::<TileData>(inv)).map(|td| td.position) {
+            Some(hex)
+        } else if let Some(pos_data) = world.data_opt::<PositionData>(item) {
+            Some(pos_data.hex)
+        } else {
+            None
         }
     }
 
@@ -45,15 +60,18 @@ impl ItemRenderer {
 
         for ent in &self.items_to_draw {
             let ent = *ent;
-//            let item_data = world.item(ent);
-            let position_data = world.data::<PositionData>(ent);
+
             let ident_data = world.data::<IdentityData>(ent);
             let graphics_data = world.data::<GraphicsData>(ent);
 
             // Main item display
-            let pos = position_data.hex.as_cart_vec();
-            let quad = Quad::new(format!("entities/items/{}", ident_data.kind.name), pos.0).centered().color(graphics_data.color);
-            quads.push(quad);
+            if let Some(pos) = ItemRenderer::draw_at(world, ent) {
+                let pos = pos.as_cart_vec();
+                let quad = Quad::new(format!("entities/items/{}", ident_data.kind.name), pos.0).centered().color(graphics_data.color);
+                quads.push(quad);
+            } else {
+                warn!("Tried to draw item {} but could not identify a position to do so", ent);
+            }
         }
         DrawList {
             quads,

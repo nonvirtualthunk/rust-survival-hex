@@ -240,6 +240,10 @@ impl Sext {
         let f = n.to_f64().expect("somehow, used \"of\" to create an Sext with a type that didn't support it");
         Sext((f * 6.0).round() as i64)
     }
+    pub fn of_rounded_up<T: num::Float>(n: T) -> Sext {
+        let f = n.to_f64().expect("somehow, used \"of\" to create an Sext with a type that didn't support it");
+        Sext((f * 6.0).ceil() as i64)
+    }
     pub fn of<T: num::Integer + num::ToPrimitive>(n: T) -> Sext {
         Sext(n.to_i64().expect("could not create Sext from value") * 6)
     }

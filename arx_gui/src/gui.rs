@@ -66,6 +66,17 @@ impl UIUnits {
     }
 }
 
+impl Into<Positioning> for UIUnits {
+    fn into(self) -> Positioning {
+        Positioning::constant(self)
+    }
+}
+impl Into<Sizing> for UIUnits {
+    fn into(self) -> Sizing {
+        Sizing::constant(self)
+    }
+}
+
 pub trait ToGUIPixels {
     fn px(&self) -> UIUnits;
 }
@@ -224,7 +235,7 @@ impl GUI {
 
             self.widget_reifications.insert(wid, state);
             if let Some(mut new_tooltip) = new_tooltip {
-                new_tooltip.reapply(self);
+                new_tooltip.reapply_all(self);
             }
             if mark_modified {
                 self.mark_widget_modified(wid);
@@ -237,7 +248,7 @@ impl GUI {
             self.widget_reifications.insert(wid, state);
 
             if let Some(mut new_tooltip) = new_tooltip {
-                new_tooltip.reapply(self);
+                new_tooltip.reapply_all(self);
             }
 
             self.mark_widget_modified(wid);
@@ -308,7 +319,8 @@ impl GUI {
         }
     }
 
-    pub fn remove_widget(&mut self, widget: &mut Widget) {
+    pub  fn remove_widget<D : DelegateToWidget>(&mut self, widget: &mut D) {
+        let widget = widget.as_widget();
         if widget.has_id() {
             let existing_state = self.widget_reifications.remove(&widget.id()).expect("widget state must exist if ID exists");
 
@@ -321,6 +333,7 @@ impl GUI {
                 let mut parent_state = self.widget_reifications.remove(&parent_id).expect("Trying to remove child after parent has been removed (or never existed)");
                 if let Some(index_in_parent) = parent_state.children.iter().position(|c| c == &widget.id()) {
                     parent_state.children.remove(index_in_parent);
+                    self.modified_set.insert(parent_id);
                 }
                 self.widget_reifications.insert(parent_id, parent_state);
             }

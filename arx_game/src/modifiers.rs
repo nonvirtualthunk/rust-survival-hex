@@ -144,6 +144,8 @@ pub enum Transformation {
     Recover(Box<Any>),
     SetKey(Box<Any>, Box<Any>),
     RemoveKey(Box<Any>),
+    Append(Box<Any>),
+    Remove(Box<Any>),
     Custom(Str),
 }
 
@@ -285,7 +287,9 @@ impl fmt::Display for Transformation {
             Transformation::Reduce(a) => write!(f, "reduced {}", Transformation::as_string(a, false, false)),
             Transformation::Custom(s) => write!(f, "{}", s),
             Transformation::SetKey(_, v) => write!(f, "{}", Transformation::as_string(v, true, false)),
-            Transformation::RemoveKey(_) => write!(f, "removed")
+            Transformation::RemoveKey(_) => write!(f, "removed"),
+            Transformation::Append(a) => write!(f, "appended {}", Transformation::as_string(a, false, false)),
+            Transformation::Remove(a) => write!(f, "removed {}", Transformation::as_string(a, false, false)),
         }
     }
 }

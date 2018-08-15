@@ -29,6 +29,7 @@ use game::Entity;
 use game::world_util::*;
 use game::ConstantModifier;
 use game::entities::modifiers::*;
+use gui;
 
 use game::logic::combat::*;
 
@@ -338,9 +339,9 @@ impl TacticalMode {
             }
         }
         if !living_enemy {
-            self.victory_time = Some(world.current_time);
+            self.victory_time = self.victory_time.or(Some(world.current_time));
         } else if !living_ally {
-            self.defeat_time = Some(world.current_time);
+            self.defeat_time = self.defeat_time.or(Some(world.current_time));
         }
     }
 
@@ -388,10 +389,27 @@ impl TacticalMode {
 
                 if let Some(selected) = self.selected_character {
                     let sel_c = world_in.view().character(selected);
-                    if let Some(path_result) = logic::movement::path(world_view, selected, sel_c.position.hex, hovered_hex) {
-                        let path = path_result.0;
-                        for hex in path {
-                            draw_list = draw_list.add_quad(Quad::new_cart(String::from("ui/feet"), hex.as_cart_vec()).centered());
+
+                    if let Some(hovered_occupant) = hovered_tile.occupied_by {
+                        if logic::faction::is_enemy(world_view, hovered_occupant, selected) {
+                            if let Some(attack_ref) = logic::combat::primary_attack_ref(world_view, selected) {
+                                let path = logic::combat::path_to_attack(world_view, selected, hovered_occupant, &attack_ref).map(|t| t.0)
+                                    .or_else(|| logic::movement::path_adjacent_to(world_view, selected, hovered_occupant).map(|t| t.0));
+//                                    .map(|path| logic::movement::portion_of_path_traversable_this_turn(world_view, selected, &path));
+
+                                if let Some(path) = path {
+                                    for hex in path {
+                                        draw_list = draw_list.add_quad(Quad::new_cart(String::from("ui/feet"), hex.as_cart_vec()).centered());
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        if let Some(path_result) = logic::movement::path(world_view, selected, sel_c.position.hex, hovered_hex) {
+                            let path = path_result.0;
+                            for hex in path {
+                                draw_list = draw_list.add_quad(Quad::new_cart(String::from("ui/feet"), hex.as_cart_vec()).centered());
+                            }
                         }
                     }
                 }
@@ -408,8 +426,8 @@ impl TacticalMode {
         world.tile_ent_opt(hovered_hex)
     }
 
-    fn current_game_state(&self, world: &World) -> tactical_gui::GameState {
-        tactical_gui::GameState {
+    fn current_game_state(&self, world: &World) -> gui::state::GameState {
+        gui::state::GameState {
             display_event_clock: self.display_event_clock,
             selected_character: self.selected_character,
             victory_time: self.victory_time,
@@ -534,23 +552,24 @@ impl GameMode for TacticalMode {
                                 if target_data.faction != self.player_faction &&
                                     sel_data.faction == self.player_faction {
                                     if let Some(attack_ref) = logic::combat::primary_attack_ref(main_world_view, cur_sel) {
-                                        if let Some(attack) = attack_ref.referenced_attack(main_world_view, cur_sel) {
-                                            if logic::combat::can_attack(main_world_view, cur_sel, found_ref, &attack, None, None) {
+                                        if let Some((path, cost)) = logic::combat::path_to_attack(main_world_view, cur_sel, found_ref, &attack_ref) {
+                                            if path.is_empty() {
                                                 logic::combat::handle_attack(world, cur_sel, found_ref, &attack_ref);
-                                            } else if let Some((attack_from, cost_to)) = logic::combat::closest_attack_location_with_cost(main_world_view, cur_sel, found_ref, &attack) {
-                                                if let Some((path, cost)) = logic::movement::path_to(main_world_view, cur_sel, attack_from) {
-                                                    logic::movement::handle_move(world, cur_sel, &path);
+                                            } else {
+                                                logic::movement::handle_move(world, cur_sel, &path);
+                                                if let Some(attack) = attack_ref.referenced_attack(main_world_view, cur_sel) {
                                                     if logic::combat::can_attack(main_world_view, cur_sel, found_ref, &attack, None, None) {
                                                         println!("Can attack from new position, attacking");
                                                         logic::combat::handle_attack(world, cur_sel, found_ref, &attack_ref);
                                                     } else {
-                                                        println!("Could not attack from new position :(");
+                                                        warn!("Could not attack from new position :(, but should have been");
                                                     }
                                                 }
                                             }
                                         } else {
-                                            warn!("Attack referenced by primary attack ref did not exist, clearing");
-                                            world.modify(cur_sel, CombatData::active_attack.set_to(AttackReference::none()), "cleared because previous ref was dead");
+                                            if let Some((path,cost)) = logic::movement::path_adjacent_to(world, cur_sel, found_ref) {
+                                                logic::movement::handle_move(world, cur_sel, &path);
+                                            }
                                         }
                                     } else {
                                         warn!("Cannot attack, there are no attacks to use!");
@@ -598,8 +617,14 @@ impl GameMode for TacticalMode {
                     Key::Up => self.camera.move_delta.y = 0.0,
                     Key::Down => self.camera.move_delta.y = 0.0,
                     Key::Return => self.end_turn(world),
-                    Key::Escape => self.selected_character = None,
+                    Key::Escape => {
+                        // close auxiliary windows if any are open, otherwise cancel character selection
+                        if ! self.gui.close_all_auxiliary_windows(gui) {
+                            self.selected_character = None
+                        }
+                    },
                     Key::LShift => self.realtime_clock_speed = 1.0,
+                    Key::I => self.gui.toggle_inventory(gui),
                     _ => ()
                 }
             },

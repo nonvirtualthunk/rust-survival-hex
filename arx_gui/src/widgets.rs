@@ -267,6 +267,7 @@ pub enum WidgetState {
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Sizing {
     PcntOfParent(f32),
+    PcntOfParentAllowingLoop(f32), // special sizing to be parent dependent, but allowed even when parent is dependent on children. Should basically omit the element from consideration
     DeltaOfParent(UIUnits),
     Constant(UIUnits),
     Derived,
@@ -432,24 +433,6 @@ impl Widget {
         Widget::new(WidgetType::Window { image: None, segment: ImageSegmentation::None })
     }
 
-    pub fn reapply(&mut self, gui: &mut GUI) {
-        if !self.validate() {
-            error!("Constructing invalid widget\n{:?}", Backtrace::new());
-        }
-        if self.id == NO_WID {
-            self.id = gui.new_id();
-        }
-
-        gui.apply_widget(self);
-        // the state override will have been applied to gui, if present, we can reset now
-        self.state_override = None;
-    }
-    pub fn apply(mut self, gui: &mut GUI) -> Self {
-        self.reapply(gui);
-
-        self
-    }
-
     pub fn dependent_on_children(&self) -> bool {
         Widget::sizing_dependent_on_children(self.size[0]) || Widget::sizing_dependent_on_children(self.size[1])
     }
@@ -489,6 +472,7 @@ impl Widget {
             Sizing::Derived => false,
             Sizing::DeltaOfParent(_) => true,
             Sizing::PcntOfParent(_) => true,
+            Sizing::PcntOfParentAllowingLoop(_) => true, // be careful with this one, it's intended to be allowed in cases parent normally wouldn't be
             Sizing::SurroundChildren => false
         }
     }
@@ -502,7 +486,7 @@ impl Widget {
             Positioning::Absolute(_) => false,
         }
     }
-    fn validate(&self) -> bool {
+    pub(crate) fn validate(&self) -> bool {
         if self.alignment[0] == Alignment::Top || self.alignment[0] == Alignment::Bottom ||
             self.alignment[1] == Alignment::Left || self.alignment[1] == Alignment::Right {
             error!("Widget created that has nonsensical alignment");
@@ -526,11 +510,11 @@ impl Default for Widget {
 pub trait WidgetContainer {
     fn for_all_widgets<F: FnMut(&mut Widget)>(&mut self, func: F);
 
-    fn reapply(&mut self, gui : &mut GUI) {
+    fn reapply_all(&mut self, gui : &mut GUI) {
         self.for_all_widgets(|w| w.reapply(gui));
     }
-    fn apply(mut self, gui : &mut GUI) -> Self where Self : Sized {
-        self.reapply(gui);
+    fn apply_all(mut self, gui : &mut GUI) -> Self where Self : Sized {
+        self.reapply_all(gui);
         self
     }
 

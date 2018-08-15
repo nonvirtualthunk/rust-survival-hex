@@ -32,6 +32,7 @@ use storage::MultiTypeEventContainer;
 use events::GameEventType;
 use events::CoreEvent;
 use events::GameEventState;
+use std::intrinsics::type_name;
 
 pub struct ModifiersApplication {
     disable_func: fn(&mut World, ModifierReference),
@@ -61,8 +62,6 @@ pub struct World {
     pub entity_indices: Map<CloneAny>,
     pub index_applications: Vec<IndexApplication>,
 }
-
-
 
 impl World {
     pub fn new() -> World {
@@ -253,7 +252,7 @@ impl World {
                             let mut ent_data: T = match is_dynamic || !ent_has_dynamic_data {
                                 true => view.effective_data.get_mut::<DataContainer<T>>().expect("modifier's dynamic data not present").storage
                                     //.entry(wrapper.entity.0).or_insert(T::default()).clone(),
-                                    .get(&wrapper.entity).unwrap_or_else(||panic!(format!("Could not retrieve dynamic data for modified entity {}", wrapper.entity))).clone(),
+                                    .get(&wrapper.entity).unwrap_or_else(||panic!(format!("Could not retrieve dynamic data for modified entity {}, type : {}", wrapper.entity, unsafe { type_name::<T>() }))).clone(),
                                 false => view.constant_data.get_mut::<DataContainer<T>>().expect("modifier's constant data not present").storage
                                     //.entry(wrapper.entity).or_insert(T::default()).clone()
                                     .get(&wrapper.entity).unwrap_or_else(||panic!(format!("Could not retrieve constant data for modified entity {}", wrapper.entity))).clone()
@@ -536,6 +535,12 @@ impl World {
         self.events.events::<E>().find(|e| e.occurred_at == time)
     }
 
+    pub fn ensure_data<T: EntityData>(&mut self, entity: Entity) {
+        if ! self.has_data::<T>(entity) {
+            self.attach_data::<T>(entity, &T::default());
+        }
+    }
+
     pub fn attach_data<T: EntityData>(&mut self, entity: Entity, data: &T) {
         {
             let self_data: &mut DataContainer<T> = self.data.get_mut::<DataContainer<T>>()
@@ -606,5 +611,14 @@ impl World {
                 .collect(),
             base_value : raw_data
         }
+    }
+}
+
+use std::ops::Deref;
+impl Deref for World {
+    type Target = WorldView;
+
+    fn deref(&self) -> &WorldView {
+        self.view()
     }
 }

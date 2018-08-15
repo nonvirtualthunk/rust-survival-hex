@@ -3,8 +3,8 @@ use game::entities::actions::*;
 use common::color::Color;
 use game::Entity;
 use std::collections::HashMap;
-use tactical_gui::GameState;
-use tactical_gui::ControlContext;
+use state::GameState;
+use state::ControlContext;
 use control_events::ControlEvents;
 
 #[derive(Default)]
@@ -58,7 +58,7 @@ impl Default for ActionButton {
 }
 
 impl ActionBar {
-    pub fn new(gui : &mut GUI) -> ActionBar {
+    pub fn new(gui : &mut GUI, parent : &Widget) -> ActionBar {
         let mut action_list = ListWidget::featherweight()
             .alignment(Alignment::Bottom, Alignment::Left)
             .position(Positioning::constant(2.ux()), Positioning::constant(2.ux()))
@@ -67,6 +67,7 @@ impl ActionBar {
             .horizontal()
             .named("Action bar list")
             .only_consume(EventConsumption::all())
+            .parent(parent)
             .apply(gui);
 
         action_list.item_archetype.set_size(Sizing::surround_children(), Sizing::surround_children()).set_color(Color::greyscale(0.8));
@@ -85,7 +86,7 @@ impl ActionBar {
             let mut selection_changed = false;
             for event in gui.events_for(self.action_list.as_widget_immut()) {
                 if let UIEvent::WidgetEvent(wevent) = event {
-                    if let WidgetEvent::ListItemClicked(index) = wevent {
+                    if let WidgetEvent::ListItemClicked(index, button) = wevent {
                         let action_type = self.actions[*index].clone();
                         self.selected_actions.insert(selected_char, action_type.clone());
                         control_context.event_bus.push_event(ControlEvents::ActionSelected(action_type));

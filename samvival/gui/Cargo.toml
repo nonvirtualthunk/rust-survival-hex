@@ -1,10 +1,10 @@
 [package]
-name = "samvival_graphics"
+name = "samvival_gui"
 version = "0.1.0"
 authors = ["Sam Bock <nonvirtualthunk@gmail.com>"]
 
 [lib]
-name = "samvival_graphics"
+name = "samvival_gui"
 
 [dependencies]
 piston = "0.37.0"
@@ -12,16 +12,15 @@ piston_window = "0.80.0"
 find_folder = "*"
 gfx_device_gl = "0.15.3"
 gfx = "0.17.0"
-piston2d-graphics = "0.26.0"
-pistoncore-glutin_window = "0.47.0"
 piston2d-gfx_graphics = "0.51.0"
-piston2d-opengl_graphics = "0.51.0"
 cgmath = "*"
 lazy_static = "*"
 image = "0.19.0"
+pathfinding = "*"
+interpolation = "*"
+noisy_float = "*"
 dimensioned = "*"
 itertools = "0.7.3"
-rusttype = { version = "0.6.2", features = ["gpu_cache"] }
 log = "*"
 pretty_env_logger = "*"
 
@@ -29,12 +28,20 @@ pretty_env_logger = "*"
 path = "../../arx_common"
 version = "0.1.0"
 
-[dependencies.arx_graphics]
-path = "../../arx_graphics"
-version = "0.1.0"
-
 [dependencies.samvival_game]
 path = "../game"
+version = "0.1.0"
+
+[dependencies.samvival_graphics]
+path = "../../samvival/graphics"
+version = "0.1.0"
+
+[dependencies.arx_gui]
+path = "../../arx_gui"
+version = "0.1.0"
+
+[dependencies.arx_gui_macros]
+path = "../../arx_gui_macros"
 version = "0.1.0"
 
 [dependencies.vecmath]

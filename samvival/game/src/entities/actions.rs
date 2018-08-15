@@ -31,7 +31,7 @@ pub enum EntitySelectors {
     InMoveRange { hex_range: u32, of: Entity },
     IsCharacter,
     IsTile,
-
+    HasInventory
 }
 
 pub struct EntitySelector(pub Vec<EntitySelectors>);
@@ -40,6 +40,7 @@ impl EntitySelector {
     pub fn friendly_character(of: Entity) -> EntitySelector { EntitySelector(vec![Friend { of }, IsCharacter]) }
     pub fn enemy_of(of: Entity) -> EntitySelector { EntitySelector(vec![Enemy { of }, IsCharacter]) }
     pub fn tile() -> EntitySelector { EntitySelector(vec![IsTile]) }
+    pub fn inventory() -> EntitySelector { EntitySelector(vec![HasInventory]) }
 
     pub fn within_range(mut self, hex_range : u32, of : Entity) -> Self {
         self.0.push(InMoveRange { hex_range, of });
@@ -71,7 +72,8 @@ impl EntitySelectors {
                     }
                 }
                 false
-            }
+            },
+            HasInventory => world.has_data::<InventoryData>(entity)
         }
     }
 }
@@ -126,6 +128,14 @@ pub mod action_types {
         icon : "ui/run_icon",
         description : "Run across terrain at a faster pace but at the expense of stamina. Converts all remaining AP to movement points.",
         costs : "2 {Stamina}, all remaining {AP}"
+    };
+
+    pub const InteractWithInventory : ActionType = ActionType {
+        target : |actor, world| vec![EntitySelector::inventory().within_range(1, actor)],
+        name : "Give or Take Items",
+        icon : "ui/interact_with_inventory_icon",
+        description : "Transfer items from your inventory to or from another. Can be used to drop items on the ground or pick them up.",
+        costs : "1 {AP} per item taken or given"
     };
 }
 

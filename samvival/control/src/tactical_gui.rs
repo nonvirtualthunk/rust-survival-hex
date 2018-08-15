@@ -18,7 +18,6 @@ use std;
 use gui::*;
 use gui::ToGUIUnit;
 use common::Color;
-use control_gui::*;
 use game::entities::actions::*;
 use game::entities::reactions::reaction_types;
 
@@ -26,7 +25,7 @@ use game::logic;
 use common::prelude::*;
 use graphics::core::GraphicsWrapper;
 use common::event_bus::EventBus;
-use control_events::ControlEvents;
+use gui::control_events::ControlEvents;
 use common::event_bus::ConsumerHandle;
 use graphics::core::DrawList;
 use graphics::Quad;
@@ -38,29 +37,25 @@ use game::Sext;
 use std::collections::HashMap;
 use noisy_float::types::r32;
 use gui::WidgetContainer;
-use control_gui::attack_descriptions::AttackDetailsWidget;
+use gui::attack_descriptions::AttackDetailsWidget;
 use game::reflect::*;
+use gui::messages_widget::MessagesDisplay;
+use gui::messages_widget::Message;
+use gui::inventory_widget::*;
 
-
-#[derive(PartialEq)]
-pub struct GameState {
-    pub display_event_clock: GameEventClock,
-    pub selected_character: Option<Entity>,
-    pub victory_time: Option<GameEventClock>,
-    pub defeat_time: Option<GameEventClock>,
-    pub player_faction: Entity,
-    pub hovered_hex_coord: AxialCoord,
-    pub animating: bool,
-    pub mouse_pixel_pos: Vec2f,
-    pub mouse_game_pos: Vec2f
-}
 
 pub struct TacticalEventBundle<'a, 'b> {
     pub tactical: &'a mut TacticalMode,
     pub world: &'b mut World,
 }
 
+#[derive(PartialEq,Clone,Copy)]
+pub enum AuxiliaryWindows {
+    Inventory
+}
+
 pub struct TacticalGui {
+    main_area : Widget,
     victory_widget : Widget,
     defeat_widget : Widget,
     action_bar : ActionBar,
@@ -70,21 +65,26 @@ pub struct TacticalGui {
     character_info_widget : CharacterInfoWidget,
     targeting_draw_list : DrawList,
     last_targeting_info : Option<(GameState, ActionType)>,
-    attack_details_widget : AttackDetailsWidget
-}
+    attack_details_widget : AttackDetailsWidget,
+    messages_display : MessagesDisplay,
+    inventory_widget: inventory_widget::InventoryDisplay,
+    open_auxiliary_windows : Vec<AuxiliaryWindows>,
 
-
-pub struct ControlContext<'a> {
-    pub event_bus : &'a mut EventBus<ControlEvents>
 }
 
 
 impl TacticalGui {
     pub fn new(gui: &mut GUI) -> TacticalGui {
+        let main_area = Widget::div()
+            .size(Sizing::DeltaOfParent(0.ux()), Sizing::DeltaOfParent(0.ux()))
+            .position(Positioning::origin(), Positioning::origin())
+            .apply(gui);
+
         let victory_widget = Widget::window(Color::greyscale(0.9), 2)
             .size(Sizing::ux(50.0), Sizing::ux(30.0))
             .position(Positioning::centered(), Positioning::centered())
             .showing(false)
+            .parent(&main_area)
             .apply(gui);
 
         let victory_text = Widget::text("Victory!", 30).centered().parent(&victory_widget).apply(gui);
@@ -107,11 +107,15 @@ impl TacticalGui {
             event_bus,
             event_bus_handle,
             character_info_widget : CharacterInfoWidget::new(gui),
-            action_bar : ActionBar::new(gui),
-            reaction_bar : ReactionBar::new(gui),
+            action_bar : ActionBar::new(gui, &main_area),
+            reaction_bar : ReactionBar::new(gui, &main_area),
             targeting_draw_list : DrawList::none(),
             last_targeting_info : None,
-            attack_details_widget : AttackDetailsWidget::new().draw_layer_for_all(GUILayer::Overlay)
+            attack_details_widget : AttackDetailsWidget::new().draw_layer_for_all(GUILayer::Overlay),
+            messages_display : MessagesDisplay::new(gui, &main_area),
+            inventory_widget : inventory_widget::InventoryDisplay::new(strf("Character Inventory"), &main_area),
+            main_area,
+            open_auxiliary_windows: Vec::new()
         }
     }
 
@@ -154,7 +158,7 @@ impl TacticalGui {
                     };
 
 
-                    let strike_count_colors = [Color::new(0.2, 0.6, 0.2, 0.35), Color::new(0.25, 0.5, 0.15, 0.35), Color::new(0.3, 0.45, 0.1, 0.35), Color::new(0.35,0.35,0.1,0.35)];
+                    let strike_count_colors = [Color::new(0.2, 0.6, 0.2, 0.6), Color::new(0.25, 0.4, 0.15, 0.6), Color::new(0.3, 0.35, 0.1, 0.6), Color::new(0.35,0.35,0.1,0.45)];
 
                     let color_for_strike_count = |sc : i32| if sc == 0 { Color::new(0.4,0.4,0.4,0.35) } else { strike_count_colors[(max_possible_strikes - sc) as usize] };
                     for (hex,cost) in &hexes {
@@ -222,6 +226,30 @@ impl TacticalGui {
         }
     }
 
+    pub fn toggle_inventory(&mut self, gui : &mut GUI) {
+        if self.open_auxiliary_windows.contains(&AuxiliaryWindows::Inventory) {
+            self.inventory_widget.set_showing(false).reapply(gui);
+            self.open_auxiliary_windows.retain(|window| window != &AuxiliaryWindows::Inventory);
+        } else {
+            self.inventory_widget.set_showing(true).reapply(gui);
+            self.open_auxiliary_windows.push(AuxiliaryWindows::Inventory);
+        }
+    }
+
+    pub fn close_all_auxiliary_windows(&mut self, gui : &mut GUI) -> bool {
+        if self.open_auxiliary_windows.non_empty() {
+            for window in &self.open_auxiliary_windows {
+                match window {
+                    AuxiliaryWindows::Inventory => self.inventory_widget.set_showing(false).reapply(gui)
+                }
+            }
+            self.open_auxiliary_windows.clear();
+            true
+        } else {
+            false
+        }
+    }
+
     fn draw_boundary_at_hex_range(&self, view : &WorldView, selected : Entity, current_position : AxialCoord, range : Sext, mut draw_list : DrawList, selector : &EntitySelector) -> DrawList {
         let hexes = hexes_in_range(view, selected, range);
         for (hex,cost) in &hexes {
@@ -246,26 +274,38 @@ impl TacticalGui {
     pub fn update_gui(&mut self, world: &mut World, gui: &mut GUI, frame_id: Option<Wid>, game_state: GameState) {
         let world_view = world.view_at_time(game_state.display_event_clock);
 
+        self.messages_display.update(gui);
+
         if let Some(selected) = game_state.selected_character {
+            self.main_area.set_width(Sizing::DeltaOfParent(-40.ux())).reapply(gui);
             self.character_info_widget.update(&world_view, gui, &game_state, ControlContext { event_bus : &mut self.event_bus });
             let char = world_view.character(selected);
 
             if char.faction == game_state.player_faction {
-                self.action_bar.update(gui, vec![action_types::MoveAndAttack, action_types::Move, action_types::Run], &game_state, ControlContext { event_bus : &mut self.event_bus });
-                self.reaction_bar.set_x(Positioning::left_of(self.character_info_widget.as_widget(), 1.ux())).as_widget().reapply(gui);
+                let actions = vec![action_types::MoveAndAttack, action_types::Move, action_types::Run, action_types::InteractWithInventory];
+                self.action_bar.update(gui, actions, &game_state, ControlContext { event_bus : &mut self.event_bus });
+//                self.reaction_bar.set_x(Positioning::left_of(self.character_info_widget.as_widget(), 1.ux())).as_widget().reapply(gui);
 //                self.reaction_bar.set_y(Positioning::constant(2.ux())).as_widget().reapply(gui);
-                self.reaction_bar.update(gui, vec![reaction_types::Defend, reaction_types::Dodge, reaction_types::Block, reaction_types::Counterattack], char.action.active_reaction.clone(), &game_state, ControlContext { event_bus : &mut self.event_bus });
+                let reactions = vec![reaction_types::Defend, reaction_types::Dodge, reaction_types::Block, reaction_types::Counterattack];
+                self.reaction_bar.update(gui, reactions, char.action.active_reaction.clone(), &game_state, ControlContext { event_bus : &mut self.event_bus });
             } else {
-                self.action_bar.set_showing(false).as_widget().reapply(gui);
-                self.reaction_bar.set_showing(false).as_widget().reapply(gui);
+                self.action_bar.set_showing(false).reapply(gui);
+                self.reaction_bar.set_showing(false).reapply(gui);
             }
 
             self.update_attack_details(world, &world_view, gui, &game_state, selected);
+
+
+            let items = &world_view.data::<InventoryData>(selected).items;
+            self.inventory_widget.update(gui, world, InventoryDisplayData::new(items.clone(), "Character Inventory"), vec![InventoryDisplayData::new(items.clone(), "Other inventory")]);
         } else {
-            self.character_info_widget.set_showing(false).as_widget().reapply(gui);
-            self.action_bar.set_showing(false).as_widget().reapply(gui);
-            self.reaction_bar.set_showing(false).as_widget().reapply(gui);
+            self.main_area.set_width(Sizing::DeltaOfParent(0.ux())).reapply(gui);
+
+            self.character_info_widget.set_showing(false).reapply(gui);
+            self.action_bar.set_showing(false).reapply(gui);
+            self.reaction_bar.set_showing(false).reapply(gui);
             self.attack_details_widget.hide(gui);
+            self.inventory_widget.set_showing(false).reapply(gui);
         }
 
         for event in self.event_bus.events_for(&mut self.event_bus_handle) {
@@ -277,8 +317,17 @@ impl TacticalGui {
                     ControlEvents::AttackSelected(attack_ref) => {
                         println!("Attack selected");
                         world.modify(selected, CombatData::active_attack.set_to(attack_ref.clone()), "attack selected");
-                        world.add_event(GameEvent::SelectedAttackChanged { entity : selected, attack_ref : attack_ref.clone() })
+                        world.add_event(GameEvent::SelectedAttackChanged { entity : selected, attack_ref : attack_ref.clone() });
                     },
+                    ControlEvents::CounterattackSelected(attack_ref) => {
+                        println!("Counter selected");
+                        if logic::combat::is_valid_counter_attack(world, selected, attack_ref) {
+                            world.modify(selected, CombatData::active_counterattack.set_to(attack_ref.clone()), "counter-attack selected");
+                            world.add_event(GameEvent::SelectedCounterattackChanged { entity : selected, attack_ref : attack_ref.clone() });
+                        } else {
+                            self.messages_display.add_message(Message::new("Only melee attacks can be used as counter-attacks, reach and ranged cannot."));
+                        }
+                    }
                     ControlEvents::ReactionSelected(reaction_type) => {
                         println!("Selected reaction type : {:?}", reaction_type);
                         world.modify(selected, ActionData::active_reaction.set_to(reaction_type.clone()), "reaction selected");
@@ -308,7 +357,13 @@ impl TacticalGui {
                 if let Some(attack) = combat::primary_attack(view, selected) {
                     self.attack_details_widget.set_position(Positioning::constant((game_state.mouse_pixel_pos.x + 20.0).px()), Positioning::constant((game_state.mouse_pixel_pos.y + 20.0).px()));
                     self.attack_details_widget.set_showing(true);
-                    self.attack_details_widget.update(gui, world, view, selected, hovered_char, &attack);
+                    if let Some((attack_from, cost)) = logic::combat::closest_attack_location_with_cost(view, selected, hovered_char, &attack) {
+                        let current_ap = view.data::<CharacterData>(selected).action_points.cur_value();
+                        let ap_remaining_after_move = (current_ap - logic::movement::ap_cost_for_move_cost(view, selected, Sext::of_rounded_up(cost)) as i32).max(0);
+                        self.attack_details_widget.update(gui, world, view, selected, hovered_char, &attack, Some(attack_from), ap_remaining_after_move);
+                    } else {
+                        self.attack_details_widget.update(gui, world, view, selected, hovered_char, &attack, None, 0);
+                    }
                 }
                 return;
             }

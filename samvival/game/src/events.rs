@@ -20,6 +20,7 @@ pub enum GameEvent {
     EffectEnded { entity : Option<Entity> },
     WorldStart,
     SelectedAttackChanged { entity : Entity, attack_ref : AttackReference },
+    SelectedCounterattackChanged { entity : Entity, attack_ref : AttackReference },
     SelectedReactionChanged { entity : Entity, reaction_type : ReactionType },
     ReactionEffectApplied { entity : Entity }
 }

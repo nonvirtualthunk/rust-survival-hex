@@ -19,6 +19,7 @@ extern crate image;
 extern crate vecmath;
 extern crate arx_common as common;
 extern crate samvival_game as game;
+extern crate arx_gui as gui;
 extern crate samvival_graphics as graphics;
 extern crate pathfinding;
 extern crate interpolation;
@@ -27,15 +28,26 @@ extern crate noisy_float;
 extern crate itertools;
 extern crate pretty_env_logger;
 #[macro_use] extern crate log;
-extern crate samvival_gui as gui;
+extern crate arx_gui;
 #[macro_use] extern crate arx_gui_macros;
 
-pub mod tactical;
+pub mod action_bar;
+pub use self::action_bar::*;
 
-pub mod tactical_gui;
+pub mod reaction_bar;
+pub use self::reaction_bar::*;
 
-pub mod core;
+pub mod character_info;
+pub use self::character_info::*;
 
-pub use core::GameMode;
+pub mod attack_descriptions;
 
-mod tactical_event_handler;
+pub mod messages_widget;
+
+pub mod state;
+pub use state::*;
+
+pub mod control_events;
+pub mod inventory_widget;
+
+pub use gui::*;

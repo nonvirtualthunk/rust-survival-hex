@@ -76,6 +76,11 @@ impl<T: Default + WidgetContainer> ListWidget<T> {
         self
     }
 
+    pub fn rows_surround_children(mut self) -> Self {
+        self.item_archetype.set_size(Sizing::surround_children(), Sizing::surround_children());
+        self
+    }
+
     pub fn horizontal(mut self) -> Self {
         self.orientation = Orientation::Horizontal;
         if self.body.size[1] == Sizing::SurroundChildren {
@@ -106,13 +111,18 @@ impl<T: Default + WidgetContainer> ListWidget<T> {
     }
 
     pub fn update<U, F: Fn(&mut T, &U)>(&mut self, gui: &mut GUI, data: &[U], func: F) -> &mut Self {
-        self.reapply(gui);
+        let draw_layer = self.as_widget_immut().draw_layer;
+
+        // make sure the body exists. Todo: only actually need to do this the first time
+        self.body.reapply(gui);
+
         while data.len() > self.children.len() {
             let index = self.children.len();
             let mut new_item = self.item_archetype.clone().parent(&self.body)
+                .draw_layer(draw_layer)
                 .with_callback(move |ctxt: &mut WidgetContext, evt: &UIEvent| {
-                    if let UIEvent::MouseRelease { .. } = evt {
-                        ctxt.trigger_event(UIEvent::WidgetEvent(WidgetEvent::ListItemClicked(index)))
+                    if let UIEvent::MouseRelease { button, .. } = evt {
+                        ctxt.trigger_event(UIEvent::WidgetEvent(WidgetEvent::ListItemClicked(index, *button)))
                     }
                 });
             new_item.clear_id();
@@ -142,7 +152,7 @@ impl<T: Default + WidgetContainer> ListWidget<T> {
         for (i, value) in data.iter().enumerate() {
             let child_id = self.children[i].id();
             func(&mut self.child_structs[i], &value);
-            ListWidget::auto_apply(child_id, gui, &mut self.child_structs[i]);
+            ListWidget::auto_apply(child_id, gui, &mut self.child_structs[i], draw_layer);
         }
 
         while data.len() < self.children.len() {
@@ -150,12 +160,14 @@ impl<T: Default + WidgetContainer> ListWidget<T> {
             self.children_to_remove.push(child);
             self.child_structs.pop();
         }
+        self.reapply_children(gui);
 
         self
     }
 
-    fn auto_apply(id: Wid, gui: &mut GUI, child_struct: &mut T) {
+    fn auto_apply(id: Wid, gui: &mut GUI, child_struct: &mut T, draw_layer : GUILayer) {
         child_struct.for_all_widgets(|w| {
+            w.set_draw_layer(draw_layer);
             if w.parent_id.is_none() {
                 w.set_parent_id(id);
             }
@@ -163,13 +175,7 @@ impl<T: Default + WidgetContainer> ListWidget<T> {
         });
     }
 
-    pub fn apply(mut self, gui: &mut GUI) -> Self {
-        self.reapply(gui);
-        self
-    }
-    pub fn reapply(&mut self, gui: &mut GUI) {
-        self.body.reapply(gui);
-
+    pub fn reapply_children(&mut self, gui: &mut GUI) {
         loop {
             if let Some(mut child) = self.children_to_remove.pop() {
                 gui.remove_widget(&mut child);
@@ -200,7 +206,7 @@ impl<T: Default> DelegateToWidget for ListWidget<T> {
     }
 }
 
-impl<T: Default + Clone> WidgetContainer for ListWidget<T> {
+impl<T: Default> WidgetContainer for ListWidget<T> {
     fn for_all_widgets<F: FnMut(&mut Widget)>(&mut self, mut func: F) {
         (func)(&mut self.body);
         for child in &mut self.children {

@@ -5,9 +5,25 @@ use common::hex::AxialCoord;
 use game::core::*;
 
 #[derive(Clone, Debug, Default, PrintFields)]
-pub struct InventoryData {
+pub struct EquipmentData {
     pub equipped : Vec<Entity>,
-    pub inventory : Vec<Entity>,
+}
+impl EntityData for EquipmentData {}
+
+pub trait EquipmentDataStore {
+    fn equipment(&self, ent : Entity) -> &EquipmentData;
+}
+impl EquipmentDataStore for WorldView {
+    fn equipment(&self, ent: Entity) -> &EquipmentData {
+        self.data::<EquipmentData>(ent)
+    }
+}
+
+
+#[derive(Clone, Debug, Default, PrintFields)]
+pub struct InventoryData {
+    pub items : Vec<Entity>,
+
 }
 impl EntityData for InventoryData {}
 

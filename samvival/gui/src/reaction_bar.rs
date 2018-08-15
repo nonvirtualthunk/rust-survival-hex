@@ -3,8 +3,8 @@ use game::entities::reactions::*;
 use common::color::Color;
 use game::Entity;
 use std::collections::HashMap;
-use tactical_gui::GameState;
-use tactical_gui::ControlContext;
+use state::GameState;
+use state::ControlContext;
 use control_events::ControlEvents;
 
 #[derive(Default)]
@@ -39,10 +39,12 @@ impl Default for ReactionButton {
             .alignment(Alignment::Top, Alignment::Left)
             .size(Sizing::constant(30.ux()), Sizing::constant(30.ux()))
             .margin(1.ux())
+            .draw_layer(GUILayer::Overlay)
             .showing(false);
-        let info_name = Widget::text("Name: ", 14).parent(&info_body).named("info name");
+        let info_name = Widget::text("Name: ", 14).parent(&info_body).named("info name").draw_layer(GUILayer::Overlay);
         let info_description = Widget::wrapped_text("Description: ", 14, TextWrap::WithinParent).parent(&info_body).named("info description")
-            .y(Positioning::below(&info_name, 1.ux()));
+            .y(Positioning::below(&info_name, 1.ux()))
+            .draw_layer(GUILayer::Overlay);
 
         let info_body_id = info_body.id();
         let icon_id = icon.id();
@@ -59,15 +61,17 @@ impl Default for ReactionButton {
 }
 
 impl ReactionBar {
-    pub fn new(gui: &mut GUI) -> ReactionBar {
+    pub fn new(gui: &mut GUI, parent : &Widget) -> ReactionBar {
         let mut action_list = ListWidget::featherweight()
-            .alignment(Alignment::Bottom, Alignment::Left)
+            .alignment(Alignment::Bottom, Alignment::Right)
             .position(Positioning::constant(2.ux()), Positioning::constant(2.ux()))
             .size(Sizing::surround_children(), Sizing::surround_children())
             .widget_type(WidgetType::window())
             .horizontal()
             .named("Reaction bar list")
             .only_consume(EventConsumption::all())
+            .parent(parent)
+            .draw_layer(GUILayer::Overlay)
             .apply(gui);
 
         action_list.item_archetype.set_size(Sizing::surround_children(), Sizing::surround_children()).set_color(Color::greyscale(0.8));
@@ -86,7 +90,7 @@ impl ReactionBar {
 
             for event in gui.events_for(self.reaction_list.as_widget_immut()) {
                 if let UIEvent::WidgetEvent(wevent) = event {
-                    if let WidgetEvent::ListItemClicked(index) = wevent {
+                    if let WidgetEvent::ListItemClicked(index, button_) = wevent {
                         let reaction_type = self.reactions[*index].clone();
                         control_context.event_bus.push_event(ControlEvents::ReactionSelected(reaction_type));
                     }

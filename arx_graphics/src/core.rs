@@ -80,7 +80,8 @@ impl Quad {
     }
 }
 
-pub const DEFAULT_FONT_IDENTIFIER: FontIdentifier = "NotoSans-Regular.ttf";
+//pub const DEFAULT_FONT_IDENTIFIER: FontIdentifier = "NotoSans-Regular.ttf";
+pub const DEFAULT_FONT_IDENTIFIER: FontIdentifier = "pf_ronda_seven.ttf";
 
 pub struct Text {
     pub text: String,

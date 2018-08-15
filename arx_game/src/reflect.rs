@@ -96,14 +96,23 @@ impl<E, T: 'static> ReduceableField<E,T> for Field<E, Reduceable<T>> where E: En
 }
 
 
-trait GameDisplayable {
-    fn to_game_str_full(&self) -> String;
+pub trait VecField<E : EntityData, T: Clone + PartialEq + 'static> {
+    fn append(&'static self, new_value: T) -> Box<FieldModifier<E, Vec<T>>>;
+    fn remove(&'static self, new_value: T) -> Box<FieldModifier<E, Vec<T>>>;
+}
+impl<E, T: Clone + PartialEq + 'static> VecField<E,T> for Field<E, Vec<T>> where E: EntityData {
+    fn append(&'static self, new_value: T) -> Box<FieldModifier<E, Vec<T>>> { FieldModifier::permanent(self, transformations::Append(new_value)) }
+    fn remove(&'static self, new_value: T) -> Box<FieldModifier<E, Vec<T>>> { FieldModifier::permanent(self, transformations::Remove(new_value)) }
+}
+
+pub trait GameDisplayable {
+    fn to_game_str_full(&self, &WorldView) -> String;
 }
 
 impl <T> GameDisplayable for Option<T> where T : GameDisplayable {
-    fn to_game_str_full(&self) -> String {
+    fn to_game_str_full(&self, view: &WorldView) -> String {
         match self {
-            Some(inner) => inner.to_game_str_full(),
+            Some(inner) => inner.to_game_str_full(view),
             None => strf("none")
         }
     }
@@ -210,6 +219,19 @@ pub mod transformations {
         fn description(&self) -> Transformation {
             Transformation::RemoveKey(box self.0.clone())
         }
+    }
+
+
+    pub struct Append<R : Clone + 'static>(pub R);
+    impl<R: Clone + 'static> FieldTransformation<Vec<R>> for Append<R> {
+        fn apply(&self, current: &mut Vec<R>) { current.push(self.0.clone()) }
+        fn description(&self) -> Transformation { Transformation::Append(box self.0.clone()) }
+    }
+
+    pub struct Remove<R : Clone + PartialEq + 'static>(pub R);
+    impl<R: Clone + PartialEq + 'static> FieldTransformation<Vec<R>> for Remove<R> {
+        fn apply(&self, current: &mut Vec<R>) { current.remove_item(&self.0); }
+        fn description(&self) -> Transformation { Transformation::Remove(box self.0.clone()) }
     }
 }
 

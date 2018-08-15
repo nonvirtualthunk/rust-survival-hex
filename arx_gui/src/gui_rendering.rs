@@ -31,11 +31,10 @@ use widget_delegation::DelegateToWidget;
 use std::time::Instant;
 
 
-
 #[derive(PartialEq, Eq, Debug, Clone, Copy, PartialOrd)]
 pub enum GUILayer {
     Overlay,
-    Main
+    Main,
 }
 
 impl GUI {
@@ -44,6 +43,7 @@ impl GUI {
         match size {
             Sizing::Constant(constant) => constant.ux(pixels_per_ux),
             Sizing::PcntOfParent(pcnt) => anchor_size * pcnt,
+            Sizing::PcntOfParentAllowingLoop(pcnt) => anchor_size * pcnt,
             Sizing::DeltaOfParent(delta) => anchor_size + delta.ux(pixels_per_ux),
             _ => 0.0
         }
@@ -61,7 +61,7 @@ impl GUI {
             let pixels_per_ux = self.pixels_per_ux();
 
             if (parent_bounding_box.is_some() || widget.ignores_parent_bounds) && widget.showing {
-                let parent_bounding_box = parent_bounding_box.unwrap_or_else(|| Rect::new(0.0,0.0,100000.0,100000.0));
+                let parent_bounding_box = parent_bounding_box.unwrap_or_else(|| Rect::new(0.0, 0.0, 100000.0, 100000.0));
                 for axis in 0..2 {
                     let anchor_pos = match widget.position[axis] {
                         Positioning::DeltaOfWidget(other_wid, _, _) => self.widget_reifications.get(&other_wid).expect("dependent wid must exist").position[axis],
@@ -92,12 +92,29 @@ impl GUI {
                                 let mut enclosing_rect = None;
                                 for child_wid in &internal_state.children {
                                     let child_reif = self.widget_reifications.get(child_wid).expect("child must exist");
-                                    if child_reif.widget.showing {
-                                        let child_bounds = child_reif.bounds();
-                                        enclosing_rect = match enclosing_rect {
-                                            Some(existing) => Some(Rect::enclosing_both(existing, child_bounds)),
-                                            None => Some(child_bounds)
-                                        };
+
+                                    match child_reif.widget.position[axis] {
+                                        Positioning::CenteredInParent | Positioning::PcntOfParent(_) =>
+                                            warn!("Loop, parent is dependent on surrounding children, but children are positioned relative to parent dim, widget: {:?}", child_reif.widget.signifier()),
+                                        _ => ()
+                                    };
+                                    match child_reif.widget.size[axis] {
+                                        Sizing::PcntOfParent(_) | Sizing::DeltaOfParent(_) =>
+                                            warn!("Loop, parent is dependent on surrounding children, but children are sized relative to parent dim, widget: {:?}", child_reif.widget.signifier()),
+                                        _ => ()
+                                    };
+
+                                    match child_reif.widget.size[axis] {
+                                        Sizing::PcntOfParentAllowingLoop(_) => (), // ignore, looping parent based sizing is ignored
+                                        _ => {
+                                            if child_reif.widget.showing {
+                                                let child_bounds = child_reif.bounds();
+                                                enclosing_rect = match enclosing_rect {
+                                                    Some(existing) => Some(Rect::enclosing_both(existing, child_bounds)),
+                                                    None => Some(child_bounds)
+                                                };
+                                            }
+                                        }
                                     }
                                 }
                                 let comparison_pos = internal_state.inner_position[axis];
@@ -144,7 +161,7 @@ impl GUI {
                                 Alignment::Right | Alignment::Bottom => anchor_pos + anchor_size + delta.ux(pixels_per_ux),
                                 _ => anchor_pos - effective_dim - delta.ux(pixels_per_ux)
                             }
-                        },
+                        }
                         Positioning::MatchWidget(other_wid) => alignment_point,
                         Positioning::Absolute(absolute_position) => absolute_position.ux(pixels_per_ux),
                     } + effective_dim * dim_multiplier;
@@ -279,7 +296,7 @@ impl GUI {
                                                         .color(widget.color * color_multiplier)
                                                         .size(effective_internal_dim)
                                                 )
-                                            },
+                                            }
                                             ImageSegmentation::Horizontal => {
                                                 let start = inner_pixel_offset - v2(0.0, effective_internal_dim.y);
                                                 let dim = effective_internal_dim;
@@ -289,17 +306,17 @@ impl GUI {
                                                     internal_state.draw_list = internal_state.draw_list.add_quad(
                                                         Quad::new(image.clone(), start)
                                                             .color(widget.color * color_multiplier)
-                                                            .sub_rect(Rect::new(0.0,0.0,0.5,1.0))
+                                                            .sub_rect(Rect::new(0.0, 0.0, 0.5, 1.0))
                                                             .size(v2(endcap_size, dim.y))
                                                     ).add_quad(
                                                         Quad::new(image.clone(), start + v2(endcap_size + middle_size, 0.0))
                                                             .color(widget.color * color_multiplier)
-                                                            .sub_rect(Rect::new(0.5,0.0,-0.5,1.0))
+                                                            .sub_rect(Rect::new(0.5, 0.0, -0.5, 1.0))
                                                             .size(v2(endcap_size, dim.y))
                                                     ).add_quad(
                                                         Quad::new(image.clone(), start + v2(endcap_size, 0.0))
                                                             .color(widget.color * color_multiplier)
-                                                            .sub_rect(Rect::new(0.5,0.0,0.5,1.0))
+                                                            .sub_rect(Rect::new(0.5, 0.0, 0.5, 1.0))
                                                             .size(v2(middle_size, dim.y))
                                                     );
                                                 } else {
@@ -307,16 +324,16 @@ impl GUI {
                                                     internal_state.draw_list = internal_state.draw_list.add_quad(
                                                         Quad::new(image.clone(), start)
                                                             .color(widget.color * color_multiplier)
-                                                            .sub_rect(Rect::new(0.0,0.0,0.5,1.0))
+                                                            .sub_rect(Rect::new(0.0, 0.0, 0.5, 1.0))
                                                             .size(v2(endcap_size, dim.y))
                                                     ).add_quad(
                                                         Quad::new(image.clone(), start + v2(endcap_size, 0.0))
                                                             .color(widget.color * color_multiplier)
-                                                            .sub_rect(Rect::new(0.5,0.0,-0.5,1.0))
+                                                            .sub_rect(Rect::new(0.5, 0.0, -0.5, 1.0))
                                                             .size(v2(endcap_size, dim.y))
                                                     );
                                                 }
-                                            },
+                                            }
                                             _ => warn!("unimplemented segmentation {:?}", segment)
                                         };
                                     }
@@ -367,9 +384,9 @@ impl GUI {
 //            debug!("Widget {} changed sufficiently to require update", signifier);
 //        }
 
-        if ! skip_update {
+        if !skip_update {
             let child_dependent = if should_update {
-                trace!(target: "gui_redraw", "{}Entering update of widget: {}, {:?}", "\t".repeat(widget_depth), signifier , self.widget_reification(wid).widget.widget_type);
+                trace!(target: "gui_redraw", "{}Entering update of widget: {}, {:?}", "\t".repeat(widget_depth), signifier, self.widget_reification(wid).widget.widget_type);
                 self.update_widget(g, wid, false)
             } else {
                 false
@@ -408,7 +425,7 @@ impl GUI {
         }
     }
 
-    pub fn recursive_draw_widget(&self, g: &mut GraphicsWrapper, wid: Wid, layer : GUILayer) {
+    pub fn recursive_draw_widget(&self, g: &mut GraphicsWrapper, wid: Wid, layer: GUILayer) {
         let widget_state = self.widget_reifications.get(&wid).expect("recursive update widget must take valid wid with known state");
         if widget_state.widget.draw_layer == layer {
             self.render_draw_list(g, &widget_state.draw_list);
@@ -445,7 +462,6 @@ impl GUI {
     }
 
 
-
     pub fn update(&mut self, g: &mut GraphicsAssets, force_update: bool) {
         if self.hover_widget == None && Instant::now().duration_since(self.hover_start) > self.hover_threshold {
             self.hover_widget = self.moused_over_widget;
@@ -453,7 +469,7 @@ impl GUI {
                 let pixels_per_ux = self.pixels_per_ux();
                 let mouse_pos = self.current_mouse_pos.clone();
 
-                let evt = UIEvent::HoverStart { over_widget : hover_widget, pos : EventPosition::absolute(mouse_pos, mouse_pos * pixels_per_ux) };
+                let evt = UIEvent::HoverStart { over_widget: hover_widget, pos: EventPosition::absolute(mouse_pos, mouse_pos * pixels_per_ux) };
                 self.handle_ui_event_for_self(&evt);
                 self.enqueue_event_excepting_self(&evt);
             }

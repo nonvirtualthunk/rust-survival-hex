@@ -6,5 +6,6 @@ use game::entities::combat::AttackReference;
 pub enum ControlEvents {
     ActionSelected(ActionType),
     ReactionSelected(ReactionType),
-    AttackSelected(AttackReference)
+    AttackSelected(AttackReference),
+    CounterattackSelected(AttackReference),
 }

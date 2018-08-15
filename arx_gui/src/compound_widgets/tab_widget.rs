@@ -49,8 +49,8 @@ pub struct TabWidget {
 }
 
 impl TabWidget {
-    pub fn new(tab_titles: Vec<&'static str>) -> TabWidget {
-        let tab_titles = tab_titles.map(|str| String::from(*str));
+    pub fn new<S : Into<String>>(tab_titles: Vec<S>) -> TabWidget {
+        let tab_titles : Vec<String> = tab_titles.into_iter().map(|s| s.into()).collect_vec();
         let num_tab_titles = tab_titles.len() as f32;
         let tab_bar_height = 3.ux();
         let body_color = Color::greyscale(0.8);
@@ -179,6 +179,6 @@ impl TabWidget {
 
 impl Default for TabWidget {
     fn default() -> Self {
-        TabWidget::new(Vec::new())
+        TabWidget::new(Vec::<Str>::new())
     }
 }

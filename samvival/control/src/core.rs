@@ -1,7 +1,6 @@
 use common::prelude::*;
 use game::World;
 use graphics::core::GraphicsWrapper;
-use conrod;
 use piston_window::*;
 use game::entities::TileData;
 use common::hex::*;
@@ -99,6 +98,7 @@ impl Game {
         world.register::<TileData>();
         world.register::<CharacterData>();
         world.register::<CombatData>();
+        world.register::<EquipmentData>();
         world.register::<InventoryData>();
         world.register::<SkillData>();
         world.register::<ItemData>();
@@ -133,7 +133,9 @@ impl Game {
                             cover: 0,
                             occupied_by: None,
                             elevation: 0,
-                        }).create(world);
+                        })
+                        .with(InventoryData::default())
+                        .create(world);
                     world.index_entity(tile, coord);
                 }
             }
@@ -166,7 +168,7 @@ impl Game {
         let bow = weapon_archetypes.with_name("longbow").create(world);
 
 
-        let  char_base = |name : Str| character_archetypes.with_name("human").clone()
+        let char_base = |name: Str| character_archetypes.with_name("human").clone()
             .with(IdentityData::new(name, taxonomy::Person));
 
         let archer = char_base("gunnar")
@@ -174,8 +176,9 @@ impl Game {
                 faction: player_faction,
                 sprite: String::from("elf/archer"),
                 name: String::from("Archer"),
-                move_speed: Sext::of_parts(1, 2), // one and 2 sixths
+                move_speed: Sext::of_parts(1, 0), // one and 0 sixths
                 health: Reduceable::new(25),
+                action_points: Reduceable::new(8),
                 ..Default::default()
             })
             .with(CombatData {
@@ -199,7 +202,7 @@ impl Game {
                 ..Default::default()
             })
             .with(ActionData {
-                active_reaction : reaction_types::Dodge.clone(),
+                active_reaction: reaction_types::Dodge.clone(),
                 ..Default::default()
             })
             .create(world);
@@ -212,15 +215,14 @@ impl Game {
         logic::movement::place_entity_in_world(world, archer, AxialCoord::new(0, 0));
 
 
-
-
         let spearman = char_base("haftdar")
             .with(CharacterData {
                 faction: player_faction,
                 sprite: String::from("human/spearman"),
                 name: String::from("Spearman"),
-                move_speed: Sext::of_parts(1, 2), // one and 2 sixths
+                move_speed: Sext::of_parts(1, 0), // one and 0 sixths
                 health: Reduceable::new(45),
+                action_points: Reduceable::new(8),
                 ..Default::default()
             })
             .with(CombatData {
@@ -246,7 +248,7 @@ impl Game {
                 ..Default::default()
             })
             .with(ActionData {
-                active_reaction : reaction_types::Counterattack.clone(),
+                active_reaction: reaction_types::Counterattack.clone(),
                 ..Default::default()
             })
             .create(world);
@@ -255,8 +257,7 @@ impl Game {
         let spear_throw = world.view().data::<ItemData>(spear).attacks.last().unwrap();
         logic::item::equip_item(world, spearman, spear, true);
         world.modify(spearman, CombatData::active_attack.set_to(AttackReference::of_attack(world.view(), spearman, spear_throw)), "switch to throw");
-        logic::movement::place_entity_in_world(world, spearman, AxialCoord::new(1,-1));
-
+        logic::movement::place_entity_in_world(world, spearman, AxialCoord::new(1, -1));
 
 
         let create_monster_at = |world_in: &mut World, pos: AxialCoord| {
@@ -285,7 +286,7 @@ impl Game {
                     ..Default::default()
                 })
                 .with(SkillData::default())
-                .with(InventoryData::default())
+                .with(EquipmentData::default())
                 .with(GraphicsData::default())
                 .with(IdentityData::of_kind(taxon("mud monster", &taxonomy::Monster)))
                 .create(world_in);

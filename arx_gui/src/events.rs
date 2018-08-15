@@ -48,7 +48,7 @@ pub enum WidgetEvent {
     RadioChanged{ new_index : i32 },
     ShowWidget(Wid),
     HideWidget(Wid),
-    ListItemClicked(usize)
+    ListItemClicked(usize, MouseButton)
 }
 
 #[derive(Clone, Debug)]

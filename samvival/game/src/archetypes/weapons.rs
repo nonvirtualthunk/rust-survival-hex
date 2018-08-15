@@ -112,7 +112,7 @@ pub fn weapon_archetypes() -> ArchetypeLibrary {
                     primary_damage_type: DamageType::Piercing,
                     secondary_damage_type: None,
                     range: 2,
-                    min_range: 1,
+                    min_range: 2,
                 },
                 Attack {
                     name: "smack",

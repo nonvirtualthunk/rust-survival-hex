@@ -10,6 +10,7 @@ pub fn character_archetypes() -> ArchetypeLibrary {
     let baseline : EntityBuilder = EntityBuilder::new()
         .with(SkillData::default())
         .with(InventoryData::default())
+        .with(EquipmentData::default())
         .with(PositionData::default())
         .with(GraphicsData::default())
         .with(ActionData::default())

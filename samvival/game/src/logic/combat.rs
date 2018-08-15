@@ -182,15 +182,23 @@ pub fn does_event_trigger_counterattack(world_view: &WorldView, counterer: Entit
 }
 
 pub fn closest_attack_location_with_cost(world_view: &WorldView, attacker: Entity, defender: Entity, attack: &Attack) -> Option<(AxialCoord, f64)> {
-    possible_attack_locations_with_cost(world_view, attacker, defender, attack).into_iter().min_by_key(|(k, v)| r64(*v))
+    // do the min by cost, adjusted ever so slightly by the actual hex in question, this is necessary to make this a stable selection, otherwise there might be many equidistant
+    // locations to use
+    possible_attack_locations_with_cost(world_view, attacker, defender, attack).into_iter().min_by_key(|(k, v)| r64(*v + (k.r as f64 * 0.0001) + (k.q as f64 * 0.00013)))
 }
 
-pub fn compute_attack_breakdown(world: &World, world_view: &WorldView, attacker: Entity, defender: Entity, attack: &Attack) -> AttackBreakdown {
+pub fn compute_attack_breakdown(world: &World, world_view: &WorldView, attacker: Entity, defender: Entity, attack: &Attack, attack_from : Option<AxialCoord>, ap_remaining : Option<i32>) -> AttackBreakdown {
     let mut attack_breakdown = AttackBreakdown::default();
 
     let attacker_data = world_view.character(attacker);
 
-    let mut attacker_strikes = attacker_data.action_points.cur_value() / attack.ap_cost as i32;
+    let ap_remaining = ap_remaining.unwrap_or(attacker_data.action_points.cur_value());
+    let base_attacker_strikes = ap_remaining / attack.ap_cost as i32;
+    let mut attacker_strikes = match attack.attack_type {
+        AttackType::Thrown => base_attacker_strikes.min(1),
+        _ => base_attacker_strikes
+    };
+
     let (defender_counter_attack, mut defender_counters) =
         combat::counters_for(world_view, defender, attacker, attack);
 
@@ -264,7 +272,7 @@ pub fn handle_attack(world: &mut World, attacker_ref: Entity, defender_ref: Enti
     if let Some(attack) = attack_ref.referenced_attack(world.view(), attacker_ref) {
         let world_view = world.view();
 
-        let attack_breakdown = compute_attack_breakdown(world, world_view, attacker_ref, defender_ref, attack);
+        let attack_breakdown = compute_attack_breakdown(world, world_view, attacker_ref, defender_ref, attack, None, None);
 
         world.start_event(GameEvent::Attack { attacker: attacker_ref, defender: defender_ref });
 
@@ -288,7 +296,9 @@ pub fn handle_attack(world: &mut World, attacker_ref: Entity, defender_ref: Enti
             // thrown natural attacks don't cause you to lose an entity when they occur, but otherwise we want to un-equip the weapon
             // and put it in the world
             if attack_ref.entity != attacker_ref {
-                item::unequip_item(world, attacker_ref, attack_ref.entity, true);
+                item::unequip_item(world, attack_ref.entity, attacker_ref, true);
+                item::remove_item_from_inventory(world, attack_ref.entity, attacker_ref);
+
                 let defender_pos = world_view.data::<PositionData>(defender_ref).hex;
                 let attacker_pos = world_view.data::<PositionData>(attacker_ref).hex;
 
@@ -422,10 +432,10 @@ pub fn counters_for(world_view: &WorldView, defender_ref: Entity, countering_ref
 }
 
 pub fn possible_attack_refs(world: &WorldView, attacker: Entity) -> Vec<AttackReference> {
-    let mut res = world.combat(attacker).natural_attacks.iter().enumerate().map(|(i, a)| AttackReference::new(attacker, i, a.name)).collect_vec();
-    for item_ref in &world.inventory(attacker).equipped {
+    let mut res = world.combat(attacker).natural_attacks.iter().enumerate().map(|(i, a)| AttackReference::new(attacker, i)).collect_vec();
+    for item_ref in &world.equipment(attacker).equipped {
         let item = world.item(*item_ref);
-        res.extend(item.attacks.iter().enumerate().map(|(i, a)| AttackReference::new(*item_ref, i, a.name)));
+        res.extend(item.attacks.iter().enumerate().map(|(i, a)| AttackReference::new(*item_ref, i)));
     }
     res
 }
@@ -435,24 +445,31 @@ pub fn possible_attacks(world: &WorldView, attacker: Entity) -> Vec<Attack> {
 }
 
 pub fn default_attack(world: &WorldView, attacker: Entity) -> Option<AttackReference> {
-    for item_ref in &world.inventory(attacker).equipped {
+    for item_ref in &world.equipment(attacker).equipped {
         let item = world.item(*item_ref);
         if let Some(attack) = item.attacks.first() {
-            return Some(AttackReference::new(*item_ref, 0, attack.name));
+            return Some(AttackReference::new(*item_ref, 0));
         }
     }
-    world.combat(attacker).natural_attacks.first().map(|a| AttackReference::new(attacker, 0, a.name))
+    world.combat(attacker).natural_attacks.first().map(|a| AttackReference::new(attacker, 0))
+}
+
+pub fn is_valid_counter_attack(world: &WorldView, counter_attacker: Entity, attack_ref : &AttackReference) -> bool {
+    attack_ref.is_melee(world, counter_attacker)
 }
 
 pub fn counter_attack_ref_to_use(world: &WorldView, counter_attacker: Entity) -> Option<AttackReference> {
-    primary_attack_ref(world, counter_attacker)
-        .filter(|par| par.is_melee(world, counter_attacker))
-        .or_else(|| {
-            let mut melee_attacks = possible_attack_refs(world, counter_attacker);
-            melee_attacks.retain(|a| a.is_melee(world, counter_attacker));
-            best_attack(world, counter_attacker, &melee_attacks)
-        })
+    let combat_data = world.data::<CombatData>(counter_attacker);
+    combat_data.active_counterattack.as_option().cloned()
+        .or_else(|| primary_attack_ref(world, counter_attacker)
+            .filter(|par| par.is_melee(world, counter_attacker))
+            .or_else(|| {
+                let mut melee_attacks = possible_attack_refs(world, counter_attacker);
+                melee_attacks.retain(|a| a.is_melee(world, counter_attacker));
+                best_attack(world, counter_attacker, &melee_attacks)
+            }))
 }
+
 pub fn counter_attack_to_use(world: &WorldView, counter_attacker: Entity) -> Option<&Attack> {
     counter_attack_ref_to_use(world, counter_attacker).and_then(|ar| ar.referenced_attack(world, counter_attacker))
 }
@@ -489,4 +506,19 @@ pub fn best_attack_against(world_view: &WorldView, attacker: Entity, attacks: &V
     let attacker = world_view.character(attacker);
     let defender = world_view.character(defender);
     attacks.get(0).map(|x| x.clone())
+}
+
+pub fn path_to_attack(world_view: &WorldView, attacker: Entity, defender: Entity, attack_ref : &AttackReference) -> Option<(Vec<AxialCoord>, f64)>{
+    if let Some(attack) = attack_ref.referenced_attack(world_view, attacker) {
+        if logic::combat::can_attack(world_view, attacker, defender, &attack, None, None) {
+            Some((Vec::new(), 0.0))
+        } else if let Some((attack_from, cost_to)) = logic::combat::closest_attack_location_with_cost(world_view, attacker, defender, &attack) {
+            logic::movement::path_to(world_view, attacker, attack_from)
+        } else {
+            None
+        }
+    } else {
+        warn!("path_to_attack used with invalid attack reference");
+        None
+    }
 }

@@ -22,6 +22,25 @@ pub trait DelegateToWidget where Self: Sized {
     fn id(&self) -> Wid {
         self.as_widget_immut().id
     }
+
+    fn reapply(&mut self, gui: &mut GUI) {
+        if !self.as_widget_immut().validate() {
+            error!("Constructing invalid widget\n{:?}", Backtrace::new());
+        }
+        if self.id() == NO_WID {
+            self.as_widget().id = gui.new_id();
+        }
+
+        gui.apply_widget(self.as_widget());
+        // the state override will have been applied to gui, if present, we can reset now
+        self.as_widget().state_override = None;
+    }
+    fn apply(mut self, gui: &mut GUI) -> Self {
+        self.reapply(gui);
+
+        self
+    }
+
     fn signifier(&self) -> String {
         if let Some(name) = self.as_widget_immut().name {
             String::from(name)
@@ -34,6 +53,10 @@ pub trait DelegateToWidget where Self: Sized {
         self
     }
     fn draw_layer(mut self, layer: GUILayer) -> Self {
+        self.set_draw_layer(layer);
+        self
+    }
+    fn set_draw_layer(&mut self, layer : GUILayer) -> &mut Self {
         self.as_widget().draw_layer = layer;
         self
     }
@@ -48,7 +71,7 @@ pub trait DelegateToWidget where Self: Sized {
         self.as_widget().position = [x, y];
         self
     }
-    fn size(mut self, w: Sizing, h: Sizing) -> Self {
+    fn size<S1 : Into<Sizing>, S2 : Into<Sizing>>(mut self, w: S1, h: S2) -> Self {
         self.set_size(w, h);
         self
     }
@@ -108,6 +131,10 @@ pub trait DelegateToWidget where Self: Sized {
         self.as_widget().border = border;
         self
     }
+    fn set_border_color(&mut self, border_color: Color) -> &mut Self {
+        self.as_widget().border.color = border_color;
+        self
+    }
     fn border(mut self, border: Border) -> Self {
         self.set_border(border);
         self
@@ -142,8 +169,8 @@ pub trait DelegateToWidget where Self: Sized {
         self.as_widget().position[0] = x;
         self
     }
-    fn set_size(&mut self, w: Sizing, h: Sizing) -> &mut Self {
-        self.as_widget().size = [w, h];
+    fn set_size<S1 : Into<Sizing>, S2 : Into<Sizing>>(&mut self, w: S1, h: S2) -> &mut Self {
+        self.as_widget().size = [w.into(), h.into()];
         self
     }
     fn margin(mut self, margin: UIUnits) -> Self {
@@ -154,20 +181,20 @@ pub trait DelegateToWidget where Self: Sized {
         self.as_widget().margin = margin;
         self
     }
-    fn x(mut self, x: Positioning) -> Self {
-        self.set_x(x);
+    fn x<P: Into<Positioning>>(mut self, x: P) -> Self {
+        self.set_x(x.into());
         self
     }
-    fn y(mut self, y: Positioning) -> Self {
+    fn y<P: Into<Positioning>>(mut self, y: P) -> Self {
         self.set_y(y);
         self
     }
-    fn set_y(&mut self, y: Positioning) -> &mut Self {
-        self.as_widget().position[1] = y;
+    fn set_y<P: Into<Positioning>>(&mut self, y: P) -> &mut Self {
+        self.as_widget().position[1] = y.into();
         self
     }
-    fn below(self, other : &Widget, delta : UIUnits) -> Self {
-        self.y(Positioning::below(other, delta))
+    fn below<W : DelegateToWidget>(self, other : &W, delta : UIUnits) -> Self {
+        self.y(Positioning::below(other.as_widget_immut(), delta))
     }
     fn above(self, other : &Widget, delta : UIUnits) -> Self {
         self.y(Positioning::above(other, delta))
@@ -205,20 +232,20 @@ pub trait DelegateToWidget where Self: Sized {
         self.as_widget().alignment[1] = Alignment::Bottom;
         self
     }
-    fn width(mut self, w: Sizing) -> Self {
-        self.set_width(w);
+    fn width<S : Into<Sizing>>(mut self, w: S) -> Self {
+        self.set_width(w.into());
         self
     }
-    fn set_width(&mut self, w: Sizing) -> &mut Self {
-        self.as_widget().size[0] = w;
+    fn set_width<S : Into<Sizing>>(&mut self, w: S) -> &mut Self {
+        self.as_widget().size[0] = w.into();
         self
     }
     fn height<S: Into<Sizing>>(mut self, h: S) -> Self {
         self.set_height(h.into());
         self
     }
-    fn set_height(&mut self, h: Sizing) -> &mut Self {
-        self.as_widget().size[1] = h;
+    fn set_height<S: Into<Sizing>>(&mut self, h: S) -> &mut Self {
+        self.as_widget().size[1] = h.into();
         self
     }
     fn only_consume(mut self, consumption: EventConsumption) -> Self {

@@ -30,23 +30,63 @@ pub fn max_moves_remaining(world_view : &WorldView, mover : Entity, multiplier: 
 pub fn hexes_in_range(world_view : &WorldView, mover : Entity, range : Sext) -> HashMap<AxialCoord, f64> {
     let mover_c = world_view.character(mover);
     let start_position = mover_c.position.hex;
-    flood_search(start_position, range.as_f64(), |from, to| move_cost_to(world_view, &mover_c, to) as f64, |&from| from.neighbors_vec())
+    flood_search(start_position, range.as_f64(), |from, to| move_cost_to_f32(world_view, &mover_c, to) as f64, |&from| from.neighbors_vec())
 }
 
 pub fn path_to(world_view: &WorldView, mover : Entity, to : AxialCoord) -> Option<(Vec<AxialCoord>, f64)> {
     let mover_c = world_view.character(mover);
     let from = mover_c.position.hex;
-    astar(&from, |c| c.neighbors_vec().into_iter().map(|c| (c, r32(move_cost_to(world_view, &mover_c, &c) as f32))), |c| c.distance(&to), |c| *c == to)
+    astar(&from, |c| c.neighbors_vec().into_iter().map(|c| (c, r32(move_cost_to_f32(world_view, &mover_c, &c) as f32))), |c| c.distance(&to), |c| *c == to)
         .map(|(vec, cost)| (vec, cost.raw() as f64))
+}
+
+pub fn path_adjacent_to(world_view: &WorldView, mover : Entity, to : Entity) -> Option<(Vec<AxialCoord>, R32)> {
+    let mover_c = world_view.character(mover);
+    let from = mover_c.position.hex;
+    let (possibles, center) = if let Some(pos) = world_view.data_opt::<PositionData>(to) {
+        (pos.hex.neighbors_vec(), pos.hex)
+    } else {
+        warn!("path_adjacent_to called against a non-position-data entity");
+        (vec![], AxialCoord::new(0,0))
+    };
+    path_any(world_view, mover, from, &possibles.into_iter().collect(), center)
+}
+
+pub fn portion_of_path_traversable_this_turn(view : &WorldView, mover : Entity, path : &Vec<AxialCoord>) -> Vec<AxialCoord> {
+    let character = view.character(mover);
+    let mut moves = character.moves;
+    let mut ret = Vec::new();
+    let mut ap_remaining = character.action_points.cur_value();
+    if let Some(start) = path.first() { ret.push(*start) }
+
+    for hex in path.iter().skip(1) {
+        let hex_cost = move_cost_to(view, mover, hex);
+        while hex_cost > moves && ap_remaining > 0 {
+            ap_remaining -= 1;
+            moves += character.move_speed;
+        }
+
+        if moves >= hex_cost {
+            ret.push(*hex);
+            moves -= hex_cost;
+        } else {
+            break;
+        }
+    }
+    ret
 }
 
 
 pub fn hex_ap_cost(world : &WorldView, mover : Entity, hex : AxialCoord) -> u32 {
+    let hex_cost = move_cost_to(world, mover, &hex);
+    ap_cost_for_move_cost(world, mover, hex_cost)
+}
+
+pub fn ap_cost_for_move_cost(world : &WorldView, mover : Entity, move_cost : Sext) -> u32 {
     let mover = world.character(mover);
-    let hex_cost = world.tile(hex).move_cost;
     let mut moves = mover.moves;
     let mut ap_cost = 0;
-    while moves < hex_cost {
+    while moves < move_cost {
         moves += mover.move_speed;
         ap_cost += 1;
     }
@@ -116,7 +156,7 @@ pub fn remove_entity_from_world(world: &mut World, entity : Entity) {
 
 pub fn path(world : &WorldView, mover : Entity, from: AxialCoord, to: AxialCoord) -> Option<(Vec<AxialCoord>, R32)> {
     let mover = world.character(mover);
-    astar(&from, |c| c.neighbors_vec().into_iter().map(|c| (c, r32(move_cost_to(world, &mover, &c)))), |c| c.distance(&to), |c| *c == to)
+    astar(&from, |c| c.neighbors_vec().into_iter().map(|c| (c, r32(move_cost_to_f32(world, &mover, &c)))), |c| c.distance(&to), |c| *c == to)
 }
 
 pub fn path_any_v(world : &WorldView, mover : Entity, from: AxialCoord, to: &Vec<AxialCoord>, heuristical_center : AxialCoord) -> Option<(Vec<AxialCoord>, R32)> {
@@ -127,11 +167,23 @@ pub fn path_any_v(world : &WorldView, mover : Entity, from: AxialCoord, to: &Vec
 
 pub fn path_any(world : &WorldView, mover : Entity, from: AxialCoord, to: &HashSet<AxialCoord>, heuristical_center : AxialCoord) -> Option<(Vec<AxialCoord>, R32)> {
     let mover = world.character(mover);
-    astar(&from, |c| c.neighbors_vec().into_iter().map(|c| (c, r32(move_cost_to(world, &mover, &c)))), |c| c.distance(&heuristical_center), |c| to.contains(c))
+    astar(&from, |c| c.neighbors_vec().into_iter().map(|c| (c, r32(move_cost_to_f32(world, &mover, &c)))), |c| c.distance(&heuristical_center), |c| to.contains(c))
 }
 
 
-pub fn move_cost_to(world: &WorldView, mover : &Character, to: &AxialCoord) -> f32 {
+pub fn move_cost_to(world : &WorldView, mover : Entity, to : &AxialCoord) -> Sext {
+    if let Some(tile) = world.tile_opt(*to) {
+        if tile.occupied_by.is_none() {
+            tile.move_cost
+        } else {
+            Sext::of(100000)
+        }
+    } else {
+        Sext::of(1000000)
+    }
+}
+
+pub fn move_cost_to_f32(world: &WorldView, mover : &Character, to: &AxialCoord) -> f32 {
     if let Some(tile) = world.tile_opt(*to) {
         if tile.occupied_by.is_none() {
             tile.move_cost.as_f32()

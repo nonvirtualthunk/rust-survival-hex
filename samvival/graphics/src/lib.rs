@@ -20,6 +20,8 @@ extern crate samvival_game as game;
 extern crate arx_graphics as graphics;
 #[macro_use] extern crate itertools;
 extern crate rusttype;
+extern crate pretty_env_logger;
+#[macro_use] extern crate log;
 
 //pub mod core;
 //pub use core::*;

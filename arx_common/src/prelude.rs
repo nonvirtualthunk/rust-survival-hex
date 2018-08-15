@@ -7,6 +7,7 @@ use interpolation;
 
 
 pub use itertools::Itertools;
+use std::time::Duration;
 
 pub type Vec3i = Vector3<i32>;
 pub type Vec3f = Vector3<f32>;
@@ -203,4 +204,13 @@ pub enum Orientation {
     Horizontal,
     Vertical,
     Depth
+}
+
+pub trait ToMillis {
+    fn to_millis(&self) -> f64;
+}
+impl ToMillis for Duration {
+    fn to_millis(&self) -> f64 {
+        ((self.as_secs() * 1000) as f64) + self.subsec_millis() as f64
+    }
 }

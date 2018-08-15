@@ -1,17 +1,18 @@
-#![feature(box_syntax)]
 #![allow(unused_imports)]
 #![allow(unused_variables)]
-#![feature(get_type_id)]
-#![feature(entry_and_modify)]
-#![feature(core_intrinsics)]
 #![allow(where_clauses_object_safety)]
 #![allow(dead_code)]
 #![allow(non_upper_case_globals)]
 
+#![feature(get_type_id)]
+#![feature(entry_and_modify)]
+#![feature(core_intrinsics)]
+#![feature(box_syntax)]
 #![feature(extern_prelude)]
 #![feature(const_fn)]
 #![feature(type_ascription)]
 #![feature(nll)]
+#![feature(vec_remove_item)]
 
 extern crate arx_common as common;
 extern crate either;

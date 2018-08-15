@@ -44,6 +44,10 @@ impl IdentityData {
             kind
         }
     }
+
+    pub fn effective_name(&self) -> String {
+        self.name.clone().unwrap_or_else(|| strf(self.kind.name))
+    }
 }
 
 impl Default for IdentityData {
