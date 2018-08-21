@@ -42,6 +42,7 @@ use game::reflect::*;
 use gui::messages_widget::MessagesDisplay;
 use gui::messages_widget::Message;
 use gui::inventory_widget::*;
+use game::entities::inventory::InventoryData;
 
 
 pub struct TacticalEventBundle<'a, 'b> {
@@ -78,6 +79,7 @@ impl TacticalGui {
         let main_area = Widget::div()
             .size(Sizing::DeltaOfParent(0.ux()), Sizing::DeltaOfParent(0.ux()))
             .position(Positioning::origin(), Positioning::origin())
+            .named("main tactical gui area")
             .apply(gui);
 
         let victory_widget = Widget::window(Color::greyscale(0.9), 2)
@@ -149,20 +151,26 @@ impl TacticalGui {
                     let ap_remaining = cdata.action_points.cur_value();
                     let cur_move = cdata.moves.as_f64();
                     let move_speed = cdata.move_speed.as_f64();
-                    let max_possible_strikes = ap_remaining / ap_per_strike as i32;
+                    let max_possible_strikes = cdata.action_points.max_value() / ap_per_strike as i32;
 
+                    let is_thrown = attack.attack_type == AttackType::Thrown;
                     let strikes_at_cost = |move_cost : &f64| -> i32 {
                         let additional_move_required = *move_cost - cur_move;
                         let additional_ap_required = (additional_move_required / move_speed).ceil() as i32;
-                        (ap_remaining - additional_ap_required) / ap_per_strike as i32
+                        let raw = (ap_remaining - additional_ap_required) / ap_per_strike as i32;
+                        if is_thrown {
+                            raw.min(1)
+                        } else {
+                            raw
+                        }
                     };
 
 
-                    let strike_count_colors = [Color::new(0.2, 0.6, 0.2, 0.6), Color::new(0.25, 0.4, 0.15, 0.6), Color::new(0.3, 0.35, 0.1, 0.6), Color::new(0.35,0.35,0.1,0.45)];
+                    let strike_count_colors = [Color::new(0.2, 0.6, 0.2, 0.8), Color::new(0.25, 0.4, 0.15, 0.8), Color::new(0.3, 0.35, 0.1, 0.8), Color::new(0.35,0.35,0.1,0.8)];
 
-                    let color_for_strike_count = |sc : i32| if sc == 0 { Color::new(0.4,0.4,0.4,0.35) } else { strike_count_colors[(max_possible_strikes - sc) as usize] };
+                    let color_for_strike_count = |sc : i32| if sc == 0 { Color::new(0.4,0.4,0.4,0.8) } else { strike_count_colors[(max_possible_strikes - sc).min(3) as usize] };
                     for (hex,cost) in &hexes {
-                        if hex != &current_position{
+//                        if hex != &current_position{
                             if let Some(tile) = view.entity_by_key(hex) {
                                 let strikes_in_this_tile = strikes_at_cost(cost);
                                 let neighbors = hex.neighbors_vec();
@@ -182,7 +190,7 @@ impl TacticalGui {
                                     }
                                 }
                             }
-                        }
+//                        }
                     }
 
                     for (entity, cdata) in view.entities_with_data::<CharacterData>() {
@@ -271,33 +279,49 @@ impl TacticalGui {
     }
 
 
-    pub fn update_gui(&mut self, world: &mut World, gui: &mut GUI, frame_id: Option<Wid>, game_state: GameState) {
-        let world_view = world.view_at_time(game_state.display_event_clock);
+    pub fn update_gui(&mut self, world: &mut World, world_view : &WorldView, gui: &mut GUI, frame_id: Option<Wid>, game_state: GameState) {
+//        let world_view = world.view_at_time(game_state.display_event_clock);
 
         self.messages_display.update(gui);
 
         if let Some(selected) = game_state.selected_character {
+            let mut control = ControlContext { event_bus : &mut self.event_bus };
+
             self.main_area.set_width(Sizing::DeltaOfParent(-40.ux())).reapply(gui);
-            self.character_info_widget.update(&world_view, gui, &game_state, ControlContext { event_bus : &mut self.event_bus });
+            self.character_info_widget.update(&world_view, gui, &game_state, &mut control);
             let char = world_view.character(selected);
 
             if char.faction == game_state.player_faction {
                 let actions = vec![action_types::MoveAndAttack, action_types::Move, action_types::Run, action_types::InteractWithInventory];
-                self.action_bar.update(gui, actions, &game_state, ControlContext { event_bus : &mut self.event_bus });
+                self.action_bar.update(gui, actions, &game_state, &mut control);
 //                self.reaction_bar.set_x(Positioning::left_of(self.character_info_widget.as_widget(), 1.ux())).as_widget().reapply(gui);
 //                self.reaction_bar.set_y(Positioning::constant(2.ux())).as_widget().reapply(gui);
                 let reactions = vec![reaction_types::Defend, reaction_types::Dodge, reaction_types::Block, reaction_types::Counterattack];
-                self.reaction_bar.update(gui, reactions, char.action.active_reaction.clone(), &game_state, ControlContext { event_bus : &mut self.event_bus });
+                self.reaction_bar.update(gui, reactions, char.action.active_reaction.clone(), &game_state, &mut control);
             } else {
                 self.action_bar.set_showing(false).reapply(gui);
                 self.reaction_bar.set_showing(false).reapply(gui);
             }
 
-            self.update_attack_details(world, &world_view, gui, &game_state, selected);
+            TacticalGui::update_attack_details(&mut self.attack_details_widget, world, &world_view, gui, &game_state, selected);
 
 
-            let items = &world_view.data::<InventoryData>(selected).items;
-            self.inventory_widget.update(gui, world, InventoryDisplayData::new(items.clone(), "Character Inventory"), vec![InventoryDisplayData::new(items.clone(), "Other inventory")]);
+            let inv_data = world_view.data::<InventoryData>(selected);
+            let items = &inv_data.items;
+            let main_inv = vec![InventoryDisplayData::new(items.clone(), "Character Inventory", vec![selected], true, inv_data.inventory_size)];
+
+            let mut ground_items = Vec::new();
+            let mut ground_entities = Vec::new();
+            for ground_coord in vec![char.position.hex].extended_by(char.position.hex.neighbors_vec()) {
+                if let Some(ent) = world_view.tile_ent_opt(ground_coord) {
+                    ground_entities.push(ent.entity);
+                    if let Some(inv) = world_view.data_opt::<InventoryData>(ent.entity) {
+                        ground_items.extend(inv.items.clone());
+                    }
+                }
+            }
+            let other_inv = vec![InventoryDisplayData::new(ground_items, "Ground", ground_entities, false, None)];
+            self.inventory_widget.update(gui, world, main_inv, other_inv, &mut control);
         } else {
             self.main_area.set_width(Sizing::DeltaOfParent(0.ux())).reapply(gui);
 
@@ -327,11 +351,42 @@ impl TacticalGui {
                         } else {
                             self.messages_display.add_message(Message::new("Only melee attacks can be used as counter-attacks, reach and ranged cannot."));
                         }
-                    }
+                    },
                     ControlEvents::ReactionSelected(reaction_type) => {
                         println!("Selected reaction type : {:?}", reaction_type);
                         world.modify(selected, ActionData::active_reaction.set_to(reaction_type.clone()), "reaction selected");
                         world.add_event(GameEvent::SelectedReactionChanged { entity : selected, reaction_type : reaction_type.clone() });
+                    },
+                    ControlEvents::ItemTransferRequested { item , from, to } => {
+                        if let Some(from) = from.find(|ent| world_view.data_opt::<InventoryData>(*ent).map(|inv| inv.items.contains(item)).unwrap_or(false)) {
+                            let from_pos = world_view.data_opt::<PositionData>(*from).map(|pd| pd.hex).unwrap_or(AxialCoord::new(0,0));
+                            // if these are ground tiles, pick the closest one
+                            let single_to = if to.iter().all(|to| world_view.has_data::<TileData>(*to)) {
+                                to.iter().min_by_key(|to| world_view.data::<TileData>(**to).position.distance(&from_pos))
+                            } else {
+                                to.first()
+                            };
+                            if let Some(single_to) = single_to {
+                                if logic::item::is_item_in_inventory_of(world, *item, *from) {
+                                    if logic::item::is_item_equipped_by(world, *item, *from) {
+                                        logic::item::unequip_item(world, *item, *from, true);
+                                    }
+                                    logic::item::remove_item_from_inventory(world, *item, *from);
+                                    logic::item::put_item_in_inventory(world, *item, *single_to);
+                                } else {
+                                    error!("Could not transfer, item no longer in source");
+                                }
+                            }
+                        } else {
+                            error!("none of the from entities actually held the desired item")
+                        }
+                    },
+                    ControlEvents::EquipItemRequested { item, equip_on } => {
+                        if ! logic::item::is_item_equipped_by(world, *item, *equip_on) {
+                            logic::item::equip_item(world, *item, *equip_on, true);
+                        } else {
+                            logic::item::unequip_item(world, *item, *equip_on, true);
+                        }
                     }
                 }
             }
@@ -350,24 +405,24 @@ impl TacticalGui {
         }
     }
 
-    pub fn update_attack_details(&mut self, world: &World, view : &WorldView, gui : &mut GUI, game_state : &GameState, selected : Entity) {
+    pub fn update_attack_details(attack_details_widget : &mut AttackDetailsWidget, world: &World, view : &WorldView, gui : &mut GUI, game_state : &GameState, selected : Entity) {
         use game::logic::*;
         if let Some(hovered_char) = view.tile_opt(game_state.hovered_hex_coord).and_then(|e| e.occupied_by) {
             if ! game_state.animating && faction::is_enemy(view, selected, hovered_char) {
                 if let Some(attack) = combat::primary_attack(view, selected) {
-                    self.attack_details_widget.set_position(Positioning::constant((game_state.mouse_pixel_pos.x + 20.0).px()), Positioning::constant((game_state.mouse_pixel_pos.y + 20.0).px()));
-                    self.attack_details_widget.set_showing(true);
+                    attack_details_widget.set_position(Positioning::constant((game_state.mouse_pixel_pos.x + 20.0).px()), Positioning::constant((game_state.mouse_pixel_pos.y + 20.0).px()));
+                    attack_details_widget.set_showing(true);
                     if let Some((attack_from, cost)) = logic::combat::closest_attack_location_with_cost(view, selected, hovered_char, &attack) {
                         let current_ap = view.data::<CharacterData>(selected).action_points.cur_value();
                         let ap_remaining_after_move = (current_ap - logic::movement::ap_cost_for_move_cost(view, selected, Sext::of_rounded_up(cost)) as i32).max(0);
-                        self.attack_details_widget.update(gui, world, view, selected, hovered_char, &attack, Some(attack_from), ap_remaining_after_move);
+                        attack_details_widget.update(gui, world, view, selected, hovered_char, &attack, Some(attack_from), ap_remaining_after_move);
                     } else {
-                        self.attack_details_widget.update(gui, world, view, selected, hovered_char, &attack, None, 0);
+                        attack_details_widget.update(gui, world, view, selected, hovered_char, &attack, None, 0);
                     }
                 }
                 return;
             }
         }
-        self.attack_details_widget.hide(gui);
+        attack_details_widget.hide(gui);
     }
 }

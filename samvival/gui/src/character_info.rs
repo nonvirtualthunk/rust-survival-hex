@@ -36,28 +36,28 @@ impl CharacterInfoWidget {
             .size(Sizing::Constant(40.0.ux()), Sizing::PcntOfParent(1.0))
             .position(Positioning::Constant(0.ux()), Positioning::Constant(0.ux()))
             .alignment(Alignment::Top, Alignment::Right)
+            .margin(1.ux())
             .showing(false)
             .apply(gui);
 
         let name_widget = Widget::text("Name", 20)
-            .position(Positioning::CenteredInParent, Positioning::Constant(2.ux()))
-            .alignment(Alignment::Top, Alignment::Left)
+            .x(Positioning::CenteredInParent)
             .parent(&main_widget)
             .apply(gui);
 
         let unit_icon_background = Widget::image("ui/blank", Color::white(), 1)
-            .position(Positioning::Constant(2.ux()), Positioning::Constant(2.ux()))
-            .size(Sizing::SurroundChildren, Sizing::SurroundChildren)
+            .x(1.ux())
+            .below(&name_widget, 0.2.ux())
+            .surround_children()
             .parent(&main_widget)
             .apply(gui);
 
         let unit_icon = Widget::image("ui/blank", Color::white(), 0)
-            .position(Positioning::Constant(0.ux()), Positioning::Constant(0.ux()))
             .parent(&unit_icon_background)
             .apply(gui);
 
         let character_stats = vec![
-            CharacterStat::new_reduceable("HP", |cdata| &cdata.health, "Health, characters fall unconscious if this reaches 0"),
+            CharacterStat::new_reduceable("HP", |cdata| &cdata.health, "Health. Characters fall unconscious if this reaches 0"),
             CharacterStat::new("AP", |cdata| cdata.action_points.cur_value(), |cdata| cdata.action_points.max_value(),
                                "Action Points, represents how much more this character can do this turn. Moving and using actions consume AP, AP resets every turn"),
             CharacterStat::cur_only("Move Speed", |cdata| cdata.move_speed,
@@ -71,13 +71,13 @@ impl CharacterInfoWidget {
         let character_stats_widget = ListWidget::featherweight()
             .parent(&main_widget)
             .size(Sizing::match_parent(), Sizing::SurroundChildren)
-            .position(Positioning::ux(2.0), Positioning::below(&unit_icon_background, 10.px()));
+            .position(Positioning::ux(1.0), Positioning::below(&unit_icon_background, 10.px()));
 
         let tabs = TabWidget::new(vec!["Attacks", "Skills"])
             .parent(&main_widget)
             .size(Sizing::ux(30.0), Sizing::ux(50.0))
-            .position(Positioning::ux(2.0), Positioning::ux(30.0))
-            .apply(gui);
+            .position(Positioning::ux(1.0), Positioning::ux(30.0))
+            .apply_all(gui);
 
         let mut skills = ListWidget::new()
             .parent(tabs.tab_named("Skills"))
@@ -101,7 +101,7 @@ impl CharacterInfoWidget {
         }
     }
 
-    pub fn update(&mut self, world_view: & WorldView, gui: &mut GUI, game_state: &GameState, control: ControlContext) {
+    pub fn update(&mut self, world_view: & WorldView, gui: &mut GUI, game_state: &GameState, control: &mut ControlContext) {
         if let Some(selected) = game_state.selected_character {
             let character = world_view.character(selected);
             let skills = world_view.skills(selected);

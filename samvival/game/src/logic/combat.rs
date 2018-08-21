@@ -170,10 +170,10 @@ pub fn possible_attack_locations_with_cost(world_view: &WorldView, attacker: Ent
 }
 
 pub fn does_event_trigger_counterattack(world_view: &WorldView, counterer: Entity, event: &GameEventWrapper<GameEvent>) -> bool {
-    if let GameEvent::Strike { attacker, defender, strike_number, .. } = event.event {
+    if let GameEvent::Strike { attacker, defender, ref strike_result, .. } = event.event {
         if event.is_ended() && counterer == defender {
             let combat_data = world_view.data::<CombatData>(defender);
-            if combat_data.counters_per_event as u8 > strike_number && combat_data.counters_remaining.cur_value() > 0 {
+            if combat_data.counters_per_event as u8 > strike_result.strike_number && combat_data.counters_remaining.cur_value() > 0 {
                 return true;
             }
         }
@@ -278,8 +278,8 @@ pub fn handle_attack(world: &mut World, attacker_ref: Entity, defender_ref: Enti
 
         for strike_index in attack_breakdown.ordering {
             match strike_index {
-                StrikeIndex::Strike(i) => handle_strike(world, attacker_ref, defender_ref, &attack_breakdown.strikes[i], i as u8),
-                StrikeIndex::Counter(i) => handle_strike(world, defender_ref, attacker_ref, &attack_breakdown.counters[i], i as u8)
+                StrikeIndex::Strike(i) => handle_strike(world, attacker_ref, defender_ref, attack_ref.entity, attack, &attack_breakdown.strikes[i], i as u8),
+                StrikeIndex::Counter(i) => handle_strike(world, defender_ref, attacker_ref, attack_ref.entity, attack, &attack_breakdown.counters[i], i as u8)
             }
         }
 
@@ -318,7 +318,7 @@ Okay, if we start from basis of 3d6 that gives us a normal-ish distribution betw
 Skills don't automatically give a curve, but specific levels give discrete bumps.
 */
 
-pub fn handle_strike(world: &mut World, attacker_ref: Entity, defender_ref: Entity, strike: &StrikeBreakdown, strike_number: u8) {
+pub fn handle_strike(world: &mut World, attacker_ref: Entity, defender_ref: Entity, weapon : Entity, attack : &Attack, strike: &StrikeBreakdown, strike_number: u8) {
     let seed = world.random_seed(13);
     let mut rng: StdRng = SeedableRng::from_seed(seed);
 
@@ -361,10 +361,15 @@ pub fn handle_strike(world: &mut World, attacker_ref: Entity, defender_ref: Enti
         world.start_event(GameEvent::Strike {
             attacker: attacker_ref,
             defender: defender_ref,
-            damage_done: damage_total,
-            hit: true,
-            killing_blow: false,
-            strike_number,
+            attack: box attack.clone(),
+            strike_result : box StrikeResult {
+                damage_types : strike.damage_types.clone(),
+                damage_done : damage_total as i32,
+                hit : true,
+                killing_blow: false,
+                strike_number,
+                weapon : if weapon == attacker_ref { None } else { Some(weapon) }
+            }
         });
 
         logic::character::apply_damage_to_character(world, defender_ref, damage_total, &strike.damage_types);
@@ -375,19 +380,29 @@ pub fn handle_strike(world: &mut World, attacker_ref: Entity, defender_ref: Enti
         world.end_event(GameEvent::Strike {
             attacker: attacker_ref,
             defender: defender_ref,
-            damage_done: damage_total,
-            hit: true,
-            killing_blow,
-            strike_number,
+            attack: box attack.clone(),
+            strike_result : box StrikeResult {
+                damage_types : strike.damage_types.clone(),
+                damage_done : damage_total as i32,
+                hit : true,
+                killing_blow,
+                strike_number,
+                weapon : if weapon == attacker_ref { None } else { Some(weapon) }
+            }
         });
     } else {
         world.add_event(GameEvent::Strike {
             attacker: attacker_ref,
             defender: defender_ref,
-            damage_done: 0,
-            hit: false,
-            killing_blow: false,
-            strike_number,
+            attack: box attack.clone(),
+            strike_result : box StrikeResult {
+                damage_types : Vec::new(),
+                damage_done : 0,
+                hit : false,
+                killing_blow : false,
+                strike_number,
+                weapon : if weapon == attacker_ref { None } else { Some(weapon) }
+            }
         });
     }
 }
@@ -425,7 +440,7 @@ pub fn counters_for(world_view: &WorldView, defender_ref: Entity, countering_ref
                 (attack.clone(), 0)
             }
         } else {
-            warn!("Not countering, no counter attack to use found");
+            trace!("Not countering, no counter attack to use found");
             (Attack::default(), 0)
         }
     }

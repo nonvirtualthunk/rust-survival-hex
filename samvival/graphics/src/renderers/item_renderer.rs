@@ -11,18 +11,24 @@ use common::hex::AxialCoord;
 use common::hex::CartVec;
 use common::color::Color;
 use common::Rect;
+use std::collections::HashMap;
+
+use game::entities::Taxon;
+use graphics::ImageIdentifier;
 
 
 pub struct ItemRenderer {
     items_to_draw: Vec<Entity>,
-    cached_game_time : Option<GameEventClock>
+    cached_game_time : Option<GameEventClock>,
+    item_images_by_taxon : HashMap<Taxon, ImageIdentifier>,
 }
 
 impl ItemRenderer {
     pub fn new() -> ItemRenderer {
         ItemRenderer {
             items_to_draw: Vec::new(),
-            cached_game_time : None
+            cached_game_time : None,
+            item_images_by_taxon : HashMap::new(),
         }
     }
 
@@ -51,7 +57,38 @@ impl ItemRenderer {
         }
     }
 
-    pub fn render_items(&mut self, world: &WorldView, _bounds : Rect<f32>) -> DrawList {
+    pub fn image_for(resources : &mut GraphicsResources, kind : &Taxon) -> ImageIdentifier {
+        let mut taxon = Some(kind);
+        while taxon.is_some() {
+            let image_ident = format!("entities/items/{}", taxon.unwrap().name);
+            if resources.is_valid_texture(image_ident.clone()) {
+                return image_ident;
+            } else {
+                taxon = taxon.and_then(|t| t.parent);
+            }
+        }
+        strf("entities/items/default")
+    }
+
+    pub fn cached_image_for(item_images_by_taxon : &mut HashMap<Taxon, ImageIdentifier>, resources : &mut GraphicsResources, ident_data : &IdentityData) -> ImageIdentifier {
+        if let Some(item_image) = item_images_by_taxon.get(&ident_data.kind) {
+            item_image.clone()
+        } else {
+            let mut taxon = Some(&ident_data.kind);
+            while taxon.is_some() {
+                let image_ident = format!("entities/items/{}", taxon.unwrap().name);
+                if resources.is_valid_texture(image_ident.clone()) {
+                    item_images_by_taxon.insert(ident_data.kind.clone(), image_ident.clone());
+                    return image_ident;
+                } else {
+                    taxon = taxon.and_then(|t| t.parent);
+                }
+            }
+            strf("entities/items/default")
+        }
+    }
+
+    pub fn render_items(&mut self, world: &WorldView, resources : &mut GraphicsResources, _bounds : Rect<f32>) -> DrawList {
         if self.cached_game_time != Some(world.current_time) {
             self.identify_relevant_entities(world);
         }
@@ -67,7 +104,8 @@ impl ItemRenderer {
             // Main item display
             if let Some(pos) = ItemRenderer::draw_at(world, ent) {
                 let pos = pos.as_cart_vec();
-                let quad = Quad::new(format!("entities/items/{}", ident_data.kind.name), pos.0).centered().color(graphics_data.color);
+                let img = ItemRenderer::cached_image_for(&mut self.item_images_by_taxon, resources, ident_data);
+                let quad = Quad::new(img, pos.0).centered().color(graphics_data.color);
                 quads.push(quad);
             } else {
                 warn!("Tried to draw item {} but could not identify a position to do so", ent);

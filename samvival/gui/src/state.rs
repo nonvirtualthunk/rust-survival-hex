@@ -22,3 +22,9 @@ pub struct GameState {
 pub struct ControlContext<'a> {
     pub event_bus : &'a mut EventBus<ControlEvents>
 }
+
+impl <'a> ControlContext<'a> {
+    pub fn trigger_event(&mut self, evt : ControlEvents) {
+        self.event_bus.push_event(evt);
+    }
+}

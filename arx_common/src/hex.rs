@@ -11,11 +11,11 @@ use datastructures::PerfectHashable;
 use std::fmt;
 
 
-const AXIAL_DELTAS: [AxialCoord; 6] =
+pub const AXIAL_DELTAS: [AxialCoord; 6] =
     [AxialCoord { q: 1, r: 0 }, AxialCoord { q: 1, r: -1 }, AxialCoord { q: 0, r: -1 },
         AxialCoord { q: -1, r: 0 }, AxialCoord { q: -1, r: 1 }, AxialCoord { q: 0, r: 1 }];
 
-const _CUBE_DELTAS: [CubeCoord; 6] =
+pub const CUBE_DELTAS: [CubeCoord; 6] =
     [CubeCoord { x: 1, y: -1, z: 0 }, CubeCoord { x: 1, y: 0, z: -1 }, CubeCoord { x: 0, y: 1, z: -1 },
         CubeCoord { x: -1, y: 1, z: 0 }, CubeCoord { x: -1, y: 0, z: 1 }, CubeCoord { x: 0, y: -1, z: 1 }];
 
@@ -162,6 +162,30 @@ impl CubeCoord {
             rz = -rx-ry
         }
         return CubeCoord::new(rx as i32, ry as i32, rz as i32)
+    }
+}
+
+impl<'a, 'b> Add<&'b CubeCoord> for &'a CubeCoord {
+    type Output = CubeCoord;
+
+    fn add(self, rhs: &'b CubeCoord) -> Self::Output {
+        CubeCoord::new(self.x + rhs.x, self.y + rhs.y, self.z + rhs.z)
+    }
+}
+
+impl Add<CubeCoord> for CubeCoord {
+    type Output = CubeCoord;
+
+    fn add(self, rhs: CubeCoord) -> Self::Output {
+        CubeCoord::new(self.x + rhs.x, self.y + rhs.y, self.z + rhs.z)
+    }
+}
+
+impl Mul<i32> for CubeCoord {
+    type Output = CubeCoord;
+
+    fn mul(self, rhs: i32) -> CubeCoord {
+        CubeCoord::new(self.x * rhs, self.y * rhs, self.z * rhs)
     }
 }
 

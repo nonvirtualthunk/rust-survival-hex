@@ -12,8 +12,13 @@ use entities::CharacterStore;
 pub fn character_at(view : &WorldView, coord : AxialCoord) -> Option<(Entity, &CharacterData)> {
     for (cref, cdata) in view.entities_with_data::<CharacterData>() {
         let character = view.character(*cref);
-        if character.position.hex == coord && cdata.is_alive() {
-            return Some((*cref, cdata));
+        if character.position.hex == coord {
+            if cdata.is_alive() {
+                println!("Could select, target is alive");
+                return Some((*cref, cdata));
+            } else {
+                println!("Could not select, target is dead: {:?} / {:?}", character.health.cur_value(), character.health.max_value());
+            }
         }
     }
     None

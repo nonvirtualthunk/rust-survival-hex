@@ -49,6 +49,11 @@ impl AnimationGroup {
     }
 
     pub fn with_animation<T : AnimationElement + 'static> (mut self, elem : T, delay : Option<f64>) -> Self {
+        self.add_animation(elem, delay);
+        self
+    }
+
+    pub fn add_animation<T : AnimationElement + 'static> (&mut self, elem : T, delay : Option<f64>) -> &mut Self {
         self.elements.push(
             AnimationGroupElement {
                 delay : delay.unwrap_or(0.0),
@@ -57,6 +62,7 @@ impl AnimationGroup {
         );
         self
     }
+
 }
 
 impl AnimationElement for AnimationGroup {
@@ -144,13 +150,91 @@ impl TextAnimationElement {
     }
 }
 
+
 impl AnimationElement for TextAnimationElement {
     fn draw(&self, _world_view: &mut WorldView, pcnt_elapsed: f64) -> DrawList {
         let pos = self.position_interpolation.interpolate(pcnt_elapsed);
         DrawList::of_text(
             Text::new(self.text.clone(), self.text_size)
                 .offset(pos.0)
-                .color(self.color_interpolation.interpolate(pcnt_elapsed)))
+                .color(self.color_interpolation.interpolate(pcnt_elapsed))
+                .centered(true,false))
+    }
+
+
+    fn raw_duration(&self) -> f64 {
+        self.duration
+    }
+
+    fn blocking_duration(&self) -> f64 {
+        self.blocking_duration.unwrap_or(self.duration)
+    }
+}
+
+#[derive(Debug)]
+pub struct ImageAnimationElement {
+    pub image : ImageIdentifier,
+    pub rotation: Interpolation<f32>,
+    pub duration: f64,
+    pub blocking_duration: Option<f64>,
+    pub position_interpolation : Interpolation<CartVec>,
+    pub color_interpolation : Interpolation<Color>,
+    pub centered: bool
+}
+
+impl ImageAnimationElement {
+    pub fn new (image : ImageIdentifier, pos : CartVec, color : Color, duration : f64) -> ImageAnimationElement {
+        ImageAnimationElement {
+            image,
+            rotation : Interpolation::constant(0.0),
+            position_interpolation : Interpolation::constant(pos),
+            color_interpolation : Interpolation::constant(color),
+            duration,
+            blocking_duration : None,
+            centered: true
+        }
+    }
+
+    pub fn with_rotation(mut self, rotation : f32) -> Self {
+        self.rotation = Interpolation::constant(rotation);
+        self
+    }
+
+    pub fn with_end_color(mut self, end_color : Color, interpolation_type : InterpolationType) -> Self {
+        self.color_interpolation.delta = end_color - self.color_interpolation.start.clone();
+        self.color_interpolation.interpolation_type = interpolation_type;
+        self
+    }
+    pub fn with_end_position(mut self, end_pos : CartVec, interpolation_type : InterpolationType) -> Self {
+        self.position_interpolation.delta = end_pos - self.position_interpolation.start.clone();
+        self.position_interpolation.interpolation_type = interpolation_type;
+        self
+    }
+    pub fn with_delta(mut self, delta : CartVec, interpolation_type : InterpolationType) -> Self {
+        self.position_interpolation.delta = delta;
+        self.position_interpolation.interpolation_type = interpolation_type;
+        self
+    }
+    pub fn with_blocking_duration(mut self, blocking_duration : f64) -> Self {
+        self.blocking_duration = Some(blocking_duration);
+        self
+    }
+    pub fn with_centered(mut self, centered : bool) -> Self {
+        self.centered = centered;
+        self
+    }
+}
+
+impl AnimationElement for ImageAnimationElement {
+    fn draw(&self, _world_view: &mut WorldView, pcnt_elapsed: f64) -> DrawList {
+        let pos = self.position_interpolation.interpolate(pcnt_elapsed);
+        let mut quad = Quad::new(self.image.clone(), pos.0)
+            .rotation(self.rotation.interpolate(pcnt_elapsed))
+            .color(self.color_interpolation.interpolate(pcnt_elapsed));
+        if self.centered {
+            quad = quad.centered();
+        }
+        DrawList::of_quad(quad)
     }
 
 

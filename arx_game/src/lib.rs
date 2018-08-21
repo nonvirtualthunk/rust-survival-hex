@@ -28,6 +28,7 @@ extern crate pretty_env_logger;
 #[macro_use] extern crate derive_more;
 extern crate itertools;
 #[macro_use] extern crate arx_macros;
+extern crate backtrace;
 
 extern crate num;
 

@@ -48,8 +48,10 @@ impl MultiTypeEventContainer {
         }
     }
     pub(crate) fn register_event_type<E : GameEventType + 'static>(&mut self) {
+//        println!("Registering event of type {:?}, nth registered: {:?}", unsafe {std::intrinsics::type_name::<E>()}, self.event_containers.len());
+//        println!("MTE: {:?}", (self as *const MultiTypeEventContainer));
         let evt_container : EventContainer<E> = EventContainer::default();
-        self.event_containers.insert(evt_container);
+        self.event_containers.insert::<EventContainer<E>>(evt_container);
 
         self.clone_up_to_time_funcs.push(|mte : &mut MultiTypeEventContainer, from : &MultiTypeEventContainer, time : GameEventClock| {
             mte.register_event_type::<E>();
@@ -89,6 +91,9 @@ impl MultiTypeEventContainer {
 
     }
     pub (crate) fn events<E : GameEventType + 'static>(&self) -> impl Iterator<Item=&GameEventWrapper<E>> {
+//        println!("Retrieving event of type {:?} [{:?} total event types registered]", unsafe {std::intrinsics::type_name::<E>()}, self.event_containers.len());
+//        println!("MTE: {:?}", (self as *const MultiTypeEventContainer));
+
         self.event_containers.get::<EventContainer<E>>().map(|e| e.events.iter()).expect("attempted to retrieve events of a non-recognized event type")
     }
     pub (crate) fn revents<E : GameEventType + 'static>(&self) -> impl Iterator<Item=&GameEventWrapper<E>> {
@@ -110,7 +115,7 @@ impl MultiTypeEventContainer {
     }
 
     pub (crate) fn update_events_to(&mut self, from : &MultiTypeEventContainer, at_time : GameEventClock) {
-        for func in self.clone_up_to_time_funcs.clone() {
+        for func in self.update_to_time_funcs.clone() {
             (func)(self, from, at_time);
         }
     }

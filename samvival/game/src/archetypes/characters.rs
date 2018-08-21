@@ -9,7 +9,10 @@ pub fn character_archetypes() -> ArchetypeLibrary {
 
     let baseline : EntityBuilder = EntityBuilder::new()
         .with(SkillData::default())
-        .with(InventoryData::default())
+        .with(InventoryData {
+            items : Vec::new(),
+            inventory_size : Some(5),
+        })
         .with(EquipmentData::default())
         .with(PositionData::default())
         .with(GraphicsData::default())

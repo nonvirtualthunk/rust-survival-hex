@@ -4,3 +4,4 @@ pub mod item;
 pub mod faction;
 pub mod experience;
 pub mod character;
+pub mod visibility;

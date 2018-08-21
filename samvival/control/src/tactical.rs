@@ -29,6 +29,8 @@ use game::Entity;
 use game::world_util::*;
 use game::ConstantModifier;
 use game::entities::modifiers::*;
+use game::logic::visibility::VisibilityComputor;
+use game;
 use gui;
 
 use game::logic::combat::*;
@@ -60,6 +62,7 @@ use gui::MouseButton;
 use gui::Key;
 
 use game::logic::faction::is_enemy;
+use std::collections::HashSet;
 
 #[derive(PartialOrd, PartialEq, Copy, Clone)]
 pub struct Cost(pub R32);
@@ -131,13 +134,16 @@ pub struct TacticalMode {
     pub last_time: Instant,
     pub last_update_time: Instant,
     pub player_faction: Entity,
+    pub visibility_computor: VisibilityComputor,
     pub minimum_active_event_clock: GameEventClock,
     event_start_times: Vec<f64>,
     pub victory_time: Option<GameEventClock>,
     pub defeat_time: Option<GameEventClock>,
     animation_elements: Vec<AnimationElementWrapper>,
     gui: TacticalGui,
-    world_view: WorldView
+    display_world_view: WorldView,
+    show_real_world: bool,
+    skipped_characters: HashSet<Entity>,
 }
 
 impl TacticalMode {
@@ -147,8 +153,10 @@ impl TacticalMode {
         camera.move_speed = tile_radius * 20.0;
         camera.zoom = 1.0;
 
+
+        let dec = world.events::<GameEvent>().find(|e| e.is_ended() && (if let GameEvent::WorldStart = e.event { true } else { false })).map(|e| e.occurred_at).unwrap_or(0);
         TacticalMode {
-            world_view: world.view_at_time(0),
+            display_world_view: world.view_at_time(dec),
             selected_character: None,
             tile_radius,
             mouse_pos: v2(0.0, 0.0),
@@ -161,7 +169,7 @@ impl TacticalMode {
             terrain_renderer: TerrainRenderer::default(),
             unit_renderer: UnitRenderer {},
             item_renderer: ItemRenderer::new(),
-            display_event_clock: 0,
+            display_event_clock: dec,
             last_realtime_clock: 0.0,
             realtime_clock: 0.0,
             realtime_clock_speed: 1.0,
@@ -177,6 +185,9 @@ impl TacticalMode {
             defeat_time: None,
             animation_elements: vec![],
             gui: TacticalGui::new(gui),
+            show_real_world: false,
+            skipped_characters: HashSet::new(),
+            visibility_computor: VisibilityComputor::new(),
         }
     }
 
@@ -254,32 +265,36 @@ impl TacticalMode {
     fn ai_action(&mut self, ai_ref: &Entity, cdata: &CharacterData, world: &mut World, world_view: &WorldView, _all_characters: &Vec<Entity>) {
         let ai = world_view.character(*ai_ref);
 
-        let closest_enemy = world_view.entities_with_data::<CharacterData>().iter()
-            .filter(|&(_, c)| c.is_alive())
-            .filter(|&(cref, _)| is_enemy(world_view, *ai_ref, *cref))
-            .min_by_key(|t| world_view.data::<PositionData>(*t.0).hex.distance(&ai.position.hex));
+        if ai.move_speed == Sext::of(0) {
 
-        if let Some(closest) = closest_enemy {
-            let enemy_ref: &Entity = closest.0;
-            let enemy_data = world_view.character(*closest.0);
-
-            if enemy_data.position.distance(&ai.position) >= r32(1.5) {
-                if let Some(path) = logic::movement::path_any_v(world_view, *ai_ref, ai.position.hex, &enemy_data.position.hex.neighbors_vec(), enemy_data.position.hex) {
-                    movement::handle_move(world, *ai_ref, path.0.as_slice())
-                } else {
-                    println!("No move towards closest enemy, stalling");
-                }
-            }
-
-            if enemy_data.position.distance(&ai.position) < r32(1.5) {
-                let all_possible_attacks = possible_attack_refs(world_view, *ai_ref);
-                if let Some(attack) = all_possible_attacks.first() {
-                    logic::combat::handle_attack(world, *ai_ref, *enemy_ref, attack);
-                }
-            }
         } else {
-            if let Some(path) = logic::movement::path(world_view, *ai_ref, ai.position.hex, ai.position.hex.neighbor(0)) {
-                logic::movement::handle_move(world, *ai_ref, path.0.as_slice());
+            let closest_enemy = world_view.entities_with_data::<CharacterData>().iter()
+                .filter(|&(_, c)| c.is_alive())
+                .filter(|&(cref, _)| is_enemy(world_view, *ai_ref, *cref))
+                .min_by_key(|t| world_view.data::<PositionData>(*t.0).hex.distance(&ai.position.hex));
+
+            if let Some(closest) = closest_enemy {
+                let enemy_ref: &Entity = closest.0;
+                let enemy_data = world_view.character(*closest.0);
+
+                if enemy_data.position.distance(&ai.position) >= r32(1.5) {
+                    if let Some(path) = logic::movement::path_any_v(world_view, *ai_ref, ai.position.hex, &enemy_data.position.hex.neighbors_vec(), enemy_data.position.hex) {
+                        movement::handle_move(world, *ai_ref, path.0.as_slice())
+                    } else {
+                        println!("No move towards closest enemy, stalling");
+                    }
+                }
+
+                if enemy_data.position.distance(&ai.position) < r32(1.5) {
+                    let all_possible_attacks = possible_attack_refs(world_view, *ai_ref);
+                    if let Some(attack) = all_possible_attacks.first() {
+                        logic::combat::handle_attack(world, *ai_ref, *enemy_ref, attack);
+                    }
+                }
+            } else {
+                if let Some(path) = logic::movement::path(world_view, *ai_ref, ai.position.hex, ai.position.hex.neighbor(0)) {
+                    logic::movement::handle_move(world, *ai_ref, path.0.as_slice());
+                }
             }
         }
     }
@@ -339,9 +354,15 @@ impl TacticalMode {
             }
         }
         if !living_enemy {
-            self.victory_time = self.victory_time.or(Some(world.current_time));
+            self.victory_time = self.victory_time.or(Some(world.current_time-1));
         } else if !living_ally {
-            self.defeat_time = self.defeat_time.or(Some(world.current_time));
+            self.defeat_time = self.defeat_time.or(Some(world.current_time-1));
+        }
+
+        self.skipped_characters.clear();
+        if self.selected_character.is_none() {
+            println!("End turn complete, selecting a character");
+            self.select_next_character(world);
         }
     }
 
@@ -365,11 +386,11 @@ impl TacticalMode {
         }
     }
 
-    fn create_animations_if_necessary(&mut self, world_in: &World, world_view: &WorldView) {
+    fn create_animations_if_necessary(&mut self, world_in: &World, resources : &mut GraphicsResources) {
         if !self.blocking_animations_active() && !self.at_latest_event(world_in) {
             if let Some(event_wrapper) = world_in.event_at(self.display_event_clock + 1) {
                 trace!("Advanced event, new event is {:?}", event_wrapper.event);
-                for elem in tactical_event_handler::animation_elements_for_new_event(&world_view, event_wrapper) {
+                for elem in tactical_event_handler::animation_elements_for_new_event(&self.display_world_view, event_wrapper, resources) {
                     self.add_animation_element(elem)
                 }
             };
@@ -441,7 +462,7 @@ impl TacticalMode {
     }
 
     fn update_world_view(&mut self, world : &World) {
-        world.update_view_to_time(&mut self.world_view, self.display_event_clock);
+        world.update_view_to_time(&mut self.display_world_view, self.display_event_clock);
     }
 }
 
@@ -452,6 +473,10 @@ impl GameMode for TacticalMode {
                 (act_data.active_reaction.on_event)(world, *ent, event);
             }
         });
+
+        game::components::SpawningComponent::register(world);
+
+        VisibilityComputor::register(world);
     }
 
     fn update(&mut self, _: &mut World, _: f64) {
@@ -461,20 +486,26 @@ impl GameMode for TacticalMode {
     }
 
     fn update_gui(&mut self, world: &mut World, ui: &mut GUI, frame_id: Option<Wid>) {
-        self.gui.update_gui(world, ui, frame_id, self.current_game_state(world));
+        self.gui.update_gui(world, &self.display_world_view, ui, frame_id, self.current_game_state(world));
     }
 
     fn draw(&mut self, world_in: &mut World, g: &mut GraphicsWrapper) {
 //        let active_events = self.active_events(world_in);
-        let mut world_view = world_in.view_at_time(self.display_event_clock);
+//        let mut world_view = world_in.view_at_time(self.display_event_clock);
 
-        self.create_animations_if_necessary(&world_in, &world_view);
+//        let world_view : &mut WorldView = &mut self.world_view;
+
+        self.create_animations_if_necessary(world_in, g.resources);
 
         self.advance_event_clock(world_in.current_time);
 
-        world_in.update_view_to_time(&mut world_view, self.display_event_clock);
+        self.update_world_view(world_in);
 
-        self.create_animations_if_necessary(&world_in, &world_view);
+        self.create_animations_if_necessary(world_in, g.resources);
+
+        self.advance_event_clock(world_in.current_time);
+
+        self.update_world_view(world_in);
 
         if let Some(v) = g.context.viewport {
             self.viewport = v;
@@ -486,12 +517,9 @@ impl GameMode for TacticalMode {
 
         let realtime_clock = self.realtime_clock;
         for elem in &mut self.animation_elements {
-            elem.start_time = match elem.start_time {
-                Some(existing) => Some(existing),
-                None => Some(self.last_realtime_clock)
-            };
+            elem.start_time = elem.start_time.or(Some(self.last_realtime_clock));
             let pcnt = elem.pcnt_elapsed(realtime_clock).min(1.0);
-            anim_draw_list.append(&mut elem.animation.draw(&mut world_view, pcnt));
+            anim_draw_list.append(&mut elem.animation.draw(&mut self.display_world_view, pcnt));
 
             let blocking_pcnt = elem.blocking_pcnt_elapsed(realtime_clock);
             if blocking_pcnt < 1.0 {
@@ -499,21 +527,28 @@ impl GameMode for TacticalMode {
             }
         }
 
+        let world_view = if ! self.show_real_world {
+            &self.display_world_view
+        } else {
+            world_in.view()
+        };
+
         let min_game_pos = self.screen_pos_to_game_pos(v2(0.0,0.0));
         let max_game_pos = self.screen_pos_to_game_pos(v2(self.viewport.window_size[0] as f32, self.viewport.window_size[1] as f32));
 
         let culling_rect = Rect::from_corners(min_game_pos.x / self.tile_radius, max_game_pos.y / self.tile_radius, max_game_pos.x / self.tile_radius, min_game_pos.y / self.tile_radius);
 
         // draw list for the map tiles
-        let terrain_draw_list = self.terrain_renderer.render_tiles(&world_view, self.display_event_clock, culling_rect);
+        let terrain_draw_list = self.terrain_renderer.render_tiles(world_view, self.display_event_clock, culling_rect);
         // draw list for items on the map
-        let item_draw_list = self.item_renderer.render_items(&world_view, culling_rect);
+        let item_draw_list = self.item_renderer.render_items(world_view, g.resources, culling_rect);
         // draw list for the units and built-in unit UI elements
-        let unit_draw_list = self.unit_renderer.render_units(&world_view, self.display_event_clock, self.selected_character);
+        let unit_draw_list = self.unit_renderer.render_units(world_view, self.display_event_clock, self.selected_character);
+
+        let ui_draw_list = self.gui.draw(world_view, self.current_game_state(world_in));
+
         // draw list for hover hex and foot icons
         let movement_ui_draw_list = self.create_move_ui_draw_list(world_in);
-
-        let ui_draw_list = self.gui.draw(&world_view, self.current_game_state(world_in));
 
         self.render_draw_list(terrain_draw_list, g);
         self.render_draw_list(item_draw_list, g);
@@ -524,6 +559,9 @@ impl GameMode for TacticalMode {
 
         let gui_camera = Camera2d::new();
         g.context.view = gui_camera.matrix(self.viewport);
+
+
+        self.display_world_view.clear_overlay();
     }
 
 
@@ -539,14 +577,17 @@ impl GameMode for TacticalMode {
 
 
                     self.update_world_view(world);
-                    let display_world_view = &self.world_view;
+                    let display_world_view = &self.display_world_view;
                     let main_world_view = world.view();
 //                    let world_view = world.view_at_time(self.display_event_clock);
 
                     let found = character_at(display_world_view, clicked_coord);
                     if let Some((found_ref, target_data)) = found {
                         match self.selected_character {
-                            Some(prev_sel) if prev_sel == found_ref => self.selected_character = None,
+                            Some(prev_sel) if prev_sel == found_ref => {
+                                self.gui.close_all_auxiliary_windows(gui);
+                                self.selected_character = None;
+                            },
                             Some(cur_sel) => {
                                 let sel_data = main_world_view.character(cur_sel);
                                 if target_data.faction != self.player_faction &&
@@ -554,6 +595,7 @@ impl GameMode for TacticalMode {
                                     if let Some(attack_ref) = logic::combat::primary_attack_ref(main_world_view, cur_sel) {
                                         if let Some((path, cost)) = logic::combat::path_to_attack(main_world_view, cur_sel, found_ref, &attack_ref) {
                                             if path.is_empty() {
+                                                println!("no movement needed, attacking");
                                                 logic::combat::handle_attack(world, cur_sel, found_ref, &attack_ref);
                                             } else {
                                                 logic::movement::handle_move(world, cur_sel, &path);
@@ -568,17 +610,22 @@ impl GameMode for TacticalMode {
                                             }
                                         } else {
                                             if let Some((path,cost)) = logic::movement::path_adjacent_to(world, cur_sel, found_ref) {
+                                                println!("Moving adjacent, no path to attack could be found");
                                                 logic::movement::handle_move(world, cur_sel, &path);
+                                            } else {
+                                                println!("no adjacent to path");
                                             }
                                         }
                                     } else {
                                         warn!("Cannot attack, there are no attacks to use!");
                                     }
                                 } else {
+                                    println!("Switching selected character");
                                     self.selected_character = Some(found_ref);
                                 }
                             }
                             None => {
+                                println!("Switching selected character");
                                 self.selected_character = Some(found_ref);
                             }
                         }
@@ -607,16 +654,22 @@ impl GameMode for TacticalMode {
                     Key::Down => self.camera.move_delta.y = -1.0,
                     Key::Z => self.camera.zoom += 0.1,
                     Key::LShift => self.realtime_clock_speed = 3.0,
+                    Key::LAlt => self.realtime_clock_speed = 0.3,
+                    Key::LCtrl => self.show_real_world = true,
                     _ => ()
                 }
             },
             UIEvent::KeyRelease { key } => {
                 match key {
+                    Key::A => gui.mark_all_modified(),
                     Key::Left => self.camera.move_delta.x = 0.0,
                     Key::Right => self.camera.move_delta.x = 0.0,
                     Key::Up => self.camera.move_delta.y = 0.0,
                     Key::Down => self.camera.move_delta.y = 0.0,
-                    Key::Return => self.end_turn(world),
+                    Key::Return => {
+                        self.gui.close_all_auxiliary_windows(gui);
+                        self.end_turn(world);
+                    },
                     Key::Escape => {
                         // close auxiliary windows if any are open, otherwise cancel character selection
                         if ! self.gui.close_all_auxiliary_windows(gui) {
@@ -624,7 +677,25 @@ impl GameMode for TacticalMode {
                         }
                     },
                     Key::LShift => self.realtime_clock_speed = 1.0,
+                    Key::LAlt => self.realtime_clock_speed = 1.0,
+                    Key::D9 => self.realtime_clock_speed = if self.realtime_clock_speed < 100.0 { 100.0 } else  { 1.0 },
                     Key::I => self.gui.toggle_inventory(gui),
+                    Key::LCtrl => self.show_real_world = false,
+                    Key::N => self.select_next_character(world),
+                    Key::Space => {
+                        if let Some(sel) = self.selected_character {
+                            if self.skipped_characters.contains(&sel) {
+                                self.skipped_characters.remove(&sel);
+                            } else {
+                                self.skipped_characters.insert(sel);
+                            }
+                        }
+                        println!("Skip, selecting a character");
+                        self.select_next_character(world);
+                        if self.selected_character.is_none() {
+                            self.end_turn(world);
+                        }
+                    },
                     _ => ()
                 }
             },
@@ -635,5 +706,44 @@ impl GameMode for TacticalMode {
 
     fn on_event(&mut self, world: &mut World, gui: &mut GUI, event: &UIEvent) {
         gui.handle_ui_event_2(event, self, world);
+    }
+}
+
+
+impl TacticalMode {
+    fn select_next_character(&mut self, world : &World) {
+        let world_view = world.view();
+        let mut player_characters : Vec<Entity> = world_view.entities_with_data::<CharacterData>().iter()
+            .filter(|(k,v)| v.faction == self.player_faction)
+            .map(|(k,v)| *k)
+            .sorted();
+
+        // eliminate everything that isn't alive, and everything that has been skipped (unless it's the selected char right now, in which case we need it in order to switch past it)
+        player_characters.retain(|e| {
+            let character = world_view.character(*e);
+            let skip = self.skipped_characters.contains(e) && self.selected_character.as_ref() != Some(e);
+            character.action_points.cur_value() > 0 && character.is_alive() && ! skip
+        });
+
+        let cur_index = if let Some(sel) = self.selected_character {
+            player_characters.iter().position(|e| e == &sel).unwrap_or(0)
+        } else {
+            player_characters.len() - 1
+        };
+
+        let new_index = if player_characters.len() > 0 { (cur_index + 1) % player_characters.len() } else { 0 };
+        if new_index < player_characters.len() {
+            // if the next one to be selected has been skipped, that means everyone has, because the only skipped on allowed ot remain in the list was the cur selected one
+            // so that means _everyone_ has been skipped
+            let next_selected = player_characters[new_index];
+            self.selected_character = if self.skipped_characters.contains(&next_selected) {
+                None
+            } else {
+                Some(next_selected)
+            };
+        } else {
+            println!("No one to select?");
+            self.selected_character = None;
+        }
     }
 }

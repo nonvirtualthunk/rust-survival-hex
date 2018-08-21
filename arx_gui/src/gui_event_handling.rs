@@ -95,17 +95,23 @@ impl GUI {
     fn handle_event_widget_intern<F: FnMut(u32, &UIEvent) -> ()>(&mut self, wid: Wid, event: &UIEvent, is_placeholder: bool, mut func: F) -> bool {
         let (parent_id, accepts_focus, consumed) = {
             if is_placeholder {
+                trace!("Pushing event {:?} into vec for widget {:?}", event, self.widget_reification(wid).widget.signifier());
                 self.events_by_widget.entry(wid).or_insert_with(|| Vec::new()).push(event.clone());
 
                 let mut mark_modified = false;
-                let mut widget_state = self.widget_reifications.remove(&wid).expect("widget state must exist");
+                let mut widget_state = if let Some(reification) = self.widget_reifications.remove(&wid) {
+                    reification
+                } else {
+                    error!("Reification did not exist for widget {:?} when trying to handle event {:?}", wid, event);
+                    return false;
+                };
 
                 let alterations = if widget_state.widget.callbacks.non_empty() {
                     let callbacks = widget_state.widget.callbacks.clone();
                     let mut widget_context = WidgetContext { widget_state: widget_state.widget_state.clone(), triggered_events: Vec::new(), widget_id : widget_state.widget.id(), widget_alterations : Vec::new() };
                     for callback in callbacks {
-                        execute_global_widget_registry_callback(callback, &mut widget_context, event);
-                        execute_global_widget_registry_callback_2(callback, self, &mut widget_context, event);
+                        execute_global_widget_registry_callback(callback.id(), &mut widget_context, event);
+                        execute_global_widget_registry_callback_2(callback.id(), self, &mut widget_context, event);
                     }
 
                     if widget_state.widget_state != widget_context.widget_state {
@@ -142,7 +148,7 @@ impl GUI {
                 if widget_state.widget.callbacks.non_empty() {
                     for callback in &widget_state.widget.callbacks {
                         trace!("Executing callback for widget {}", wid);
-                        (func)(*callback, event);
+                        (func)(callback.id(), event);
                     }
                 }
             }
@@ -170,10 +176,14 @@ impl GUI {
         };
 
         if let Some(consumed) = consumed {
+            trace!("Event {:?} was consumed by widget {:?}", event, self.widget_reification(wid).widget.signifier());
             consumed
         } else if let Some(parent_id) = parent_id {
-            trace!("Event not consumed, parent present, passing event to parent");
-            self.handle_event_widget_intern(parent_id, event, is_placeholder, func)
+            trace!("Event not consumed, parent present, passing event to parent : {:?}", self.widget_reification(parent_id).widget.signifier());
+            match event {
+                UIEvent::WidgetEvent { .. } => self.handle_event_widget_intern(parent_id, &event.clone_with_most_recently_from_widget(wid), is_placeholder, func),
+                _ => self.handle_event_widget_intern(parent_id, event, is_placeholder, func),
+            }
         } else {
             false
         }
@@ -265,12 +275,20 @@ impl GUI {
             }
         }
 
-        let mut queued_events = self.queued_events.remove(&type_id).unwrap_or_else(|| Vec::new());
-        for queued_event in &queued_events {
-            self.handle_ui_event(queued_event, state);
+        // each queued events can then enque more events, so we keep checking, up to a maximum depth of 10 (don't want infiniloops)
+        for i in 0..10 {
+            if i >= 9 {
+                warn!("Possible infiniloop in event queueing, cutting off after one more iteration.");
+            }
+            let queued_events = self.queued_events.remove(&type_id).unwrap_or_else(|| Vec::new());
+            self.queued_events.insert(type_id, Vec::new());
+            if queued_events.is_empty() {
+                break;
+            }
+            for queued_event in &queued_events {
+                self.handle_ui_event(queued_event, state);
+            }
         }
-        queued_events.clear();
-        self.queued_events.insert(type_id, queued_events);
 
         ret
     }
@@ -350,6 +368,8 @@ impl GUI {
             UIEvent::KeyRelease { .. } => FocusedWidget,
             UIEvent::MouseEntered { to_widget, .. } => SpecificWidget(*to_widget),
             UIEvent::MouseExited { from_widget, .. } => SpecificWidget(*from_widget),
+            UIEvent::WidgetEvent { originating_widget, .. } => SpecificWidget(*originating_widget),
+            UIEvent::CustomEvent { originating_widget, .. } => SpecificWidget(*originating_widget),
             _ => MousedWidget
         };
 

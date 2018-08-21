@@ -4,6 +4,10 @@ use std::fmt;
 use world::World;
 use std::sync::atomic::{ATOMIC_USIZE_INIT, AtomicUsize, Ordering};
 use std::rc::Rc;
+use std::fmt::Formatter;
+use std::fmt::Error;
+use std::any::TypeId;
+use std::collections::HashMap;
 
 pub static ENTITY_ID_COUNTER: AtomicUsize = ATOMIC_USIZE_INIT;
 
@@ -29,18 +33,23 @@ pub trait EntityData: Clone + Any + Default + Debug {}
 
 #[derive(Clone)]
 pub struct EntityBuilder {
-    initializations: Vec<Rc<Fn(&mut World, Entity)>>
+    initializations_by_type_id: HashMap<TypeId, Rc<Fn(&mut World, Entity)>>
+}
+impl Debug for EntityBuilder {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        write!(f, "EntityBuilder()")
+    }
 }
 
 impl EntityBuilder {
     pub fn new() -> EntityBuilder {
         EntityBuilder {
-            initializations: vec![]
+            initializations_by_type_id: HashMap::new()
         }
     }
 
     pub fn with<T: EntityData>(mut self, new_data: T) -> Self {
-        self.initializations.push(Rc::new(move |world: &mut World, entity: Entity| {
+        self.initializations_by_type_id.insert(TypeId::of::<T>(), Rc::new(move |world: &mut World, entity: Entity| {
             world.attach_data(entity, &new_data)
         }));
         self
@@ -48,9 +57,17 @@ impl EntityBuilder {
 
     pub fn create(&self, world: &mut World) -> Entity {
         let entity = World::create_entity();
-        for initialization in &self.initializations {
+        world.add_entity(entity);
+        for initialization in self.initializations_by_type_id.values() {
             (initialization)(world, entity);
         }
         entity
     }
 }
+
+
+#[derive(Clone,Debug,Default)]
+pub struct DebugData {
+    pub name : String
+}
+impl EntityData for DebugData {}

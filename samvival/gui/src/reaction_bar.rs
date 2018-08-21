@@ -32,7 +32,7 @@ impl Default for ReactionButton {
     fn default() -> Self {
         let icon = Button::image_button(String::from("ui/blank")).fixed_size(34.px(), 34.px()).named("action bar icon");
         let info_body = Widget::window(Color::greyscale(0.85), 1)
-            .named("info body")
+            .named("reaction info body")
             .parent(&icon)
             .ignore_parent_bounds()
             .y(Positioning::above(&icon, 2.ux()))
@@ -84,13 +84,13 @@ impl ReactionBar {
     }
 
     pub fn update(&mut self, gui: &mut GUI, reactions: Vec<ReactionType>, selected_reaction: ReactionType,
-                  game_state: &GameState, control_context: ControlContext) {
+                  game_state: &GameState, control_context: &mut ControlContext) {
         if let Some(selected_char) = game_state.selected_character {
             self.reaction_list.set_showing(true).reapply(gui);
 
             for event in gui.events_for(self.reaction_list.as_widget_immut()) {
-                if let UIEvent::WidgetEvent(wevent) = event {
-                    if let WidgetEvent::ListItemClicked(index, button_) = wevent {
+                if let UIEvent::WidgetEvent{ event, .. } = event {
+                    if let WidgetEvent::ListItemClicked(index, button_) = event {
                         let reaction_type = self.reactions[*index].clone();
                         control_context.event_bus.push_event(ControlEvents::ReactionSelected(reaction_type));
                     }

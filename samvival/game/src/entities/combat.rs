@@ -9,6 +9,7 @@ use game::Entity;
 use game::entity::EntityData;
 use game::world::WorldView;
 use game::GameDisplayable;
+use entities::common::Taxon;
 
 
 #[derive(Clone, Debug, PrintFields)]
@@ -107,7 +108,18 @@ pub struct Attack {
     pub primary_damage_type : DamageType,
     pub secondary_damage_type : Option<DamageType>,
     pub range : u32,
-    pub min_range : u32
+    pub min_range : u32,
+    pub ammunition_kind: Option<Taxon>
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct StrikeResult {
+    pub weapon : Option<Entity>,
+    pub damage_done : i32,
+    pub hit : bool,
+    pub killing_blow : bool,
+    pub strike_number : u8,
+    pub damage_types : Vec<DamageType>,
 }
 
 impl Default for Attack {
@@ -122,7 +134,8 @@ impl Default for Attack {
             primary_damage_type : DamageType::Untyped,
             secondary_damage_type : None,
             range : 1,
-            min_range : 0
+            min_range : 0,
+            ammunition_kind: None
         }
     }
 }

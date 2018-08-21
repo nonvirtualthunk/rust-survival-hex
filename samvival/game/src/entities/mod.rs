@@ -11,6 +11,9 @@ pub mod time;
 pub mod common;
 pub mod actions;
 pub mod reactions;
+pub mod attributes;
+pub mod custom_ability_data;
+pub mod visibility;
 
 pub mod fields;
 
@@ -25,5 +28,8 @@ pub use entities::tile::*;
 pub use entities::time::*;
 pub use entities::fields::*;
 pub use entities::common::*;
+pub use entities::attributes::*;
+pub use entities::custom_ability_data::*;
+pub use entities::visibility::*;
 
 pub use entities::modifiers::modify;

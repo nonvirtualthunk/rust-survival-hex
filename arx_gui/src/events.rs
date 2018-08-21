@@ -9,6 +9,9 @@ use common::prelude::*;
 use gui::GUI;
 use widgets::WidgetState;
 use widgets::Wid;
+use std::fmt::Debug;
+use std::rc::Rc;
+use std::any::Any;
 
 #[derive(Clone, Debug)]
 pub struct EventPosition {
@@ -46,8 +49,6 @@ impl EventPosition {
 pub enum WidgetEvent {
     ButtonClicked(Wid),
     RadioChanged{ new_index : i32 },
-    ShowWidget(Wid),
-    HideWidget(Wid),
     ListItemClicked(usize, MouseButton)
 }
 
@@ -69,7 +70,42 @@ pub enum UIEvent {
     Resize { size : Vec2f },
     Focus { has_focus : bool },
     WidgetStateChanged { old_state : WidgetState, new_state : WidgetState },
-    WidgetEvent (WidgetEvent)
+    WidgetEvent { event : WidgetEvent, originating_widget : Wid, most_recently_from_widget : Wid },
+    CustomEvent { event : Rc<Any>, originating_widget : Wid }
+}
+impl UIEvent {
+    pub fn widget_event(event : WidgetEvent, wid : Wid) -> UIEvent {
+        UIEvent::WidgetEvent { event, originating_widget : wid, most_recently_from_widget : wid }
+    }
+    pub fn custom_event<E : Any + 'static>(event : E, originating_widget : Wid ) -> UIEvent {
+        UIEvent::CustomEvent { event : Rc::new(event), originating_widget }
+    }
+    pub fn clone_with_most_recently_from_widget(&self, w : Wid) -> UIEvent {
+        if let UIEvent::WidgetEvent { event, originating_widget, most_recently_from_widget } = self {
+            UIEvent::WidgetEvent { event : event.clone(), originating_widget : *originating_widget, most_recently_from_widget : w }
+        } else {
+            warn!("attempted to perform a \"clone_with_most_recently_from_widget\" on a non-widget event");
+            self.clone()
+        }
+    }
+    pub fn as_custom_event<E : Any + Clone + 'static>(&self) -> Option<(E,Wid)> {
+        match self {
+            UIEvent::CustomEvent { event, originating_widget } => {
+                let evt_clone = event.clone();
+                match evt_clone.downcast::<E>() {
+                    Ok(e) => {
+                        trace!("Downcast custom event successfull");
+                        Some(((*e).clone(), *originating_widget))
+                    }
+                    Err(error) => {
+                        trace!("Could not downcast custom event, type id was {:?}", error.get_type_id());
+                        None
+                    }
+                }
+            },
+            _ => None
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -99,6 +135,7 @@ pub mod ui_event_types {
     pub const WIDGET_EVENT : UIEventType =          UIEventType { bit_flag : 0b00000000000000000100000000000000 };
     pub const HOVER_START : UIEventType =           UIEventType { bit_flag : 0b00000000000000001000000000000000 };
     pub const HOVER_END : UIEventType =             UIEventType { bit_flag : 0b00000000000000010000000000000000 };
+    pub const CUSTOM_EVENT : UIEventType =          UIEventType { bit_flag : 0b00000000000000100000000000000000 };
     pub const MOUSE_EVENT_TYPES : [UIEventType; 7] = [MOUSE_PRESS, MOUSE_RELEASE, MOUSE_DRAG, MOUSE_MOVE, MOUSE_POSITION, MOUSE_ENTERED, MOUSE_EXITED];
     pub const KEY_EVENTS : [UIEventType; 2] = [KEY_PRESS, KEY_RELEASE];
 }
@@ -126,6 +163,7 @@ impl UIEvent {
             UIEvent::WidgetEvent { .. } =>          WIDGET_EVENT,
             UIEvent::HoverStart { .. } =>           HOVER_START,
             UIEvent::HoverEnd { .. } =>             HOVER_END,
+            UIEvent::CustomEvent { .. } =>          CUSTOM_EVENT,
         }
     }
     pub fn bit_flag(&self) -> u32 {

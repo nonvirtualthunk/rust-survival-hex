@@ -11,6 +11,7 @@ use core::GameEventClock;
 use world::storage::*;
 use events::GameEventType;
 use events::GameEventState;
+use std::collections::HashSet;
 
 
 /// world views are views into the data of a world. The world itself is the ledger of changes, the view is a way of looking at it at a specific time.
@@ -19,16 +20,17 @@ use events::GameEventState;
 
 pub struct WorldView {
     pub(crate) entities: Vec<EntityContainer>,
+    pub(crate) entity_set: HashSet<Entity>,
     pub(crate) self_entity : Entity,
     pub(crate) constant_data: Map<CloneAny>,
     pub(crate) effective_data: Map<CloneAny>,
+    pub(crate) overlay_data: Map<CloneAny>,
     pub current_time: GameEventClock,
     pub(crate) modifier_cursor: ModifierClock,
     pub(crate) modifier_indices: HashMap<TypeId, usize>,
     pub(crate) events: MultiTypeEventContainer,
     pub entity_indices: Map<CloneAny>,
-
-
+    pub(crate) has_overlay: bool,
 }
 
 
@@ -36,6 +38,14 @@ pub struct WorldView {
 
 impl WorldView {
     pub fn data<T: EntityData>(&self, entity: Entity) -> &T {
+        if self.has_overlay {
+            if let Some(overlay) = self.overlay_data.get::<DataContainer<T>>() {
+                if let Some(overlaid) = overlay.storage.get(&entity) {
+                    return overlaid;
+                }
+            }
+        }
+
         let data: &DataContainer<T> = self.effective_data.get::<DataContainer<T>>()
             .unwrap_or_else(|| panic!(format!("Could not retrieve effective data for entity {:?}, looking for data {:?}", entity, unsafe {std::intrinsics::type_name::<T>()})));
 
@@ -45,17 +55,30 @@ impl WorldView {
         }
     }
     pub fn data_opt<T: EntityData>(&self, entity: Entity) -> Option<&T> {
+        if self.has_overlay {
+            if let Some(overlay) = self.overlay_data.get::<DataContainer<T>>() {
+                if let Some(overlaid) = overlay.storage.get(&entity) {
+                    return Some(overlaid);
+                }
+            }
+        }
+
         let data: &DataContainer<T> = self.effective_data.get::<DataContainer<T>>()
             .unwrap_or_else(|| panic!(format!("Could not retrieve effective data for entity {:?}, looking for data {:?}", entity, unsafe {std::intrinsics::type_name::<T>()})));
         data.storage.get(&entity)
     }
 
     pub fn data_mut<T: EntityData>(&mut self, entity: Entity) -> &mut T {
-        let data: &mut DataContainer<T> = self.effective_data.get_mut::<DataContainer<T>>().unwrap();
-        match data.storage.get_mut(&entity) {
-            Some(t) => t,
-            None => panic!("Attempted to get mutable reference to non-existent data in view")
-        }
+        self.has_overlay = true;
+
+        let eff_data: &DataContainer<T> = self.effective_data.get::<DataContainer<T>>().unwrap();
+        let overlay_data: &mut DataContainer<T> = self.overlay_data.entry::<DataContainer<T>>().or_insert_with(||DataContainer::<T>::new());
+        overlay_data.storage.entry(entity).or_insert_with(|| eff_data.storage.get(&entity).cloned().unwrap_or_else(||T::default()))
+    }
+
+    pub fn clear_overlay(&mut self) {
+        self.overlay_data.clear();
+        self.has_overlay = false;
     }
 
     pub fn world_data<T: EntityData>(&self) -> &T {
@@ -77,6 +100,14 @@ impl WorldView {
         self.has_data_r::<T>(&entity)
     }
     pub fn has_data_r<T : EntityData>(&self, entity : &Entity) -> bool {
+        if self.has_overlay {
+            if let Some(overlay) = self.overlay_data.get::<DataContainer<T>>() {
+                if overlay.storage.contains_key(&entity) {
+                    return true;
+                }
+            }
+        }
+
         let data: &DataContainer<T> = self.effective_data.get::<DataContainer<T>>()
             .unwrap_or_else(|| panic!(format!("Could not retrieve effective data for entity {:?}, looking for data {:?}", entity, unsafe {std::intrinsics::type_name::<T>()})));
         data.storage.contains_key(&entity)

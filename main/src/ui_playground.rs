@@ -133,7 +133,7 @@ fn make_windows(gui: &mut GUI) {
         .position(Positioning::Constant(4.ux()), Positioning::Constant(10.ux()))
         .size(Sizing::Constant(30.ux()), Sizing::Constant(50.ux()))
         .parent(&test_window)
-        .apply(gui);
+        .apply_all(gui);
 
     let foo_widget = Widget::text("This is the Foo Tab", 14)
         .position(Positioning::CenteredInParent, Positioning::CenteredInParent)

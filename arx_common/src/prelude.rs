@@ -9,6 +9,8 @@ use interpolation;
 pub use itertools::Itertools;
 use std::time::Duration;
 
+pub use hex::AxialCoord;
+
 pub type Vec3i = Vector3<i32>;
 pub type Vec3f = Vector3<f32>;
 
@@ -162,6 +164,8 @@ pub trait ExtendedCollection<T> {
     fn any_match<F : Fn(&T) -> bool>(&self, func : F) -> bool;
 
     fn find<F : Fn(&T) -> bool>(&self, func : F) -> Option<&T>;
+
+    fn extended_by<I: IntoIterator<Item = T>>(self, other : I) -> Self where Self : Sized;
 }
 
 impl <T> ExtendedCollection<T> for Vec<T> {
@@ -183,6 +187,11 @@ impl <T> ExtendedCollection<T> for Vec<T> {
 
     fn find<F : Fn(&T) -> bool>(&self, func : F) -> Option<&T> {
         self.iter().find(|t| (func)(t))
+    }
+
+    fn extended_by<I: IntoIterator<Item = T>>(mut self, other : I) -> Self where Self : Sized {
+        self.extend(other);
+        self
     }
 }
 

@@ -35,7 +35,7 @@ impl AttackDescriptionsWidget {
     }
 
 
-    pub fn update(&mut self, gui: &mut GUI, view: &WorldView, character: Entity, control: ControlContext) {
+    pub fn update(&mut self, gui: &mut GUI, view: &WorldView, character: Entity, control: &mut ControlContext) {
         let attacks = possible_attacks(view, character);
         let active_attack = primary_attack(view, character);
 
@@ -59,8 +59,8 @@ impl AttackDescriptionsWidget {
         });
 
         for event in gui.events_for(self.attack_list.as_widget_immut()) {
-            if let UIEvent::WidgetEvent(wevent) = event {
-                if let WidgetEvent::ListItemClicked(index, button) = wevent {
+            if let UIEvent::WidgetEvent{ event, .. } = event {
+                if let WidgetEvent::ListItemClicked(index, button) = event {
                     if let Some(attack_ref) = AttackReference::of_attack(view, character, &attacks[*index]).as_option() {
                         match button {
                             MouseButton::Left => control.event_bus.push_event(ControlEvents::AttackSelected(attack_ref.clone())),
@@ -128,7 +128,6 @@ pub struct AttackDetailsWidget {
     pub damage_div: Widget,
     pub damage_details_div: Widget,
 
-    pub body: Widget,
     pub name: Widget,
 
     pub to_hit: Widget,
@@ -139,6 +138,9 @@ pub struct AttackDetailsWidget {
     pub damage_dice_details: Widget,
     pub damage_bonus_details: Widget,
     pub damage_absorption_details: Widget,
+
+
+    pub body: Widget,
 }
 
 impl AttackDetailsWidget {

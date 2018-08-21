@@ -48,13 +48,6 @@ impl ConstantModifier<CharacterData> for ReduceStaminaMod {
     }
 }
 
-pub struct DamageMod(pub i32);
-impl ConstantModifier<CharacterData> for DamageMod {
-    fn modify(&self, data: &mut CharacterData) {
-        data.health.reduce_by(self.0);
-    }
-}
-
 pub struct ReduceMoveMod(pub Sext);
 impl ConstantModifier<CharacterData> for ReduceMoveMod {
     fn modify(&self, data: &mut CharacterData) {

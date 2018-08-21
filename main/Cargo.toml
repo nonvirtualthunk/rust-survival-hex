@@ -1,11 +1,12 @@
 [package]
-name = "spinning_square"
+name = "samvival"
 version = "0.1.0"
 authors = ["Sam Bock <nonvirtualthunk@gmail.com>"]
 autobins = false
+description = "samvival"
 
 [[bin]]
-name = "survival_hex"
+name = "samvival"
 path = "src/survival_hex.rs"
 
 
@@ -58,3 +59,14 @@ debug = true
 
 #[target.x86_64-apple-darwin.freetype]
 #rustc-link-lib = "freetype:dylib"
+
+[package.metadata.bundle]
+name = "Samvival"
+identifier = "arx.samvival"
+icon = ["../assets/icons/32x32.png"]
+version = "1.0.0"
+resources = ["../assets"]
+copyright = "Copyright (c) Sam Bock 2018. All rights reserved."
+category = "Game"
+short_description = "Samvival"
+osx_minimum_system_version = "10.8"

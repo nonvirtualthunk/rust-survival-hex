@@ -117,7 +117,7 @@ pub fn handle_move(world : &mut World, mover : Entity, path : &[AxialCoord]) {
 
 //                modify(world, mover, SkillXPMod(Skill::ForestSurvival, 1));
                 // advance the event clock
-                world.add_event(GameEvent::Move { character : mover, from : prev_hex, to : hex });
+                world.add_event(GameEvent::Move { character : mover, from : prev_hex, to : hex, cost: hex_cost });
 
                 prev_hex = hex;
                 prev_hex_ent = hex_ent;

@@ -42,7 +42,7 @@ impl <T: Interpolateable<T>> Interpolation<T> {
             _ => {
                 let effective_fract = match self.interpolation_type {
                     InterpolationType::Linear => fract,
-                    InterpolationType::Exponential { power } => fract.powf(power),
+                    InterpolationType::Exponential { power } => if fract != 0.0 { fract.powf(power) } else { 0.0 },
                     InterpolationType::Custom { ref function } => (function)(fract),
                     InterpolationType::Constant => fract // cannot actually be reached
                 };

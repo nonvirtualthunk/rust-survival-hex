@@ -66,6 +66,5 @@ version = "0.1.0"
 
 [profile.release]
 debug = true
-
 #[target.x86_64-apple-darwin.freetype]
 #rustc-link-lib = "freetype:dylib"

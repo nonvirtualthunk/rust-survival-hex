@@ -63,7 +63,7 @@ impl<T: Default + WidgetContainer> ListWidget<T> {
             children_to_remove: Vec::new(),
             item_gap,
             orientation: Orientation::Vertical,
-        }.only_consume(EventConsumption::widget_events())
+        }
     }
 
     pub fn parent(mut self, parent: &Widget) -> Self {
@@ -111,10 +111,15 @@ impl<T: Default + WidgetContainer> ListWidget<T> {
     }
 
     pub fn update<U, F: Fn(&mut T, &U)>(&mut self, gui: &mut GUI, data: &[U], func: F) -> &mut Self {
+        self.update_with_row(gui, data, move |t : &mut T, u : &U, _ : &Widget| { func(t,u) })
+    }
+
+    pub fn update_with_row<U, F: Fn(&mut T, &U, &Widget)>(&mut self, gui: &mut GUI, data: &[U], func: F) -> &mut Self {
         let draw_layer = self.as_widget_immut().draw_layer;
 
         // make sure the body exists. Todo: only actually need to do this the first time
         self.body.reapply(gui);
+        let body_id = self.body.id();
 
         while data.len() > self.children.len() {
             let index = self.children.len();
@@ -122,7 +127,8 @@ impl<T: Default + WidgetContainer> ListWidget<T> {
                 .draw_layer(draw_layer)
                 .with_callback(move |ctxt: &mut WidgetContext, evt: &UIEvent| {
                     if let UIEvent::MouseRelease { button, .. } = evt {
-                        ctxt.trigger_event(UIEvent::WidgetEvent(WidgetEvent::ListItemClicked(index, *button)))
+                        trace!("Triggering list item event");
+                        ctxt.trigger_event(UIEvent::widget_event(WidgetEvent::ListItemClicked(index, *button), body_id));
                     }
                 });
             new_item.clear_id();
@@ -150,8 +156,9 @@ impl<T: Default + WidgetContainer> ListWidget<T> {
         }
 
         for (i, value) in data.iter().enumerate() {
-            let child_id = self.children[i].id();
-            func(&mut self.child_structs[i], &value);
+            let child = &self.children[i];
+            let child_id = child.id();
+            func(&mut self.child_structs[i], &value, child);
             ListWidget::auto_apply(child_id, gui, &mut self.child_structs[i], draw_layer);
         }
 
@@ -171,8 +178,8 @@ impl<T: Default + WidgetContainer> ListWidget<T> {
             if w.parent_id.is_none() {
                 w.set_parent_id(id);
             }
-            w.reapply(gui);
         });
+        child_struct.reapply_all(gui);
     }
 
     pub fn reapply_children(&mut self, gui: &mut GUI) {

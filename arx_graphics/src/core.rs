@@ -242,8 +242,14 @@ impl<'a, 'b : 'a> GraphicsWrapper<'a, 'b> {
             quad.image.rect([0.0, 0.0, w, h])
         }.maybe_src_rect(quad.sub_rect.map(|r| [r.x as f64 * tex_info.size.x as f64, r.y as f64 * tex_info.size.y as f64, r.w as f64 * tex_info.size.x as f64, r.h as f64 * tex_info.size.y as f64]));
 
+
         let pos = as_f64(quad.offset);
         let transform = math::multiply(self.context.view, math::translate(pos));
+        let transform = if quad.rotation != 0.0 {
+            math::multiply(transform, math::rotate_radians(quad.rotation as f64))
+        } else {
+            transform
+        };
         image.draw(&tex_info.texture, &self.draw_state, transform, self.graphics);
     }
 

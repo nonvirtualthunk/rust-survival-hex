@@ -83,16 +83,14 @@ pub mod reaction_types {
                                 let modifier = world.modify(ent, CombatData::counters_remaining.increase_by(increase_counters_by), "counterattack reaction");
 
                                 world.modify(ent, ModifierTrackingData::modifiers_by_key.set_key_to(strf(modifier_key), modifier), None);
-                                println!("end turn counter increase modifications applied");
+                                world.add_event(GameEvent::ReactionEffectApplied { entity : ent });
                             }
                         }
                     }
                 } else if event.is_starting() {
-                    println!("start turn counter increase modifications looking to remove");
                     if let Some(prev_modifier) = view.data::<ModifierTrackingData>(ent).modifiers_by_key.get(modifier_key) {
                         world.disable_modifier(prev_modifier.clone());
                         world.add_event(GameEvent::EffectEnded { entity : None });
-                        println!("start turn counter increase modifications removed");
                     }
                 }
             }
@@ -108,24 +106,23 @@ pub mod reaction_types {
         costs: "1 stamina for every 2 strikes against you",
         condition_description: "none",
         condition_func: |view, ent| view.data::<CharacterData>(ent).stamina.cur_value() > Sext::of(0),
-        on_event: |world, ent, event| if let Some(GameEvent::FactionTurn { faction, .. }) = event.if_ended() {
+        on_event: |world, ent, event| if let GameEvent::FactionTurn { faction, .. } = event.event {
             let view = world.view();
             let char_data = view.data::<CharacterData>(ent);
-            if faction == &char_data.faction && char_data.stamina.cur_value() > Sext::of(0) {
-                let increase_dodge_by = (world.view().data::<CombatData>(ent).dodge_bonus * 2).max(2);
-                let modifier = world.modify(ent, CombatData::dodge_bonus.add(increase_dodge_by), "dodge reaction");
+            let modifier_key = "dodge-reaction";
+            if faction == char_data.faction {
+                if event.is_ended() {
+                    if char_data.stamina.cur_value() > Sext::of(0) {
+                        let increase_dodge_by = (world.view().data::<CombatData>(ent).dodge_bonus * 2).max(2);
+                        let modifier = world.modify(ent, CombatData::dodge_bonus.add(increase_dodge_by), "dodge reaction");
 
-                world.modify(ent, ModifierTrackingData::modifiers_by_key.set_key_to(strf("dodge-reaction"), modifier), None);
-                world.add_event(GameEvent::ReactionEffectApplied { entity : ent });
-                println!("end turn dodge modifications applied");
-            } else if let Some(GameEvent::FactionTurn { faction, .. }) = event.if_ended() {
-                let view = world.view();
-                let char_data = view.data::<CharacterData>(ent);
-                if faction == &char_data.faction {
-                    if let Some(prev_modifier) = view.data::<ModifierTrackingData>(ent).modifiers_by_key.get("dodge-reaction") {
+                        world.modify(ent, ModifierTrackingData::modifiers_by_key.set_key_to(strf(modifier_key), modifier), None);
+                        world.add_event(GameEvent::ReactionEffectApplied { entity : ent });
+                    }
+                } else if event.is_starting() {
+                    if let Some(prev_modifier) = view.data::<ModifierTrackingData>(ent).modifiers_by_key.get(modifier_key) {
                         world.disable_modifier(prev_modifier.clone());
                         world.add_event(GameEvent::EffectEnded { entity : None });
-                        println!("end turn didge modifications removed");
                     }
                 }
             }

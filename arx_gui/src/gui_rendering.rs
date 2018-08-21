@@ -105,7 +105,7 @@ impl GUI {
                                     };
 
                                     match child_reif.widget.size[axis] {
-                                        Sizing::PcntOfParentAllowingLoop(_) => (), // ignore, looping parent based sizing is ignored
+                                        Sizing::PcntOfParentAllowingLoop(_) | Sizing::ExtendToParentEdge => (), // ignore, looping parent based sizing is ignored
                                         _ => {
                                             if child_reif.widget.showing {
                                                 let child_bounds = child_reif.bounds();
@@ -149,6 +149,9 @@ impl GUI {
                                 }
                             }
                         }
+                        Sizing::ExtendToParentEdge => {
+                            0.0
+                        }
                         sizing => self.compute_raw_widget_size(sizing, anchor_size)
                     };
 
@@ -166,6 +169,20 @@ impl GUI {
                         Positioning::Absolute(absolute_position) => absolute_position.ux(pixels_per_ux),
                     } + effective_dim * dim_multiplier;
                     trace!(target: "gui_redraw_quads", "effective_pos {:?}, effective_dim {:?}, dim_multiplier {:?}", effective_pos, effective_dim, dim_multiplier);
+
+                    let effective_dim = if Sizing::ExtendToParentEdge == widget.size[axis] {
+                        // TODO: support non-left/top aligned
+                        if widget.alignment[axis] != Alignment::Top && widget.alignment[axis] != Alignment::Left {
+                            error!("extend to parent not currently supported for non top/left aligned widgets");
+                            effective_dim
+                        } else {
+                            let far_parent = parent_position.map(|p| p[axis]).unwrap_or(0.0) + parent_size.map(|p| p[axis]).unwrap_or(self.gui_size[axis]);
+                            let new_dim = far_parent - effective_pos;
+                            new_dim
+                        }
+                    } else {
+                        effective_dim
+                    };
 
                     internal_state.dimensions[axis] = effective_dim;
                     internal_state.inner_dimensions[axis] = effective_dim - border_width_near - border_width_far - margin * 2.0;

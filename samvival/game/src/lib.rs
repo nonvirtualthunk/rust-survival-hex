@@ -27,8 +27,10 @@ extern crate pretty_env_logger;
 extern crate itertools;
 #[macro_use] extern crate arx_macros;
 extern crate arx_game as game;
+extern crate noise;
 
 extern crate num;
+extern crate cgmath;
 
 pub mod entities;
 pub mod world_util;
@@ -39,6 +41,8 @@ pub use events::*;
 pub mod archetypes;
 
 pub mod prelude;
+
+pub mod terrain;
 //
 //pub mod core;
 //
@@ -48,6 +52,7 @@ pub mod logic;
 //
 pub mod entity_util;
 
+pub mod components;
 //
 //pub mod prelude;
 //

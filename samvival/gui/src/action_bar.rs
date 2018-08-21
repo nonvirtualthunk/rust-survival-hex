@@ -79,14 +79,14 @@ impl ActionBar {
         }
     }
 
-    pub fn update(&mut self, gui : &mut GUI, actions : Vec<ActionType>, game_state : &GameState, control_context : ControlContext) {
+    pub fn update(&mut self, gui : &mut GUI, actions : Vec<ActionType>, game_state : &GameState, control_context : &mut ControlContext) {
         if let Some(selected_char) = game_state.selected_character {
             self.action_list.set_showing(true).reapply(gui);
 
             let mut selection_changed = false;
             for event in gui.events_for(self.action_list.as_widget_immut()) {
-                if let UIEvent::WidgetEvent(wevent) = event {
-                    if let WidgetEvent::ListItemClicked(index, button) = wevent {
+                if let UIEvent::WidgetEvent{ event, .. } = event {
+                    if let WidgetEvent::ListItemClicked(index, button) = event {
                         let action_type = self.actions[*index].clone();
                         self.selected_actions.insert(selected_char, action_type.clone());
                         control_context.event_bus.push_event(ControlEvents::ActionSelected(action_type));

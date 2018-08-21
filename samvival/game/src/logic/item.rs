@@ -1,8 +1,7 @@
 use entities::modifiers::EquipItemMod;
 use entities::modifiers::ItemHeldByMod;
 use events::GameEvent;
-use game::World;
-use game::Entity;
+use game::prelude::*;
 use entities::modify;
 use entities::combat::CombatData;
 use entities::combat::AttackReference;
@@ -18,19 +17,31 @@ use entities::inventory::InventoryData;
 pub fn put_item_in_inventory(world: &mut World, item : Entity, inventory : Entity) {
     world.modify(item, ItemData::in_inventory_of.set_to(Some(inventory)), None);
     world.modify(inventory, InventoryData::items.append(item), None);
+    world.add_event(GameEvent::AddToInventory { item, to_inventory: inventory });
 }
 
 pub fn remove_item_from_inventory(world: &mut World, item : Entity, inventory : Entity) {
     world.modify(item, ItemData::in_inventory_of.set_to(None), None);
     world.modify(inventory, InventoryData::items.remove(item), None);
+    world.add_event(GameEvent::RemoveFromInventory { item, from_inventory: inventory });
 }
 
-pub fn equip_item(world: &mut World, character : Entity, item : Entity, trigger_event : bool) {
+pub fn equip_item(world: &mut World, item : Entity, character : Entity, trigger_event : bool) {
+    let world_view = world.view();
+    let (item,character) = if world_view.has_data::<EquipmentData>(item) && ! world_view.has_data::<EquipmentData>(character) {
+        warn!("Equip item called with an item on the right hand and a character on the left, swapping");
+        (character, item)
+    } else {
+        (item, character)
+    };
+
     world.modify(character, EquipmentData::equipped.append(item), None);
-    put_item_in_inventory(world, item, character);
+    if ! is_item_in_inventory_of(world, item, character) {
+        put_item_in_inventory(world, item, character);
+    }
 
 
-    if world.view().data::<CombatData>(character).active_attack.is_none() {
+    if world_view.data::<CombatData>(character).active_attack.is_none() {
         let item_attack_ref = AttackReference::of_primary_from(world.view(), item);
         if item_attack_ref.is_some() {
             world.modify(character, CombatData::active_attack.set_to(item_attack_ref), "item equipped");
@@ -42,9 +53,24 @@ pub fn equip_item(world: &mut World, character : Entity, item : Entity, trigger_
     }
 }
 
+pub fn is_item_equipped_by(world: &WorldView, item : Entity, character : Entity) -> bool {
+    if let Some(equip) = world.data_opt::<EquipmentData>(character) {
+        equip.equipped.contains(&item)
+    } else {
+        false
+    }
+}
+pub fn is_item_in_inventory_of(world: &WorldView, item : Entity, character : Entity) -> bool {
+    if let Some(inv) = world.data_opt::<InventoryData>(character) {
+        inv.items.contains(&item)
+    } else {
+        false
+    }
+}
+
 
 pub fn unequip_item(world: &mut World, item : Entity, from_character : Entity, trigger_event : bool) {
-    if world.view().data::<EquipmentData>(from_character).equipped.contains(&item) {
+    if is_item_equipped_by(world, item, from_character) {
         modify(world, from_character, UnequipItemMod(item));
 
         if world.view().data::<CombatData>(from_character).active_attack.entity == item {

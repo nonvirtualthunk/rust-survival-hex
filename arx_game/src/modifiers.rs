@@ -146,7 +146,7 @@ pub enum Transformation {
     RemoveKey(Box<Any>),
     Append(Box<Any>),
     Remove(Box<Any>),
-    Custom(Str),
+    Custom(String),
 }
 
 //pub trait CloneToAny {

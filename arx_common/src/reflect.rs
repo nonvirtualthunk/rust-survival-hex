@@ -8,6 +8,7 @@ pub struct Field<E, T : 'static> {
     pub setter : fn(&mut E, T),
     pub getter : fn(&E) -> &T,
     pub getter_mut : fn(&mut E) -> &mut T,
+
 }
 
 impl <E, T : 'static> Debug for Field<E,T> {

@@ -17,12 +17,16 @@ use rusttype::gpu_cache::Cache as RTCache;
 use rusttype::gpu_cache::CacheBuilder as RTCacheBuilder;
 use std;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::path::PathBuf;
 use text::TextLayout;
 use piston_window::G2dTexture;
 use piston_window::Filter;
 use piston_window::Texture;
 use core::Text;
+use std::path::Path;
+use std::env::current_dir;
+use std::env::current_exe;
 
 pub type RTFont = rt::Font<'static>;
 pub type RTPositionedGlyph = rt::PositionedGlyph<'static>;
@@ -47,7 +51,22 @@ pub struct GraphicsAssets {
 }
 impl GraphicsAssets {
     pub fn new(base_path: &'static str) -> GraphicsAssets {
-        let assets_path = find_folder::Search::ParentsThenKids(3, 3).for_folder("assets").unwrap();
+
+        let mut cur_dir = current_exe().expect("not in a dir?");
+        cur_dir.pop();
+        cur_dir.pop();
+        cur_dir.pop();
+//        let assets_path = find_folder::Search::ParentsThenKids(3, 8).for_folder("assets").unwrap();
+        let assets_path = find_folder::SearchFolder {
+//            start : Path::new("/Users/nvt/Code/samvival/target/release/bundle/osx/Samvival.app/Contents/").to_path_buf(),
+            start : cur_dir,
+            direction : find_folder::Search::Kids(6)
+        }.for_folder("assets").expect("Could not find assets");
+
+        println!("Found assets: {:?}", assets_path);
+//        let mut assets_path = PathBuf::new();
+//        assets_path.push(Path::new("/Users/nvt/Code/samvival/assets"));
+//        assets_path.push(Path::new("/Users/nvt/Code/samvival/target/release/bundle/osx/Samvival.app/Contents/Resources/_up_/assets"));
         let main_path = assets_path.join(base_path);
         let texture_path = main_path.join("textures");
 
@@ -65,6 +84,7 @@ impl GraphicsAssets {
 pub struct GraphicsResources {
     pub assets : GraphicsAssets,
     textures: HashMap<ImageIdentifier, TextureInfo>,
+    non_present_textures: HashSet<ImageIdentifier>,
     factory: gfx_device_gl::Factory,
     pub glyph_cache : RTCache<'static>,
     pub font_texture_data : Vec<u8>,
@@ -90,6 +110,7 @@ impl GraphicsResources {
 
         GraphicsResources {
             textures: HashMap::new(),
+            non_present_textures: HashSet::new(),
             factory,
             glyph_cache : RTCacheBuilder { height : 512, width : 512, pad_glyphs : true, position_tolerance: 0.5, scale_tolerance : 0.5 }.build(),
             font_texture,
@@ -99,6 +120,10 @@ impl GraphicsResources {
     }
 
     pub fn read_texture(assets_path: &PathBuf, factory: &mut gfx_device_gl::Factory, identifier: ImageIdentifier) -> TextureInfo {
+        GraphicsResources::read_texture_opt(assets_path, factory, identifier.clone()).expect(format!("Could not load image with identifier {:?}", identifier).as_str())
+    }
+
+    pub fn read_texture_opt(assets_path: &PathBuf, factory: &mut gfx_device_gl::Factory, identifier: ImageIdentifier) -> Option<TextureInfo> {
         let identifier = if !identifier.ends_with(".png") {
             format!("{}.png", identifier)
         } else {
@@ -110,21 +135,25 @@ impl GraphicsResources {
         texture_settings.set_min(Filter::Nearest);
         texture_settings.set_mag(Filter::Nearest);
 
-        let image = image_lib::open(path.as_path()).expect(format!("Could not find path {:?}", path).as_str());
+        let image = if let Ok(image) = image_lib::open(path.as_path()) {
+            image
+        } else {
+            return None;
+        };
         let image = image_lib::imageops::flip_vertical(&image);
 
         let tex = Texture::from_image(
             factory,
             &image,
             &texture_settings,
-        ).expect(format!("Could not find path {:?}", path).as_str());
+        ).expect(format!("Could not create image path {:?}", path).as_str());
 
         let w = image.width();
         let h = image.height();
-        TextureInfo {
+        Some(TextureInfo {
             texture: tex,
             size: v2(w as i32, h as i32),
-        }
+        })
     }
 
     pub fn texture(&mut self, identifier: ImageIdentifier) -> TextureInfo {
@@ -135,6 +164,25 @@ impl GraphicsResources {
             self.textures.insert(identifier.clone(), tex);
             self.textures.get(&identifier).unwrap().clone()
         }
+    }
+
+    pub fn texture_opt(&mut self, identifier: ImageIdentifier) -> Option<TextureInfo> {
+        if self.textures.contains_key(&identifier) {
+            Some(self.textures.get(&identifier).unwrap().clone())
+        } else if self.non_present_textures.contains(&identifier) {
+            None
+        } else {
+            if let Some(tex) = GraphicsResources::read_texture_opt(&self.assets.texture_path, &mut self.factory, identifier.clone()) {
+                self.textures.insert(identifier.clone(), tex);
+                Some(self.textures.get(&identifier).unwrap().clone())
+            } else {
+                self.non_present_textures.insert(identifier.clone());
+                None
+            }
+        }
+    }
+    pub fn is_valid_texture(&mut self, identifier : ImageIdentifier) -> bool {
+        self.texture_opt(identifier).is_some()
     }
 
     pub fn font(&mut self, identifier: FontIdentifier) -> &RTFont {

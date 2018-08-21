@@ -261,7 +261,7 @@ pub enum WidgetState {
     Slider { current_value: f64 },
     Button { pressed: bool },
     Text { text: String },
-    Tab { active_tab: u32, tabs: Vec<Wid>, tab_buttons: Vec<Wid> },
+    Tab { active_tab: Option<u32>, tabs: Vec<Wid>, tab_buttons: Vec<Wid> },
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -269,6 +269,7 @@ pub enum Sizing {
     PcntOfParent(f32),
     PcntOfParentAllowingLoop(f32), // special sizing to be parent dependent, but allowed even when parent is dependent on children. Should basically omit the element from consideration
     DeltaOfParent(UIUnits),
+    ExtendToParentEdge,
     Constant(UIUnits),
     Derived,
     SurroundChildren,
@@ -300,6 +301,14 @@ impl Positioning {
     }
     pub fn match_to(other_widget : &Widget) -> Positioning { Positioning::MatchWidget(other_widget.id()) }
     pub fn absolute(uiu: UIUnits) -> Positioning { Positioning::Absolute(uiu) }
+
+    pub fn depends_on(&self) -> Option<Wid> {
+        match self {
+            Positioning::DeltaOfWidget(wid,_,_) => Some(*wid),
+            Positioning::MatchWidget(wid) => Some(*wid),
+            _ => None
+        }
+    }
 }
 impl Default for Positioning {
     fn default() -> Self {
@@ -325,11 +334,26 @@ pub enum Alignment {
     Bottom,
 }
 
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+pub struct WidgetCallbackRef(u32);
+
+impl WidgetCallbackRef {
+    pub fn new(id : u32, inherent : bool) -> WidgetCallbackRef {
+        if inherent { WidgetCallbackRef::inherent_callback(id) }
+        else { WidgetCallbackRef::listener_callback(id) }
+    }
+    pub fn inherent_callback(id : u32) -> WidgetCallbackRef { WidgetCallbackRef(id | 0b10000000000000000000000000000000) }
+    pub fn listener_callback(id : u32) -> WidgetCallbackRef { WidgetCallbackRef(id & 0b01111111111111111111111111111111) }
+
+    pub fn is_inherent(&self) -> bool { (self.0 & 0b10000000000000000000000000000000) != 0 }
+    pub fn id(&self) -> u32 { self.0 & 0b01111111111111111111111111111111 }
+}
+
 
 #[derive(Clone, PartialEq)]
 pub struct Widget {
     pub name : Option<Str>,
-    pub callbacks: Vec<u32>,
+    pub callbacks: Vec<WidgetCallbackRef>,
     pub(crate) id: Wid,
     pub parent_id: Option<Wid>,
     pub widget_type: WidgetType,
@@ -345,7 +369,6 @@ pub struct Widget {
     pub draw_layer : GUILayer,
     pub state_override: Option<WidgetState>,
     pub event_consumption: EventConsumption,
-    pub custom_draw: Option<Arc<CustomWidgetRenderer>>,
     pub tooltip : Option<String>
 }
 
@@ -367,7 +390,6 @@ impl Widget {
             callbacks: Vec::new(),
             event_consumption: EventConsumption::none(),
             accepts_focus: false,
-            custom_draw: None,
             ignores_parent_bounds: false,
             name : None,
             draw_layer : GUILayer::Main,
@@ -443,18 +465,26 @@ impl Widget {
         }
     }
 
-    pub fn add_callback<State: 'static, U: Fn(&mut State, &UIEvent) + 'static>(&mut self, function: U) -> &mut Self {
+    pub fn add_callback<State: 'static, U: Fn(&mut State, &UIEvent) + 'static>(&mut self, function: U, inherent : bool) -> &mut Self {
         let new_id = WIDGET_CALLBACKS.with(|widget_callbacks| widget_callbacks.borrow_mut().add_callback(function));
-        self.callbacks.push(new_id);
+        self.callbacks.push(WidgetCallbackRef::new(new_id, inherent));
+        self
+    }
+    pub fn add_inherent_callback<State: 'static, U: Fn(&mut State, &UIEvent) + 'static>(&mut self, function: U) -> &mut Self {
+        self.add_callback(function, true);
         self
     }
     pub fn with_callback<State: 'static, U: Fn(&mut State, &UIEvent) + 'static>(mut self, function: U) -> Self {
-        self.add_callback(function);
+        self.add_callback(function, false);
+        self
+    }
+    pub fn with_inherent_callback<State: 'static, U: Fn(&mut State, &UIEvent) + 'static>(mut self, function: U) -> Self {
+        self.add_callback(function, true);
         self
     }
     pub fn add_callback_2<State: 'static, OtherState: 'static, U: Fn(&mut State, &mut OtherState, &UIEvent) + 'static>(&mut self, function: U) -> &mut Self {
         let new_id = WIDGET_CALLBACKS.with(|widget_callbacks| widget_callbacks.borrow_mut().add_callback_2(function));
-        self.callbacks.push(new_id);
+        self.callbacks.push(WidgetCallbackRef::new(new_id, false));
         self
     }
     pub fn with_callback_2<State: 'static, OtherState: 'static, U: Fn(&mut State, &mut OtherState, &UIEvent) + 'static>(mut self, function: U) -> Self {
@@ -462,7 +492,7 @@ impl Widget {
         self
     }
     pub fn clear_callbacks(&mut self) {
-        self.callbacks.clear();
+        self.callbacks.retain(|c| c.is_inherent());
     }
 
     // -------------------------------------------------- private functions -----------------------------------------------------------
@@ -473,6 +503,7 @@ impl Widget {
             Sizing::DeltaOfParent(_) => true,
             Sizing::PcntOfParent(_) => true,
             Sizing::PcntOfParentAllowingLoop(_) => true, // be careful with this one, it's intended to be allowed in cases parent normally wouldn't be
+            Sizing::ExtendToParentEdge => true, // likewise this one
             Sizing::SurroundChildren => false
         }
     }
@@ -497,6 +528,17 @@ impl Widget {
             return false;
         }
         true
+    }
+
+
+    pub(crate) fn depends_on(&self) -> Vec<Wid> {
+        let mut ret = Vec::new();
+        for pos in self.position.iter() {
+            if let Some(dependent) = pos.depends_on() {
+                ret.push(dependent);
+            }
+        }
+        ret
     }
 }
 

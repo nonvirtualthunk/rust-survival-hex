@@ -33,11 +33,11 @@ impl Button {
             .border_color(Color::black())
             .size(Sizing::SurroundChildren, Sizing::SurroundChildren)
             .margin(0.5.ux())
-            .with_callback(|ctxt: &mut WidgetContext, evt: &UIEvent| {
+            .with_inherent_callback(|ctxt: &mut WidgetContext, evt: &UIEvent| {
                 let widget_id = ctxt.widget_id;
                 if let UIEvent::MouseRelease { .. } = evt {
                     ctxt.update_state(WidgetState::Button { pressed: false });
-                    ctxt.trigger_event(UIEvent::WidgetEvent(WidgetEvent::ButtonClicked(widget_id)));
+                    ctxt.trigger_event(UIEvent::widget_event(WidgetEvent::ButtonClicked(widget_id), widget_id));
                 } else if let UIEvent::MousePress { .. } = evt {
                     ctxt.update_state(WidgetState::Button { pressed: true });
                 } else if let UIEvent::MouseExited { .. } = evt {
@@ -61,9 +61,15 @@ impl Button {
         Button {
             text: Widget::text(text, 14)
                 .size(Sizing::Derived, Sizing::Derived)
-                .position(Positioning::Constant(0.px()), Positioning::Constant(0.px())),
+                .position(Positioning::Constant(0.px()), Positioning::Constant(0.px()))
+                .parent(&body),
             body,
         }
+    }
+
+    pub fn set_text<S : Into<String>>(&mut self, text : S) -> &mut Self {
+        self.text.set_text(text);
+        self
     }
 
     pub fn apply(mut self, gui: &mut GUI) -> Self {
@@ -85,9 +91,9 @@ impl Button {
     }
 
     pub fn with_on_click<State: 'static, F: Fn(&mut State) -> () + 'static>(mut self, function: F) -> Self {
-        self.body = self.body.with_callback(move |state: &mut State, evt: &UIEvent| {
-            if let UIEvent::WidgetEvent(evt) = evt {
-                if let WidgetEvent::ButtonClicked(btn) = evt {
+        self.body = self.body.with_callback(move |state: &mut State, event: &UIEvent| {
+            if let UIEvent::WidgetEvent{ event, .. } = event {
+                if let WidgetEvent::ButtonClicked(btn) = event {
                     (function)(state)
                 }
             };
@@ -95,9 +101,9 @@ impl Button {
         self
     }
     pub fn with_on_click_2<State: 'static, OtherState: 'static, F: Fn(&mut State, &mut OtherState) -> () + 'static>(mut self, function: F) -> Self {
-        self.body = self.body.with_callback_2(move |state: &mut State, other: &mut OtherState, evt: &UIEvent| {
-            if let UIEvent::WidgetEvent(evt) = evt {
-                if let WidgetEvent::ButtonClicked(btn) = evt {
+        self.body = self.body.with_callback_2(move |state: &mut State, other: &mut OtherState, event: &UIEvent| {
+            if let UIEvent::WidgetEvent{ event, .. } = event {
+                if let WidgetEvent::ButtonClicked(btn) = event {
                     (function)(state, other)
                 }
             };
@@ -111,9 +117,9 @@ impl Button {
     }
 
     pub fn clicked(&self, gui: &GUI) -> bool {
-        for evt in gui.events_for(&self.body) {
-            if let UIEvent::WidgetEvent(evt) = evt {
-                if let WidgetEvent::ButtonClicked(btn) = evt {
+        for event in gui.events_for(&self.body) {
+            if let UIEvent::WidgetEvent{ event, .. } = event {
+                if let WidgetEvent::ButtonClicked(btn) = event {
                     return true;
                 }
             }

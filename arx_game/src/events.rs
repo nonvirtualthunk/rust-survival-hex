@@ -32,6 +32,13 @@ impl <E: GameEventType> GameEventWrapper<E> {
             None
         }
     }
+    pub fn if_starting(&self) -> Option<&E> {
+        if self.is_starting() {
+            Some(&self.event)
+        } else {
+            None
+        }
+    }
 }
 
 pub trait GameEventType : Clone + Debug {

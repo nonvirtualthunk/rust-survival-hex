@@ -135,6 +135,10 @@ pub trait DelegateToWidget where Self: Sized {
         self.as_widget().border.color = border_color;
         self
     }
+    fn set_border_sides(&mut self, border_sides: BorderSides) -> &mut Self {
+        self.as_widget().border.sides = border_sides;
+        self
+    }
     fn border(mut self, border: Border) -> Self {
         self.set_border(border);
         self
@@ -279,15 +283,16 @@ pub trait DelegateToWidget where Self: Sized {
         self.clear_callbacks();
         self
     }
-    fn clear_callbacks(&mut self) {
+    fn clear_callbacks(&mut self) -> &mut Self {
         self.as_widget().clear_callbacks();
+        self
     }
     fn with_callback<State: 'static, U: Fn(&mut State, &UIEvent) + 'static>(mut self, function: U) -> Self {
-        self.as_widget().add_callback(function);
+        self.as_widget().add_callback(function, false);
         self
     }
     fn add_callback<State: 'static, U: Fn(&mut State, &UIEvent) + 'static>(&mut self, function: U) -> &mut Self {
-        self.as_widget().add_callback(function);
+        self.as_widget().add_callback(function, false);
         self
     }
     fn with_callback_2<State: 'static, OtherState: 'static, U: Fn(&mut State, &mut OtherState, &UIEvent) + 'static>(mut self, function: U) -> Self {

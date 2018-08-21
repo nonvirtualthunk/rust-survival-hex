@@ -29,6 +29,7 @@ pub fn weapon_archetypes() -> ArchetypeLibrary {
                 secondary_damage_type: None,
                 range: 10,
                 min_range: 2,
+                ammunition_kind: Some(taxonomy::projectiles::Arrow)
             }],
             ..Default::default()
         })
@@ -49,6 +50,7 @@ pub fn weapon_archetypes() -> ArchetypeLibrary {
                     secondary_damage_type: None,
                     range: 1,
                     min_range: 0,
+                    ammunition_kind: None,
                 },
                 Attack {
                     name: "slash",
@@ -61,6 +63,7 @@ pub fn weapon_archetypes() -> ArchetypeLibrary {
                     secondary_damage_type: None,
                     range: 1,
                     min_range: 0,
+                    ammunition_kind: None,
                 }],
             ..Default::default()
         })
@@ -81,6 +84,7 @@ pub fn weapon_archetypes() -> ArchetypeLibrary {
                     secondary_damage_type: None,
                     range: 1,
                     min_range: 0,
+                    ammunition_kind: None,
                 },
                 Attack {
                     name: "slash",
@@ -93,6 +97,7 @@ pub fn weapon_archetypes() -> ArchetypeLibrary {
                     secondary_damage_type: None,
                     range: 1,
                     min_range: 0,
+                    ammunition_kind: None,
                 }],
             ..Default::default()
         })
@@ -113,6 +118,7 @@ pub fn weapon_archetypes() -> ArchetypeLibrary {
                     secondary_damage_type: None,
                     range: 2,
                     min_range: 2,
+                    ammunition_kind: None,
                 },
                 Attack {
                     name: "smack",
@@ -125,6 +131,7 @@ pub fn weapon_archetypes() -> ArchetypeLibrary {
                     secondary_damage_type: None,
                     range: 1,
                     min_range: 0,
+                    ammunition_kind: None,
                 },
                 Attack {
                     name: "throw",
@@ -137,6 +144,7 @@ pub fn weapon_archetypes() -> ArchetypeLibrary {
                     secondary_damage_type: None,
                     range: 4,
                     min_range: 2,
+                    ammunition_kind: None,
                 }],
             ..Default::default()
         })
@@ -158,6 +166,7 @@ pub fn weapon_archetypes() -> ArchetypeLibrary {
                     secondary_damage_type: None,
                     range: 1,
                     min_range: 0,
+                    ammunition_kind: None,
                 }],
             ..Default::default()
         })

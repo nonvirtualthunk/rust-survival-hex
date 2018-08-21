@@ -33,19 +33,26 @@ use events::GameEventType;
 use events::CoreEvent;
 use events::GameEventState;
 use std::intrinsics::type_name;
+use std::ops::Deref;
+use entity::DebugData;
+use rand::StdRng;
+use rand::SeedableRng;
+use backtrace::Backtrace;
 
 pub struct ModifiersApplication {
     disable_func: fn(&mut World, ModifierReference),
     reset_func: fn(&World, &mut WorldView),
     recompute_for_disabled_modifiers: fn(&World, &mut WorldView, GameEventClock, GameEventClock),
-    apply_func: fn(&World, &mut WorldView, usize, ModifierClock, GameEventClock, bool) -> Option<usize>
+    apply_func: fn(&World, &mut WorldView, usize, ModifierClock, GameEventClock, bool) -> Option<usize>,
+    remove_entity_func: fn(&mut WorldView, Entity),
+    bootstrap_entity_func: fn(&World, &mut WorldView, Entity),
 }
 
 pub struct IndexApplication {
     index_func: Rc<Fn(&World, &mut WorldView)>
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct ModifierReference(TypeId, bool, usize);
 
 pub struct World {
@@ -78,45 +85,50 @@ impl World {
             events: MultiTypeEventContainer::new(),
             view: UnsafeCell::new(WorldView {
                 entities: vec![],
+                entity_set: HashSet::new(),
                 self_entity: self_ent,
                 constant_data: Map::<CloneAny>::new(),
                 effective_data: Map::<CloneAny>::new(),
+                overlay_data: Map::<CloneAny>::new(),
                 current_time: 0,
                 events: MultiTypeEventContainer::new(),
                 modifier_cursor: 0,
                 modifier_indices: hash_map::HashMap::new(),
-                entity_indices: Map::<CloneAny>::new()
+                entity_indices: Map::<CloneAny>::new(),
+                has_overlay: false,
             }),
             modifier_application_by_type: hash_map::HashMap::new(),
             entity_indices: Map::<CloneAny>::new(),
-            index_applications: vec![]
+            index_applications: vec![],
         };
 
         world.register_event_type::<CoreEvent>();
+        world.register::<DebugData>();
 
         world
     }
 
-    pub fn register_index<I : Hash + Eq + Clone + 'static>(&mut self) {
+    pub fn register_index<I: Hash + Eq + Clone + 'static>(&mut self) {
         self.entity_indices.insert(EntityIndex::<I>::new());
         self.mut_view().entity_indices.insert(EntityIndex::<I>::new());
 
-        let index_func = |world : &World, view : &mut WorldView| {
-            let world_index : &EntityIndex<I> = world.entity_indices.get::<EntityIndex<I>>().unwrap();
-            let view_index : &mut EntityIndex<I> = view.entity_indices.get_mut::<EntityIndex<I>>().unwrap();
+        let index_func = |world: &World, view: &mut WorldView| {
+            let world_index: &EntityIndex<I> = world.entity_indices.get::<EntityIndex<I>>().unwrap();
+            let view_index: &mut EntityIndex<I> = view.entity_indices.get_mut::<EntityIndex<I>>().unwrap();
             view_index.update_from(world_index);
         };
 
         self.index_applications.push(IndexApplication {
-            index_func : Rc::new(index_func)
+            index_func: Rc::new(index_func)
         });
     }
 
-    pub fn register_event_type<E : GameEventType + 'static>(&mut self) {
+    pub fn register_event_type<E: GameEventType + 'static>(&mut self) {
         self.events.register_event_type::<E>();
+        self.mut_view().events.register_event_type::<E>();
     }
 
-    pub(crate) fn modifiers_container<T : EntityData>(&self) -> &ModifiersContainer<T> {
+    pub(crate) fn modifiers_container<T: EntityData>(&self) -> &ModifiersContainer<T> {
         self.modifiers.get::<ModifiersContainer<T>>().expect("modifiers are expected to be present, you may not have registered all your entity data types")
     }
 
@@ -133,31 +145,34 @@ impl World {
             if dynamic {
                 all_modifiers.dynamic_modifiers.get_mut(index).expect("cannot disable a non-existent modifier").disabled_at = Some(world.current_time);
             } else {
-                info!("Disabling modifier with reference {:?} and marking disabled at to {:?}", modifier_ref, world.current_time);
+                trace!("Disabling modifier with reference {:?} and marking disabled at to {:?}", modifier_ref, world.current_time);
                 let modifier = all_modifiers.modifiers.get_mut(index).expect("cannot disable a non-existent modifier").disabled_at = Some(world.current_time);
-                all_modifiers.modifiers_by_disabled_at.entry(world.current_time).or_insert_with(||Vec::new()).push(index);
+                all_modifiers.modifiers_by_disabled_at.entry(world.current_time).or_insert_with(|| Vec::new()).push(index);
             }
         };
 
-        let recompute_for_disabled_modifiers_between = |world: &World, view: &mut WorldView, start : GameEventClock, end : GameEventClock| {
+        let recompute_for_disabled_modifiers_between = |world: &World, view: &mut WorldView, start: GameEventClock, end: GameEventClock| {
             let all_modifiers: &ModifiersContainer<T> = world.modifiers.get::<ModifiersContainer<T>>().expect("modifiers not present");
 
             let mut entities_to_recompute = HashSet::new();
             let empty_vec = Vec::new();
-            for time in start .. end {
+            for time in start..end {
                 for modifier_index in all_modifiers.modifiers_by_disabled_at.get(&time).unwrap_or(&empty_vec) {
                     let entity = all_modifiers.modifiers.get(*modifier_index).expect("modifier referenced by disabled at must exist").entity;
                     entities_to_recompute.insert(entity);
                 }
             }
 
-            info!("Entities to recompute due to disabled modifiers : {:?}", entities_to_recompute);
+            if entities_to_recompute.len() > 0 {
+                trace!("Entities to recompute due to disabled modifiers : {:?}", entities_to_recompute);
+            }
+
             for entity in entities_to_recompute {
                 let mut raw_data: T = world.data.get::<DataContainer<T>>()
-                    .unwrap_or_else(||panic!(format!("Attempt to recompute unregistered data type for entity: {:?}", entity)))
+                    .unwrap_or_else(|| panic!(format!("Attempt to recompute unregistered data type for entity: {:?}", entity)))
                     .storage
                     .get(&entity)
-                    .unwrap_or_else(||panic!(format!("Attempt to recompute data that has not been attached to entity: {:?}", entity)))
+                    .unwrap_or_else(|| panic!(format!("Attempt to recompute data that has not been attached to entity: {:?}", entity)))
                     .clone();
 
                 info!("Raw data for recomputation: {:?}", raw_data);
@@ -252,10 +267,15 @@ impl World {
                             let mut ent_data: T = match is_dynamic || !ent_has_dynamic_data {
                                 true => view.effective_data.get_mut::<DataContainer<T>>().expect("modifier's dynamic data not present").storage
                                     //.entry(wrapper.entity.0).or_insert(T::default()).clone(),
-                                    .get(&wrapper.entity).unwrap_or_else(||panic!(format!("Could not retrieve dynamic data for modified entity {}, type : {}", wrapper.entity, unsafe { type_name::<T>() }))).clone(),
+                                    .entry(wrapper.entity)
+                                    .or_insert_with(|| { world.raw_data::<T>(wrapper.entity).clone() })
+                                    .clone(),
                                 false => view.constant_data.get_mut::<DataContainer<T>>().expect("modifier's constant data not present").storage
                                     //.entry(wrapper.entity).or_insert(T::default()).clone()
-                                    .get(&wrapper.entity).unwrap_or_else(||panic!(format!("Could not retrieve constant data for modified entity {}", wrapper.entity))).clone()
+//                                    .get(&wrapper.entity).unwrap_or_else(|| panic!(format!("Could not retrieve constant data for modified entity {}", wrapper.entity))).clone()
+                                    .entry(wrapper.entity)
+                                    .or_insert_with(|| { world.raw_data::<T>(wrapper.entity).clone() })
+                                    .clone(),
                             };
 
                             wrapper.modifier.modify(&mut ent_data, view);
@@ -274,11 +294,25 @@ impl World {
             }
         };
 
+        let remove_entity_func = |view : &mut WorldView, entity : Entity| {
+            view.effective_data.get_mut::<DataContainer<T>>().unwrap().storage.remove(&entity);
+            view.constant_data.get_mut::<DataContainer<T>>().unwrap().storage.remove(&entity);
+        };
+
+        let bootstrap_entity_func = |world : &World, view: &mut WorldView, entity : Entity| {
+            if let Some(existing_data) = world.raw_data_opt::<T>(entity) {
+                view.effective_data.get_mut::<DataContainer<T>>().unwrap().storage.insert(entity, existing_data.clone());
+                view.constant_data.get_mut::<DataContainer<T>>().unwrap().storage.insert(entity, existing_data.clone());
+            }
+        };
+
         self.modifier_application_by_type.insert(TypeId::of::<T>(), ModifiersApplication {
             disable_func: (disable_func),
             reset_func: (reset_func),
             recompute_for_disabled_modifiers: (recompute_for_disabled_modifiers_between),
             apply_func: (apply_func),
+            remove_entity_func,
+            bootstrap_entity_func
         });
     }
 
@@ -292,17 +326,29 @@ impl World {
     }
 
     pub fn view_at_time(&self, at_time: GameEventClock) -> WorldView {
+        let entities = self.entities.iter().filter(|e| e.1 <= at_time).cloned().collect_vec();
+        let entity_set : HashSet<Entity> = entities.iter().map(|e| e.0).collect();
         let mut new_view = WorldView {
-            entities: self.entities.iter().filter(|e| e.1 <= at_time).cloned().collect(),
+            entity_set,
+            entities,
             self_entity: self.self_entity,
             constant_data: self.data.clone(),
             effective_data: self.data.clone(),
+            overlay_data: Map::new(),
             current_time: 0,
             events: self.events.clone_events_up_to(at_time),
             modifier_cursor: 0,
             modifier_indices: hash_map::HashMap::new(),
-            entity_indices: self.entity_indices.clone()
+            entity_indices: self.entity_indices.clone(),
+            has_overlay: false,
         };
+
+        for EntityContainer(entity, time) in self.entities.iter().skip_while(|e| e.1 <= at_time) {
+            for (type_id, application_capability) in &self.modifier_application_by_type {
+                println!("Removing entity that was created after {:?}, [{:?}]", at_time, time);
+                (application_capability.remove_entity_func)(&mut new_view, *entity);
+            }
+        }
 
         self.update_view_to_time(&mut new_view, at_time);
 
@@ -320,8 +366,23 @@ impl World {
 
         view.events.update_events_to(&self.events, at_time);
 
-        let new_entities: Vec<EntityContainer> = self.entities.iter().take_while(|e| e.1 <= at_time).cloned().collect();
-        new_entities.iter().rev().for_each(|e| view.entities.push(e.clone()));
+        let existing_set = &view.entity_set;
+        let cur_time = view.current_time;
+        let new_entities: Vec<EntityContainer> = self.entities.iter().rev()
+            .skip_while(|e| e.1 > at_time)
+            .take_while(|e| e.1 > cur_time)
+            .filter(|e| ! existing_set.contains(&e.0))
+            .cloned()
+            .collect();
+
+        new_entities.into_iter().rev().for_each(|e| {
+            println!("Bootstrapping entity that was created after {:?}, [{:?}]", cur_time, e.1);
+            for (type_id, application_capability) in &self.modifier_application_by_type {
+                (application_capability.bootstrap_entity_func)(self, view, e.0);
+            }
+            view.entity_set.insert(e.0);
+            view.entities.push(e);
+        });
 
 
         // we need to keep track of where we are in each modifier type, as well as the global modifier cursor.
@@ -420,26 +481,26 @@ impl World {
         self.entities.push(EntityContainer(entity, self.current_time));
     }
 
-    pub fn index_entity<I: Hash + Eq + Clone + 'static>(&mut self, entity : Entity, key : I) {
-        let index : &mut EntityIndex<I> = self.entity_indices.get_mut::<EntityIndex<I>>().unwrap();
+    pub fn index_entity<I: Hash + Eq + Clone + 'static>(&mut self, entity: Entity, key: I) {
+        let index: &mut EntityIndex<I> = self.entity_indices.get_mut::<EntityIndex<I>>().unwrap();
         index.index.insert(key, entity);
     }
 
-    pub fn modify<T: EntityData, S : Into<Option<Str>>>(&mut self, entity: Entity, modifier: Box<Modifier<T>>, description : S) -> ModifierReference {
+    pub fn modify<T: EntityData, S: Into<Option<Str>>>(&mut self, entity: Entity, modifier: Box<Modifier<T>>, description: S) -> ModifierReference {
         self.add_modifier(entity, modifier, description)
     }
-    pub fn add_modifier<T: EntityData, S : Into<Option<Str>>>(&mut self, entity: Entity, modifier: Box<Modifier<T>>, description : S) -> ModifierReference {
+    pub fn add_modifier<T: EntityData, S: Into<Option<Str>>>(&mut self, entity: Entity, modifier: Box<Modifier<T>>, description: S) -> ModifierReference {
         let all_modifiers: &mut ModifiersContainer<T> = self.modifiers.get_mut::<ModifiersContainer<T>>()
-            .unwrap_or_else(||panic!(format!("attempted to add a modifier for an unregistered kind of data")));
+            .unwrap_or_else(|| panic!(format!("attempted to add a modifier for an unregistered kind of data")));
         if modifier.modifier_type() == ModifierType::Dynamic {
-            let index = all_modifiers.dynamic_entity_set.len();
+            let index = all_modifiers.dynamic_modifiers.len();
             all_modifiers.dynamic_modifiers.push(ModifierContainer {
                 modifier,
                 applied_at: self.current_time,
                 disabled_at: None,
                 modifier_index: self.total_dynamic_modifier_count,
                 entity,
-                description : description.into()
+                description: description.into(),
             });
             all_modifiers.dynamic_entity_set.insert(entity);
             self.total_dynamic_modifier_count += 1;
@@ -452,7 +513,7 @@ impl World {
                 disabled_at: None,
                 modifier_index: self.total_modifier_count,
                 entity,
-                description : description.into()
+                description: description.into(),
             });
             trace!("Creating modifier with count {}, incrementing", self.total_modifier_count);
             self.total_modifier_count += 1;
@@ -467,7 +528,7 @@ impl World {
 
     pub fn add_world_modifier<T: EntityData>(&mut self, modifier: Box<Modifier<T>>) {
         let tmp = self.self_entity;
-        self.add_modifier::<T,Option<Str>>(tmp, modifier, None);
+        self.add_modifier::<T, Option<Str>>(tmp, modifier, None);
     }
 
     pub fn add_constant_modifier<T: EntityData, CM: ConstantModifier<T> + 'static>(&mut self, entity: Entity, constant_modifier: CM) {
@@ -497,15 +558,15 @@ impl World {
         self.add_modifier(entity, box DynamicModifierWrapper { inner: dynamic_modifier, _ignored: PhantomData }, None);
     }
 
-    pub fn add_callback<E : GameEventType + 'static>(&mut self, event_callback : EventCallback<E>) {
+    pub fn add_callback<E: GameEventType + 'static>(&mut self, event_callback: EventCallback<E>) {
         self.events.add_callback(event_callback);
     }
 
-    pub fn push_event<E : GameEventType + 'static>(&mut self, event: E, state : GameEventState) {
+    pub fn push_event<E: GameEventType + 'static>(&mut self, event: E, state: GameEventState) {
         let wrapper = GameEventWrapper {
             event: event,
             occurred_at: self.current_time,
-            state
+            state,
         };
 
         let callbacks = self.events.push_event(wrapper.clone());
@@ -517,26 +578,26 @@ impl World {
         }
     }
 
-    pub fn add_event<E : GameEventType + 'static>(&mut self, event: E) {
+    pub fn add_event<E: GameEventType + 'static>(&mut self, event: E) {
         self.push_event(event.clone(), GameEventState::Started);
         self.push_event(event, GameEventState::Ended);
     }
-    pub fn start_event<E : GameEventType + 'static>(&mut self, event: E) {
+    pub fn start_event<E: GameEventType + 'static>(&mut self, event: E) {
         self.push_event(event, GameEventState::Started);
     }
-    pub fn end_event<E : GameEventType + 'static>(&mut self, event: E) {
+    pub fn end_event<E: GameEventType + 'static>(&mut self, event: E) {
         self.push_event(event, GameEventState::Ended);
     }
-    pub fn continue_event<E : GameEventType + 'static>(&mut self, event: E) {
+    pub fn continue_event<E: GameEventType + 'static>(&mut self, event: E) {
         self.push_event(event, GameEventState::Continuing);
     }
 
-    pub fn event_at<E : GameEventType + 'static>(&self, time : GameEventClock) -> Option<&GameEventWrapper<E>> {
+    pub fn event_at<E: GameEventType + 'static>(&self, time: GameEventClock) -> Option<&GameEventWrapper<E>> {
         self.events.events::<E>().find(|e| e.occurred_at == time)
     }
 
     pub fn ensure_data<T: EntityData>(&mut self, entity: Entity) {
-        if ! self.has_data::<T>(entity) {
+        if !self.has_data::<T>(entity) {
             self.attach_data::<T>(entity, &T::default());
         }
     }
@@ -544,8 +605,10 @@ impl World {
     pub fn attach_data<T: EntityData>(&mut self, entity: Entity, data: &T) {
         {
             let self_data: &mut DataContainer<T> = self.data.get_mut::<DataContainer<T>>()
-                .unwrap_or_else(||panic!(format!("Attempt to attach unregistered data: {:?}", data)));
-            self_data.storage.insert(entity, data.clone());
+                .unwrap_or_else(|| panic!(format!("Attempt to attach unregistered data: {:?}", data)));
+            if let Some(prev) = self_data.storage.insert(entity, data.clone()) {
+                error!("Attached data multiple times, that's going to super-break stuff {:?}", Backtrace::new());
+            }
         }
 
         {
@@ -565,17 +628,33 @@ impl World {
     }
 
 
-    pub fn random_seed(&self, extra : u8) -> [u8;32] {
+    pub fn random_seed(&self, extra: u8) -> [u8; 32] {
         use std::mem;
 
-        let time_bytes : [u8;8] = unsafe {
+        let time_bytes: [u8; 8] = unsafe {
             mem::transmute(self.current_time)
         };
 
-        [time_bytes[0],time_bytes[1],time_bytes[2],time_bytes[3],time_bytes[4],time_bytes[5],time_bytes[6],time_bytes[7],0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,extra]
+        [time_bytes[0], time_bytes[1], time_bytes[2], time_bytes[3], time_bytes[4], time_bytes[5], time_bytes[6], time_bytes[7], 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, extra]
+    }
+
+    pub fn random(&self, extra: u8) -> StdRng {
+        let seed = self.random_seed(extra);
+        let rng: StdRng = SeedableRng::from_seed(seed);
+        rng
+    }
+
+    pub fn raw_data<T : EntityData>(&self, entity : Entity) -> &T {
+        self.raw_data_opt::<T>(entity).expect("Attempted to get raw data, but entity had none")
+    }
+    pub fn raw_data_opt<T : EntityData>(&self, entity : Entity) -> Option<&T> {
+        self.data.get::<DataContainer<T>>().expect("Attempted to get raw data where type not registered").storage.get(&entity)
+    }
+
+    pub fn world_data_mut<T : EntityData>(&mut self) -> &T {
+        self.data.get_mut::<DataContainer<T>>().expect("Attempted to get raw data where type not registered").storage.entry(self.self_entity).or_insert_with(||T::default())
     }
 }
-
 
 
 impl World {
@@ -589,9 +668,9 @@ impl World {
         self.field_logs_with_condition_for::<T>(ent, |m| true, self.current_time)
     }
 
-    pub fn field_logs_with_condition_for<T: EntityData>(&self, ent: Entity, condition : fn(&ModifierContainer<T>) -> bool, at_time : GameEventClock) -> FieldLogs <T>{
+    pub fn field_logs_with_condition_for<T: EntityData>(&self, ent: Entity, condition: fn(&ModifierContainer<T>) -> bool, at_time: GameEventClock) -> FieldLogs<T> {
         let container = self.modifiers_container::<T>();
-        let data_container : &DataContainer<T> = self.data.get::<DataContainer<T>>().expect("Data kind must exist");
+        let data_container: &DataContainer<T> = self.data.get::<DataContainer<T>>().expect("Data kind must exist");
         let raw_data = data_container.storage.get(&ent).unwrap_or_else(|| &data_container.sentinel).clone();
         FieldLogs {
             field_modifications: container.modifiers.iter()
@@ -609,12 +688,11 @@ impl World {
                     field_modifications
                 })
                 .collect(),
-            base_value : raw_data
+            base_value: raw_data,
         }
     }
 }
 
-use std::ops::Deref;
 impl Deref for World {
     type Target = WorldView;
 

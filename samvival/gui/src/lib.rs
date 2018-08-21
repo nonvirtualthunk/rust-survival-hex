@@ -6,6 +6,7 @@
 
 #![feature(box_syntax)]
 #![feature(nll)]
+#![feature(const_vec_new)]
 
 extern crate piston_window;
 extern crate gfx_device_gl;

@@ -8,7 +8,8 @@ use common::hex::*;
 
 #[derive(Clone, Default, Debug, PrintFields)]
 pub struct TileData {
-    pub name : Str,
+    pub main_terrain_name: Str,
+    pub secondary_terrain_name: Option<Str>,
     pub position: AxialCoord,
     pub move_cost: Sext,
     pub cover: i8,

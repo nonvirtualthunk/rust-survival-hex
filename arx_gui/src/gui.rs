@@ -27,6 +27,8 @@ use core::mem;
 
 use anymap::any::UncheckedAnyExt;
 use anymap::AnyMap;
+
+use std::collections::VecDeque;
 //use anymap::any::Any;
 
 use piston_window::MouseButton;
@@ -107,7 +109,7 @@ pub struct Modifiers {
 pub(crate) struct WidgetReification {
     pub(crate) widget: Widget,
     pub(crate) draw_list: DrawList,
-    pub(crate) children: Vec<Wid>,
+    pub(crate) children: VecDeque<Wid>,
     pub(crate) scroll: Vec2f,
     pub(crate) position: Vec2f,
     pub(crate) inner_position: Vec2f,
@@ -125,7 +127,7 @@ impl WidgetReification {
         WidgetReification {
             widget,
             draw_list: DrawList::none(),
-            children: vec![],
+            children: VecDeque::new(),
             scroll: v2(0.0, 0.0),
             position: v2(0.0, 0.0),
             dimensions: v2(0.0, 0.0),
@@ -186,8 +188,86 @@ impl GUI {
         }
     }
 
+    pub fn mark_all_modified(&mut self) {
+        for key in self.widget_reifications.keys() {
+            self.modified_set.insert(*key);
+        }
+    }
+
     pub fn new_id(&mut self) -> Wid {
         create_wid()
+    }
+
+    pub fn append_child(&self, children : VecDeque<Wid>, new_child : &Widget) -> VecDeque<Wid> {
+        let mut ret = VecDeque::with_capacity(children.len() + 1);
+
+        let all_handled = |wids : &Vec<Wid>, ret : &VecDeque<Wid>| -> bool { wids.iter().all(|wid| ret.contains(wid)) };
+        let handled = |wid : &Wid, ret : &VecDeque<Wid>| -> bool { ret.contains(wid) };
+        let all_handled_or_not_present = |wids : &Vec<Wid>, ret : &VecDeque<Wid>, remaining : &VecDeque<Wid>| -> bool { !wids.iter().any(|wid| remaining.contains(wid)) };
+        let depends_on = |wid : &Wid| -> Vec<Wid> { if wid == &new_child.id() { new_child.depends_on() } else { self.widget_reification(*wid).widget.depends_on() } };
+
+        ret.extend(children.iter().filter(|c| depends_on(c).is_empty()));
+
+
+        let mut max_iter = 1000;
+        let mut remaining : VecDeque<Wid> = children.into_iter().filter(|c| ! handled(c, &ret)).collect();
+        if new_child.depends_on().is_empty() {
+            ret.push_back(new_child.id());
+        } else {
+            remaining.push_back(new_child.id());
+        }
+        loop {
+            if let Some(next) = remaining.pop_back() {
+                let depends_on = depends_on(&next);
+                if depends_on.is_empty() || all_handled(&depends_on, &ret) {
+                    ret.push_back(next);
+                } else {
+                    if ! all_handled_or_not_present(&depends_on, &ret, &remaining) {
+                        remaining.push_front(next);
+                    } else {
+                        ret.push_back(next);
+                    }
+                }
+            } else {
+                break;
+            }
+            max_iter -= 1;
+            if max_iter <= 3 {
+                let w = remaining.front().unwrap();
+                let signifier = if w == &new_child.id() { format!("new_child: {:?}", new_child.signifier()) } else { format!("existing child: {:?}", self.widget_reification(*w).widget.signifier()) };
+                error!("[{}] Got into infinite topological sorting loop, breaking : {}", max_iter, signifier);
+            }
+            if max_iter <= 0 {
+                break;
+            }
+        }
+
+
+
+//        let (no_dep_children, dep_children) = children.into_iter()
+//            .map(|c| (c,self.widget_reification(c).widget.depends_on()))
+//            .partition(|(c,dep)| dep.is_empty());
+//
+//        let new_dep = new_child.depends_on();
+//        if new_dep.is_empty() {
+//            ret.push_front(new_child.id());
+//        }
+//        ret.extend(no_dep_children.map(|(c,a_)| c));
+//
+//        let mut dep_children = dep_children.collect_vec();
+//        if new_dep.non_empty() {
+//            dep_children.push((new_child.id(), new_dep));
+//        }
+//        while dep_children.non_empty() {
+//            let mut i = 0;
+//            while i < dep_children.len() {
+//                if let Some((child, deps)) = dep_children.get(i) {
+////                    if deps.iter().all
+//                }
+//            }
+//        }
+
+        ret
     }
 
     pub fn apply_widget(&mut self, widget: &mut Widget) {
@@ -195,12 +275,21 @@ impl GUI {
 
         // ensure that the child is now registered with its parent, if any
         if let Some(parent) = widget.parent_id {
-            if let Some(parent_state) = self.widget_reifications.get_mut(&parent) {
+            let new_children = if let Some(parent_state) = self.widget_reifications.get(&parent) {
                 if !parent_state.children.contains(&wid) {
-                    parent_state.children.push(wid);
+                    Some(self.append_child(parent_state.children.clone(), widget))
+                } else {
+                    None
                 }
             } else {
+                error!("Attempted to add widget as child of other non-existent widget: {:?}, parent: {:?}", widget.signifier(), parent);
                 panic!("Attempted to add widget as child of other non-existent widget")
+            };
+
+            if let Some(new_children) = new_children {
+                if let Some(parent_state) = self.widget_reifications.get_mut(&parent) {
+                    parent_state.children = new_children;
+                }
             }
         } else {
             self.top_level_widgets.insert(wid);
@@ -284,7 +373,7 @@ impl GUI {
                 let tdw_id = tdw.id();
                 let tdw_text_id = tdw.text.id();
 
-                widget.add_callback(move |ctxt: &mut WidgetContext, evt: &UIEvent| {
+                widget.add_inherent_callback(move |ctxt: &mut WidgetContext, evt: &UIEvent| {
                     match evt {
                         UIEvent::HoverStart { pos, .. } => {
                             let (x, y) = ((pos.absolute_pos.x + 1.0).ux(), (pos.absolute_pos.y + 1.0).ux());
@@ -307,37 +396,32 @@ impl GUI {
 
     pub fn mark_widget_modified(&mut self, wid : Wid) {
         self.modified_set.insert(wid);
-        let (dependent_on_children, parent_id) = {
-            let widget = &self.widget_reification(wid).widget;
-            (widget.dependent_on_children(), widget.parent_id)
-        };
 
-        if dependent_on_children {
-            if let Some(parent) = parent_id {
-                self.mark_widget_modified(parent);
+        let mut cur_parent = self.widget_reification(wid).widget.parent_id;
+        let mut to_mark = Vec::new();
+        loop {
+            if let Some(parent_id) = cur_parent {
+                if let Some(reification) = self.widget_reification_opt(parent_id) {
+                    let widget = &reification.widget;
+                    if widget.dependent_on_children() {
+                        to_mark.push(parent_id);
+                    }
+                    cur_parent = widget.parent_id;
+                } else {
+                    break;
+                }
+            } else {
+                break;
             }
         }
+
+        self.modified_set.extend(to_mark);
     }
 
     pub  fn remove_widget<D : DelegateToWidget>(&mut self, widget: &mut D) {
         let widget = widget.as_widget();
         if widget.has_id() {
-            let existing_state = self.widget_reifications.remove(&widget.id()).expect("widget state must exist if ID exists");
-
-            for child in existing_state.children {
-                self.remove_widget_by_id(child);
-            }
             self.remove_widget_by_id(widget.id());
-
-            if let Some(parent_id) = existing_state.widget.parent_id {
-                let mut parent_state = self.widget_reifications.remove(&parent_id).expect("Trying to remove child after parent has been removed (or never existed)");
-                if let Some(index_in_parent) = parent_state.children.iter().position(|c| c == &widget.id()) {
-                    parent_state.children.remove(index_in_parent);
-                    self.modified_set.insert(parent_id);
-                }
-                self.widget_reifications.insert(parent_id, parent_state);
-            }
-
             widget.clear_id();
         } else {
             warn!("Attempted to remove widget that had never been added, that's...fine, but weird");
@@ -345,7 +429,17 @@ impl GUI {
     }
 
     pub fn remove_widget_by_id(&mut self, wid : Wid) {
-        debug!("Removing widget by id: {}", wid);
+        self.remove_widget_by_id_intern(wid, true);
+    }
+
+    fn remove_widget_by_id_intern(&mut self, wid : Wid, remove_from_parent : bool) {
+        let existing_state = self.widget_reifications.remove(&wid).expect("widget state must exist if ID exists");
+
+        for child in existing_state.children {
+            self.remove_widget_by_id_intern(child, false); // don't remove from parent, because we're already in the midst of doing that right now
+        }
+
+        trace!("Removing widget by id: {}", wid);
         self.widget_reifications.remove(&wid);
         self.events_by_widget.remove(&wid);
         if self.focused_widget == Some(wid) {
@@ -353,6 +447,17 @@ impl GUI {
         }
         self.modified_set.remove(&wid);
         self.top_level_widgets.remove(&wid);
+
+        if remove_from_parent {
+            if let Some(parent_id) = existing_state.widget.parent_id {
+                let mut parent_state = self.widget_reifications.remove(&parent_id).expect("Trying to remove child after parent has been removed (or never existed)");
+                if let Some(index_in_parent) = parent_state.children.iter().position(|c| c == &wid) {
+                    parent_state.children.remove(index_in_parent);
+                    self.modified_set.insert(parent_id);
+                }
+                self.widget_reifications.insert(parent_id, parent_state);
+            }
+        }
     }
 
     /*
@@ -368,6 +473,10 @@ impl GUI {
         } else {
             panic!("Could not find reification for given widget id: {:?}", wid);
         }
+    }
+
+    pub(crate) fn widget_reification_opt(&self, wid: Wid) -> Option<&WidgetReification> {
+        self.widget_reifications.get(&wid)
     }
 
     pub(crate) fn child_widgets_of(&self, wid : Wid) -> Vec<&Widget> {

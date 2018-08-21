@@ -3,6 +3,7 @@ use game::Entity;
 use game::entity::EntityData;
 use game::world::WorldView;
 use common::AxialCoord;
+use entities::common::Taxon;
 
 
 #[derive(Clone, Default, Debug, PrintFields)]

@@ -6,3 +6,5 @@ pub use widget_delegation::*;
 pub use gui::UIUnits;
 pub use gui::ToGUIUnit;
 pub use gui::ToGUIPixels;
+pub use gui::WidgetContext;
+pub use events::WidgetEvent;

@@ -23,6 +23,7 @@ impl EquipmentDataStore for WorldView {
 #[derive(Clone, Debug, Default, PrintFields)]
 pub struct InventoryData {
     pub items : Vec<Entity>,
+    pub inventory_size : Option<u32>,
 
 }
 impl EntityData for InventoryData {}

@@ -262,8 +262,8 @@ impl<E: EntityData, T: Clone> FieldModifier<E, T> {
 
 impl<E: EntityData, T: Clone + 'static> Modifier<E> for FieldModifier<E, T> {
     fn modify(&self, data: &mut E, world: &WorldView) {
-        let old_value = (self.field.getter_mut)(data);
-        self.transform.apply(old_value)
+        let value = (self.field.getter_mut)(data);
+        self.transform.apply(value)
     }
 
     fn is_active(&self, world: &WorldView) -> bool {

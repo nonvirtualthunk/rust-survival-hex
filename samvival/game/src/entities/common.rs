@@ -73,7 +73,7 @@ impl EntityData for ActionData {}
 //}
 
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub struct Taxon {
     pub name : Str,
     pub parent : Option<&'static Taxon>
@@ -115,6 +115,14 @@ pub mod taxonomy {
     pub const Person : Taxon = taxon("person", &Creature);
     pub const Monster : Taxon = taxon("monster", &Creature);
     pub const Animal : Taxon = taxon("animal", &Creature);
+
+
+    pub const Projectile : Taxon = taxon("projectile", &Item);
+    pub mod projectiles {
+        use super::*;
+        pub const Arrow : Taxon = taxon("arrow", &Projectile);
+        pub const Bolt : Taxon = taxon("bolt", &Projectile);
+    }
 }
 
 
