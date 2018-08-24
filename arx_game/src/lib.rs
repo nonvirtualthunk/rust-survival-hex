@@ -5,7 +5,6 @@
 #![allow(non_upper_case_globals)]
 
 #![feature(get_type_id)]
-#![feature(entry_and_modify)]
 #![feature(core_intrinsics)]
 #![feature(box_syntax)]
 #![feature(extern_prelude)]

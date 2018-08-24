@@ -6,7 +6,8 @@ use game::EntityData;
 
 #[derive(Debug,Clone,Default,PrintFields)]
 pub struct VisibilityData {
-    pub visibility_by_faction : HashMap<Entity, Visibility>
+    pub visibility_by_faction : HashMap<Entity, Visibility>,
+    empty_visibility : Visibility
 }
 impl EntityData for VisibilityData {}
 
@@ -23,5 +24,11 @@ impl Visibility {
             visible_hexes : HashSet::new(),
             revealed_hexes : HashSet::new()
         }
+    }
+}
+
+impl VisibilityData {
+    pub fn visibility_for(&self, faction : Entity) -> &Visibility {
+        self.visibility_by_faction.get(&faction).unwrap_or(&self.empty_visibility)
     }
 }

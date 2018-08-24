@@ -2,7 +2,6 @@
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 #![feature(get_type_id)]
-#![feature(entry_and_modify)]
 #![feature(core_intrinsics)]
 #![allow(where_clauses_object_safety)]
 #![allow(dead_code)]

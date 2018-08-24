@@ -7,6 +7,13 @@ use state::GameState;
 use state::ControlContext;
 use control_events::ControlEvents;
 
+
+//pub enum PlayerActions {
+//    MoveAndAttack(Attack),
+//}
+
+
+
 #[derive(Default)]
 pub struct ActionBar {
     pub action_list : ListWidget<ActionButton>,

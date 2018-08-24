@@ -132,9 +132,7 @@ impl Game {
             min_tile_bound: AxialCoord::new(-30, -30),
             max_tile_bound: AxialCoord::new(30, 30),
         });
-        world.attach_world_data(VisibilityData {
-            visibility_by_faction : HashMap::new()
-        });
+        world.attach_world_data(VisibilityData::default());
 
         for tile in terrain::generator::generate() {
             let tile = tile.with(DebugData { name : strf("world tile") }).create(world);

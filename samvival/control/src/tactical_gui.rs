@@ -140,6 +140,8 @@ impl TacticalGui {
             let range = cdata.max_moves_remaining(1.0);
             let current_position = cdata.position.hex;
 
+            let visibility = view.world_data::<VisibilityData>().visibility_for(game_state.player_faction);
+
             let mut draw_list = DrawList::none();
 
             if action_type == &action_types::MoveAndAttack {
@@ -170,6 +172,7 @@ impl TacticalGui {
 
                     let color_for_strike_count = |sc : i32| if sc == 0 { Color::new(0.4,0.4,0.4,0.8) } else { strike_count_colors[(max_possible_strikes - sc).min(3) as usize] };
                     for (hex,cost) in &hexes {
+                        if visibility.visible_hexes.contains(&hex) {
 //                        if hex != &current_position{
                             if let Some(tile) = view.entity_by_key(hex) {
                                 let strikes_in_this_tile = strikes_at_cost(cost);
@@ -191,15 +194,18 @@ impl TacticalGui {
                                 }
                             }
 //                        }
+                        }
                     }
 
                     for (entity, cdata) in view.entities_with_data::<CharacterData>() {
                         let character = view.character(*entity);
-                        if logic::combat::within_range(view, selected, *entity, &attack, None, None)  && logic::combat::is_valid_attack_target(view, selected, *entity, &attack) {
-                            if is_enemy(view, *entity, selected) {
-                                let hex = character.position.hex;
-                                for q in 0 .. 6 {
-                                    draw_list = draw_list.add_quad(Quad::new(format!("ui/hex/hex_edge_{}", q), hex.as_cart_vec().0).color(Color::new(0.7,0.1,0.1,0.75)).centered());
+                        if visibility.visible_hexes.contains(&character.position.hex) {
+                            if logic::combat::within_range(view, selected, *entity, &attack, None, None)  && logic::combat::is_valid_attack_target(view, selected, *entity, &attack) {
+                                if is_enemy(view, *entity, selected) {
+                                    let hex = character.position.hex;
+                                    for q in 0 .. 6 {
+                                        draw_list = draw_list.add_quad(Quad::new(format!("ui/hex/hex_edge_{}", q), hex.as_cart_vec().0).color(Color::new(0.7,0.1,0.1,0.75)).centered());
+                                    }
                                 }
                             }
                         }

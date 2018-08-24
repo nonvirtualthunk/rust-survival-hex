@@ -8,7 +8,6 @@
 #![feature(get_type_id)]
 #![feature(specialization)]
 #![feature(nll)]
-#![feature(rc_downcast)]
 #![feature(const_vec_new)]
 
 extern crate piston_window;

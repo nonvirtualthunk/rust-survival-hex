@@ -548,7 +548,7 @@ impl GameMode for TacticalMode {
         // draw list for items on the map
         let item_draw_list = self.item_renderer.render_items(world_view, g.resources, culling_rect);
         // draw list for the units and built-in unit UI elements
-        let unit_draw_list = self.unit_renderer.render_units(world_view, self.display_event_clock, self.selected_character);
+        let unit_draw_list = self.unit_renderer.render_units(world_view, self.display_event_clock, self.player_faction, self.selected_character);
 
         let ui_draw_list = self.gui.draw(world_view, self.current_game_state(world_in));
 
