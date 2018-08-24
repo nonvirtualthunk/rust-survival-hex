@@ -30,6 +30,7 @@ use game::terrain;
 
 //use graphics::core::Context as ArxContext;
 use graphics::core::GraphicsResources;
+use std::collections::HashMap;
 
 
 //pub static mut GLOBAL_MODIFIERS : Modifiers = Modifiers {
@@ -110,11 +111,15 @@ impl Game {
         world.register::<ActionData>();
         world.register::<ModifierTrackingData>();
         world.register::<AttributeData>();
+        world.register::<AllegianceData>();
+        world.register::<ObserverData>();
 
         register_custom_ability_data(world);
         // -------- world data ---------------
         world.register::<MapData>();
         world.register::<TurnData>();
+        world.register::<TimeData>();
+        world.register::<VisibilityData>();
 
         world.register_index::<AxialCoord>();
 
@@ -123,9 +128,12 @@ impl Game {
             let events = world.events::<GameEvent>().next();
         }
 
-        world.attach_world_data(&MapData {
+        world.attach_world_data(MapData {
             min_tile_bound: AxialCoord::new(-30, -30),
             max_tile_bound: AxialCoord::new(30, 30),
+        });
+        world.attach_world_data(VisibilityData {
+            visibility_by_faction : HashMap::new()
         });
 
         for tile in terrain::generator::generate() {
@@ -142,7 +150,7 @@ impl Game {
             .with(DebugData { name : strf("player faction") })
             .create(world);
 
-        world.attach_world_data(&TurnData {
+        world.attach_world_data(TurnData {
             turn_number: 0,
             active_faction: player_faction,
         });
@@ -170,7 +178,6 @@ impl Game {
 
         let archer = char_base("gunnar")
             .with(CharacterData {
-                faction: player_faction,
                 sprite: String::from("elf/archer"),
                 name: String::from("Archer"),
                 move_speed: Sext::of_parts(1, 0), // one and 0 sixths
@@ -178,6 +185,7 @@ impl Game {
                 action_points: Reduceable::new(8),
                 ..Default::default()
             })
+            .with(AllegianceData { faction : player_faction })
             .with(CombatData {
                 ranged_accuracy_bonus: 2,
                 natural_attacks: vec![
@@ -216,7 +224,6 @@ impl Game {
 
         let spearman = char_base("haftdar")
             .with(CharacterData {
-                faction: player_faction,
                 sprite: String::from("human/spearman"),
                 name: String::from("Spearman"),
                 move_speed: Sext::of_parts(1, 0), // one and 0 sixths
@@ -224,6 +231,7 @@ impl Game {
                 action_points: Reduceable::new(8),
                 ..Default::default()
             })
+            .with(AllegianceData { faction : player_faction })
             .with(CombatData {
                 ranged_accuracy_bonus: 0,
                 melee_accuracy_bonus: 1,
@@ -261,7 +269,6 @@ impl Game {
 
         let monster_base = EntityBuilder::new()
             .with(CharacterData {
-                faction: enemy_faction,
                 sprite: String::from("void/monster"),
                 name: String::from("Monster"),
                 move_speed: Sext::of_rounded(0.75),
@@ -269,6 +276,7 @@ impl Game {
                 health: Reduceable::new(16),
                 ..Default::default()
             })
+            .with(AllegianceData { faction : enemy_faction })
             .with(CombatData {
                 natural_attacks: vec![Attack {
                     name: "slam",
@@ -299,7 +307,6 @@ impl Game {
 
         let spawner = EntityBuilder::new()
             .with(CharacterData {
-                faction: enemy_faction,
                 sprite: strf("void/summoner_monolith"),
                 name: String::from("Summoning Stone"),
                 move_speed: Sext::of(0),
@@ -307,6 +314,7 @@ impl Game {
                 health: Reduceable::new(100),
                 ..Default::default()
             })
+            .with(AllegianceData { faction : enemy_faction })
             .with(PositionData::default())
             .with(CombatData { dodge_bonus : -10, .. Default::default() })
             .with(MonsterSpawnerData { spawns : vec![Spawn { entity : monster_base.clone(), start_spawn_turn : 1, turns_between_spawns : 4 }] })

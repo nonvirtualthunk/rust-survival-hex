@@ -19,6 +19,10 @@ extern crate arx_common as common;
 extern crate arx_game as game;
 #[macro_use] extern crate itertools;
 extern crate rusttype;
+extern crate rect_packer;
+extern crate graphics;
+extern crate pretty_env_logger;
+#[macro_use] extern crate log;
 
 pub mod core;
 pub use core::*;
@@ -34,5 +38,7 @@ pub use interpolation::*;
 
 pub mod text;
 pub use text::*;
+
+pub mod texture_atlas;
 
 mod resources;

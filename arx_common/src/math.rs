@@ -1,4 +1,5 @@
 use num::Num;
+use num::Float;
 use cgmath::Vector2;
 use std::fmt::Debug;
 
@@ -109,10 +110,22 @@ impl <T : Num + Copy + PartialOrd + Debug> Rect<T> {
         self.y
     }
 
+    pub fn width(&self) -> T { self.w }
+    pub fn height(&self) -> T { self.h }
+
     pub fn max(&self) -> Vector2<T> {
         Vector2 {
             x : self.max_x(),
             y : self.max_y()
+        }
+    }
+}
+
+impl Rect<f32> {
+    pub fn center(&self) -> Vector2<f32> {
+        Vector2 {
+            x : (self.min_x() + self.max_x()) / 2.0,
+            y : (self.min_y() + self.max_y()) / 2.0
         }
     }
 }

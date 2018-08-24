@@ -433,6 +433,10 @@ impl GUI {
     }
 
     fn remove_widget_by_id_intern(&mut self, wid : Wid, remove_from_parent : bool) {
+        if ! self.widget_reifications.contains_key(&wid) {
+            return;
+        }
+
         let existing_state = self.widget_reifications.remove(&wid).expect("widget state must exist if ID exists");
 
         for child in existing_state.children {

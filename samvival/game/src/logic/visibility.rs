@@ -1,12 +1,19 @@
 use common::prelude::*;
-use common::hex;
 use prelude::*;
+
+use common::hex::CubeCoord;
+use game::events::CoreEvent;
 
 use entities::Visibility;
 use entities::VisibilityData;
 use entities::character::CharacterData;
 use entities::common::*;
 use game::EntityData;
+use entities::character::ObserverData;
+use entities::character::AllegianceData;
+use entities::time::TimeOfDay;
+use entities::faction::FactionData;
+use entities::tile::TileStore;
 
 
 //pub struct
@@ -28,19 +35,32 @@ impl VisibilityComputor {
 
     pub fn register(world: &mut World) {
         world.register::<VisibilityComputor>();
+        world.register::<VisibilityData>();
+
+        let world_view = world.view();
+        for (faction,_) in world_view.entities_with_data::<FactionData>() {
+            let vis = {
+                let computor = world.world_data_mut::<VisibilityComputor>();
+                computor.recompute_visibility(world_view, *faction, None)
+            };
+            world.modify_world(VisibilityData::visibility_by_faction.set_key_to(*faction, vis), None);
+            world.add_event(CoreEvent::Recomputation);
+        }
 
         world.add_callback(|world,event_w| {
             match event_w.event {
                 GameEvent::WorldStart => {
-
                 },
                 GameEvent::Move { character, from, to, .. } => {
                     let world_view = world.view();
-                    let faction = world_view.character(character).faction;
-                    let computor = world.world_data_mut::<VisibilityComputor>();
-                    let vis = computor.recompute_visibility(world_view, faction, None);
+                    let faction = world_view.character(character).allegiance.faction;
+                    let vis = {
+                        let computor = world.world_data_mut::<VisibilityComputor>();
+                        computor.recompute_visibility(world_view, faction, None)
+                    };
 
-//                    world.modify()
+                    world.modify_world(VisibilityData::visibility_by_faction.set_key_to(faction, vis), None);
+                    world.add_event(CoreEvent::Recomputation);
                 },
                 _ => ()
             }
@@ -53,10 +73,14 @@ impl VisibilityComputor {
         // for the moment, recompute from scratch every time
 
         let mut visibility = Visibility::new();
+        if let Some(old_visibility) = world.world_data::<VisibilityData>().visibility_by_faction.get(&faction) {
+            visibility.revealed_hexes = old_visibility.revealed_hexes.clone();
+        }
 
-        for (ent,cdata) in world.entities_with_data::<CharacterData>() {
-            if cdata.faction == faction {
-                self.compute_character_visibility(world, *ent, cdata, &mut visibility);
+        for (ent,cdata) in world.entities_with_data::<ObserverData>() {
+            let allegiance = world.data::<AllegianceData>(*ent);
+            if allegiance.faction == faction {
+                self.compute_observer_visibility(world, *ent, &mut visibility);
             }
         }
 
@@ -64,18 +88,57 @@ impl VisibilityComputor {
     }
 
 
-    fn compute_character_visibility(&self, world : &WorldView, ent : Entity, cdata : &CharacterData, visibility : &mut Visibility) {
+    fn compute_observer_visibility(&self, world : &WorldView, ent : Entity, visibility : &mut Visibility) {
         let center : AxialCoord = world.data::<PositionData>(ent).hex;
-        let center_cube = center.as_cube_coord();
+        let observer = world.data::<ObserverData>(ent);
+        let center_cube : CubeCoord = center.as_cube_coord();
+        let center_f = v3(center_cube.x as f32 + 1e-6, center_cube.y as f32 + 2e-6, center_cube.z as f32 - 3e-6);
 
         visibility.visible_hexes.insert(center);
-        for r in 1 .. 6 {
-            let mut cur = center_cube + hex::CUBE_DELTAS[4] * r;
 
-            for j in 0 .. r {
-                visibility.visible_hexes.insert(cur.as_axial_coord());
-                cur = cur + hex::CUBE_DELTAS[j as usize];
+        let start_elevation = world.tile_opt(center).map(|t| t.elevation).unwrap_or(0);
+
+        let max_r = observer.vision_range_at_time(TimeOfDay::Daylight) + 1;
+
+        for edge in CubeCoord::ring(center_cube, max_r as u32) {
+            let edge_f = v3(edge.x as f32 + 1e-6, edge.y as f32 + 2e-6, edge.z as f32 - 3e-6);
+            let delta = edge_f - center_f;
+            let mut visibility_remaining = max_r;
+
+            let mut max_intervening_elevation = 0;
+
+            let hex_dist = center_cube.distance(&edge);
+            visibility.visible_hexes.insert(center);
+            for i in 1 .. hex_dist {
+                let pcnt = (i as f32) / (hex_dist as f32);
+                let point = center_f + delta * pcnt;
+                let hex = CubeCoord::rounded(point.x, point.y, point.z).as_axial_coord();
+
+                if let Some(tile) = world.tile_opt(hex) {
+                    let elevation = tile.elevation;
+
+                    if max_intervening_elevation > start_elevation && elevation < max_intervening_elevation {
+                        visibility_remaining = -1;
+                    } else if elevation >= start_elevation {
+                        let obstruction = tile.cover;
+                        visibility_remaining -= 1 + obstruction as i32;
+                    }
+                    max_intervening_elevation = max_intervening_elevation.max(elevation);
+
+                    if visibility_remaining >= 0 {
+                        visibility.visible_hexes.insert(hex);
+                        visibility.revealed_hexes.insert(hex);
+                    } else {
+                        break;
+                    }
+                }
             }
         }
+
+//        for r in 1 .. max_r {
+//            for hex in CubeCoord::ring(center_cube, r as u32) {
+//                visibility.visible_hexes.insert(hex.as_axial_coord());
+//            }
+//        }
     }
 }

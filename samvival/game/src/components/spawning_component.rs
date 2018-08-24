@@ -17,7 +17,8 @@ impl SpawningComponent {
             if let Some(GameEvent::FactionTurn { turn_number, faction }) = evt.if_starting() {
                 for (ent,spawner_data) in view.entities_with_data::<MonsterSpawnerData>() {
                     if let Some(char_data) = view.data_opt::<CharacterData>(*ent) {
-                        if &char_data.faction == faction {
+                        let allegiance = view.data::<AllegianceData>(*ent);
+                        if &allegiance.faction == faction {
                             if let Some(spawner_pos) = view.data_opt::<PositionData>(*ent) {
                                 for spawn in &spawner_data.spawns {
                                     let turn_offset = *turn_number as i32 - spawn.start_spawn_turn;
@@ -33,6 +34,8 @@ impl SpawningComponent {
                                             let spawn_point = valid_spawn_points[rand.gen_range(0,valid_spawn_points.len())];
                                             let monster = spawn.entity.clone()
                                                 .with(DebugData { name : strf("spawned monster") })
+                                                .with(PositionData { hex : *spawn_point})
+                                                .with(AllegianceData { faction : allegiance.faction })
                                                 .create(world);
                                             logic::movement::place_entity_in_world(world, monster, *spawn_point);
                                         } else {

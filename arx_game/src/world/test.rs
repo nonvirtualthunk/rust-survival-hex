@@ -1,5 +1,6 @@
 use entity::*;
 use prelude::*;
+use common::prelude::*;
 use common::hex::*;
 use common::reflect::*;
 use events::CoreEvent;
@@ -44,6 +45,7 @@ mod test {
 
     impl DynamicModifier<FooData> for MultiplyByOtherEntityModifier {
         fn modify(&self, data: &mut FooData, world: &WorldView) {
+//            println!("Applying dynamic modifier: {:?}, {:?}", data.a , world.data::<FooData>(self.other_entity).a);
             data.a = data.a * world.data::<FooData>(self.other_entity).a;
         }
 
@@ -107,6 +109,9 @@ mod test {
         assert_eq!(test_data_1.a, 5);
         assert_eq!(test_data_2.a, 4);
 
+        assert_eq!(view.data::<FooData>(ent1).a, 5);
+        assert_eq!(view.data::<FooData>(ent2).a, 4);
+
         world.add_dynamic_modifier(ent1, MultiplyByOtherEntityModifier { other_entity: ent2 });
         world.add_event(CoreEvent::TimePassed);
 
@@ -146,8 +151,6 @@ mod test {
             })
             .create(&mut world);
 
-        world.add_entity(ent1);
-        world.add_entity(ent2);
 
         let view = world.view();
 
@@ -163,9 +166,9 @@ mod test {
         world.add_modifier(ent1, AddBarDataModifier { delta: 2.0 }.wrap(), "test");
         world.add_event(CoreEvent::TimePassed);
 
-        // show up in reverse chronological order, last created first in list
-        assert_that(&view.entities.get(0).unwrap().0).is_equal_to(ent2);
-        assert_that(&view.entities.get(1).unwrap().0).is_equal_to(ent1);
+        // show up in chronological order, first created first in list
+        assert_that(&view.entities.get(0).unwrap().0).is_equal_to(ent1);
+        assert_that(&view.entities.get(1).unwrap().0).is_equal_to(ent2);
 
         // now that it's been modified they should not be the same
         assert_that(&bar_data_1.x).is_not_equal_to(bar_data_2.x);
@@ -229,7 +232,7 @@ mod test {
 
     #[test]
     pub fn test_disabling_modifiers() {
-        pretty_env_logger::init();
+        rust_init();
 
         let mut world : World = World::new();
 
@@ -267,6 +270,9 @@ mod test {
         let modifier_ref_1 = world.add_modifier(ent1, FooData::a.add(4), "simple addition");
         world.add_event(CoreEvent::WorldInitialized);
 
+        let mut view_2 = world.view_at_time(world.next_time);
+
+        assert_that(&view_2.data::<FooData>(ent1).a).is_equal_to(5);
         assert_that(&foo_data_1.a).is_equal_to(5);
 
         // add a modifier on top of that one that multiples by 2, should now be 10
@@ -278,7 +284,71 @@ mod test {
         // now disable the first modifier, the second modifier should be layer on top of the base data to make a 2
         world.disable_modifier(modifier_ref_1);
         world.add_event(CoreEvent::TimePassed);
+        let just_disabled_time = world.current_time();
 
         assert_that(&foo_data_1.a).is_equal_to(2);
+
+//        println!("Applying modifier to take effect at {:?}", world.next_time);
+        world.add_modifier(ent1, FooData::a.add(4), None);
+        world.add_event(CoreEvent::TimePassed);
+
+//        println!("next time: {:?}, mut_view.cur_time: {:?}, just_disabled_time: {:?}", world.next_time, view.current_time, just_disabled_time);
+        // bringing the non-realtime view up to date with just after we disabled the modifier it should have the correct value
+        world.update_view_to_time(&mut view_2, just_disabled_time);
+        assert_that(&view_2.data::<FooData>(ent1).a).is_equal_to(2);
+
+    }
+
+
+    #[test]
+    pub fn test_registering_new_data_type() {
+        rust_init();
+
+        let mut world : World = World::new();
+
+        world.register::<FooData>();
+
+        let ent1 = EntityBuilder::new()
+            .with(FooData {
+                a: 1,
+                b: vec![]
+            })
+            .create(&mut world);
+
+        let ent2 = EntityBuilder::new()
+            .with(FooData {
+                a: 2,
+                b: vec![]
+            })
+            .create(&mut world);
+
+        let view = world.view();
+        let mut view_2 = world.view_at_time(world.next_time);
+
+        let foo_data_1 = view.data::<FooData>(ent1);
+        let foo_data_2 = view.data::<FooData>(ent2);
+
+        assert_that(&foo_data_1.a).is_equal_to(1);
+        assert_that(&foo_data_1.b).is_equal_to(&Vec::new());
+
+        assert_that(&foo_data_2.a).is_equal_to(2);
+        assert_that(&foo_data_2.b).is_equal_to(&Vec::new());
+
+        // add a simple modifier to increase a by 4, should now be 5. Keep a reference to the modifier
+        world.add_modifier(ent1, FooData::a.add(4), "simple addition");
+        world.add_event(CoreEvent::WorldInitialized);
+
+        world.register::<BarData>();
+
+        world.attach_data(ent1, BarData {x : 3.0});
+        world.add_modifier(ent1, BarData::x.add(1.0), "x addition");
+        world.add_event(CoreEvent::TimePassed);
+
+        world.update_view_to_time(&mut view_2, world.next_time);
+
+        assert_that(&view.has_data::<BarData>(ent1)).is_true();
+        assert_that(&view.data::<BarData>(ent1).x).is_equal_to(4.0);
+        assert_that(&view_2.data::<BarData>(ent1).x).is_equal_to(4.0);
+
     }
 }

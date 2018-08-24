@@ -6,8 +6,6 @@ use common::Rect;
 use find_folder;
 use gfx;
 use gfx_device_gl;
-use image as image_lib;
-use image::GenericImage;
 use itertools::Itertools;
 use piston_window::*;
 use piston_window::math;
@@ -22,6 +20,9 @@ use std::path::PathBuf;
 use text::TextLayout;
 
 pub use resources::*;
+use graphics::types::SourceRectangle;
+use graphics::types::Rectangle as GraphicsRectangle;
+use texture_atlas::StoredTextureInfo;
 
 #[derive(Clone)]
 pub struct Quad {
@@ -242,7 +243,6 @@ impl<'a, 'b : 'a> GraphicsWrapper<'a, 'b> {
             quad.image.rect([0.0, 0.0, w, h])
         }.maybe_src_rect(quad.sub_rect.map(|r| [r.x as f64 * tex_info.size.x as f64, r.y as f64 * tex_info.size.y as f64, r.w as f64 * tex_info.size.x as f64, r.h as f64 * tex_info.size.y as f64]));
 
-
         let pos = as_f64(quad.offset);
         let transform = math::multiply(self.context.view, math::translate(pos));
         let transform = if quad.rotation != 0.0 {
@@ -251,6 +251,68 @@ impl<'a, 'b : 'a> GraphicsWrapper<'a, 'b> {
             transform
         };
         image.draw(&tex_info.texture, &self.draw_state, transform, self.graphics);
+    }
+
+    pub fn draw_quads(&mut self, quads: &Vec<Quad>, atlas_identifier : TextureAtlasIdentifier) {
+        let white = [1.0f32,1.0f32,1.0f32,1.0f32];
+        let mut color = [1.0f32,1.0f32,1.0f32,1.0f32];
+        let mut rects : Vec<(GraphicsRectangle, SourceRectangle)> = Vec::new();
+
+        let transform = self.context.view.clone();
+
+        for quad in quads {
+            // rotation is stupid and their api is terrible, so.
+            if quad.rotation != 0.0 {
+                self.draw_quad(quad.clone());
+                continue;
+            }
+
+            let (rect, source_rect) = {
+                let tex_info = self.resources.texture_from_atlas(quad.texture_identifier.clone(), atlas_identifier);
+                let (w, h) = if let Some(size) = quad.size {
+                    (size.x as f32, size.y as f32)
+                } else {
+                    (tex_info.pixel_rect.width() as f32, tex_info.pixel_rect.height() as f32)
+                };
+
+                let rect = if quad.centered {
+                    [(quad.offset.x - w / 2.0) as f64, (quad.offset.y - h / 2.0) as f64, w as f64, h as f64]
+                } else {
+                    [quad.offset.x as f64, quad.offset.y as f64, w as f64, h as f64]
+                };
+
+                let tx = tex_info.pixel_rect.x as f32;
+                let ty = tex_info.pixel_rect.y as f32;
+                let tw = tex_info.pixel_rect.w as f32;
+                let th = tex_info.pixel_rect.h as f32;
+                let source_rect = if let Some(sub_rect) = quad.sub_rect {
+                     [(tx + sub_rect.x * tw) as f64, (ty + sub_rect.y * th) as f64, (tw * sub_rect.w) as f64, (th * sub_rect.h) as f64]
+                } else {
+                    [tx as f64, ty as f64, tw as f64, th as f64]
+                };
+
+                (rect, source_rect)
+            };
+
+            let eff_color = quad.image.color.unwrap_or(white);
+            if color != eff_color {
+                if rects.non_empty() {
+                    self.resources.upload_atlases(self.graphics);
+                    let atlas = self.resources.atlas_texture(atlas_identifier);
+                    image::draw_many(rects.as_slice(), color, atlas, &self.draw_state, transform, self.graphics);
+                    rects.clear();
+                }
+                color = eff_color;
+            }
+
+            rects.push((rect, source_rect));
+        }
+        if rects.non_empty() {
+            self.resources.upload_atlases(self.graphics);
+            let atlas = self.resources.atlas_texture(atlas_identifier);
+            image::draw_many(rects.as_slice(), color, atlas, &self.draw_state, transform, self.graphics);
+            rects.clear();
+        }
     }
 
     fn dpi_scale(&self) -> f32 {

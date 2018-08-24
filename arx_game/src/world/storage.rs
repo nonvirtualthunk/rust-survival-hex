@@ -34,7 +34,7 @@ pub(crate) struct EventContainer<E : GameEventType> {
 impl <E : GameEventType> Default for EventContainer<E> {
     fn default() -> Self { EventContainer {
         events : vec![],
-        default : GameEventWrapper { event : E::beginning_of_time_event(), occurred_at : 0, state : GameEventState::Ended },
+        default : GameEventWrapper::event_and_state(E::beginning_of_time_event(), GameEventState::Ended),
         event_listeners : vec![]
     } }
 }
@@ -132,7 +132,7 @@ pub struct ModifierContainer<T: EntityData> {
 
 impl <T: EntityData> ModifierContainer<T> {
     pub fn is_active_at_time(&self, time : GameEventClock) -> bool {
-        self.applied_at <= time && self.disabled_at.unwrap_or(MAX_GAME_EVENT_CLOCK) >= time
+        self.applied_at <= time && self.disabled_at.unwrap_or(MAX_GAME_EVENT_CLOCK) > time
     }
 }
 
@@ -170,7 +170,8 @@ impl<T: EntityData> ModifiersContainer<T> {
 #[derive(Clone)]
 pub(crate) struct DataContainer<T: EntityData> {
     pub(crate) storage: HashMap<Entity, T>,
-    pub(crate) sentinel: T
+    pub(crate) sentinel: T,
+    pub(crate) entities_with_data: Vec<Entity>,
 }
 
 
@@ -179,7 +180,8 @@ impl<T: EntityData> DataContainer<T> {
     pub fn new() -> DataContainer<T> {
         DataContainer {
             storage: HashMap::new(),
-            sentinel: T::default()
+            sentinel: T::default(),
+            entities_with_data: Vec::new(),
         }
     }
 }

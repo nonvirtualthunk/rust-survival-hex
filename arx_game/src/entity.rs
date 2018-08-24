@@ -50,17 +50,17 @@ impl EntityBuilder {
 
     pub fn with<T: EntityData>(mut self, new_data: T) -> Self {
         self.initializations_by_type_id.insert(TypeId::of::<T>(), Rc::new(move |world: &mut World, entity: Entity| {
-            world.attach_data(entity, &new_data)
+            world.attach_data(entity, new_data.clone())
         }));
         self
     }
 
     pub fn create(&self, world: &mut World) -> Entity {
         let entity = World::create_entity();
-        world.add_entity(entity);
         for initialization in self.initializations_by_type_id.values() {
             (initialization)(world, entity);
         }
+        world.add_entity(entity);
         entity
     }
 }

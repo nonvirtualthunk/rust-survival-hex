@@ -90,12 +90,12 @@ impl AxialCoord {
         CartVec(self.as_cartesian(1.0))
     }
     pub fn rounded(&self) -> AxialCoord {
-        CubeCoord::rounded(self.q as f32, self.r as f32).as_axial_coord()
+        CubeCoord::rounded_axial(self.q as f32, self.r as f32).as_axial_coord()
     }
     pub fn from_cartesian(pixel : &Vec2f, size : f32) -> AxialCoord {
         let q = (pixel.x * 0.666666666667) / size;
         let r = ((-pixel.x / 3.0) + (3.0f64.sqrt() as f32/3.0) * pixel.y) / size;
-        return CubeCoord::rounded(q, r).as_axial_coord()
+        return CubeCoord::rounded_axial(q, r).as_axial_coord()
     }
     pub fn from_cart_coord(coord : CartVec) -> AxialCoord {
         AxialCoord::from_cartesian(coord.deref(), 1.0)
@@ -126,26 +126,31 @@ impl PerfectHashable for AxialCoord {
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct CubeCoord {
-    x: i32,
-    y: i32,
-    z: i32
+    pub x: i32,
+    pub y: i32,
+    pub z: i32
 }
 
 impl CubeCoord {
     pub fn new(x: i32, y: i32, z: i32) -> CubeCoord {
         CubeCoord { x, y, z }
     }
-    pub fn distance(&self, other: &CubeCoord) -> f32 {
-        ((self.x - other.x).abs() + (self.y - other.y).abs() + (self.z - other.z).abs()) as f32 / 2.0
+    pub fn distance(&self, other: &CubeCoord) -> u32 {
+//        ((self.x - other.x).abs() + (self.y - other.y).abs() + (self.z - other.z).abs()) as f32 / 2.0
+        (self.x - other.x).abs().max((self.y - other.y).abs()).max((self.z - other.z).abs()) as u32
     }
     pub fn as_axial_coord(&self) -> AxialCoord {
         AxialCoord::new(self.x, self.z)
     }
-    pub fn rounded(q : f32, r : f32) -> CubeCoord {
+    pub fn rounded_axial(q : f32, r : f32) -> CubeCoord {
         let x = q;
         let y = -q - r;
         let z = r;
 
+        CubeCoord::rounded(x,y,z)
+    }
+
+    pub fn rounded(x : f32, y : f32, z : f32) -> CubeCoord {
         let mut rx = x.round();
         let mut ry = y.round();
         let mut rz = z.round();
@@ -162,6 +167,53 @@ impl CubeCoord {
             rz = -rx-ry
         }
         return CubeCoord::new(rx as i32, ry as i32, rz as i32)
+    }
+
+    pub fn ring(center : CubeCoord, radius : u32) -> impl Iterator<Item=CubeCoord> {
+        RingIterator::new(center, radius)
+    }
+}
+
+struct RingIterator {
+    radius : u32,
+    i : usize,
+    j : u32,
+    cur : CubeCoord
+}
+impl Iterator for RingIterator {
+    type Item = CubeCoord;
+
+    fn next(&mut self) -> Option<<Self as Iterator>::Item> {
+        let mut ret = None;
+        if self.radius == 0 {
+            if self.i == 0 && self.j == 0 {
+                self.i += 1;
+                ret = Some(self.cur)
+            }
+        } else {
+            if self.i < 6 {
+                if self.j < self.radius {
+                    ret = Some(self.cur);
+                    self.cur = self.cur + CUBE_DELTAS[self.i];
+                    self.j = self.j + 1;
+                    if self.j >= self.radius {
+                        self.j = 0;
+                        self.i += 1;
+                    }
+                }
+            }
+        }
+        ret
+    }
+}
+impl RingIterator {
+    pub fn new(center : CubeCoord, radius : u32) -> RingIterator {
+        RingIterator {
+            radius,
+            i : 0,
+            j : 0,
+            cur : center + CUBE_DELTAS[4] * (radius as i32)
+        }
     }
 }
 

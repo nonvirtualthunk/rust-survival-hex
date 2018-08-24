@@ -125,7 +125,7 @@ impl TacticalGui {
         if let Some(selected) = game_state.selected_character {
             let cdata = view.character(selected);
             // if it's not the player's turn, don't display UI
-            if view.world_data::<TurnData>().active_faction != cdata.faction {
+            if view.world_data::<TurnData>().active_faction != cdata.allegiance.faction {
                 return DrawList::none();
             }
 
@@ -291,7 +291,7 @@ impl TacticalGui {
             self.character_info_widget.update(&world_view, gui, &game_state, &mut control);
             let char = world_view.character(selected);
 
-            if char.faction == game_state.player_faction {
+            if char.allegiance.faction == game_state.player_faction {
                 let actions = vec![action_types::MoveAndAttack, action_types::Move, action_types::Run, action_types::InteractWithInventory];
                 self.action_bar.update(gui, actions, &game_state, &mut control);
 //                self.reaction_bar.set_x(Positioning::left_of(self.character_info_widget.as_widget(), 1.ux())).as_widget().reapply(gui);

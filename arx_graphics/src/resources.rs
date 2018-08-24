@@ -6,9 +6,8 @@ use common::Rect;
 use find_folder;
 use gfx;
 use gfx_device_gl;
-use image as image_lib;
-use image::GenericImage;
 use itertools::Itertools;
+use image as image_lib;
 use piston_window::math;
 use piston_window::TextureSettings;
 use piston_window::types;
@@ -27,12 +26,18 @@ use core::Text;
 use std::path::Path;
 use std::env::current_dir;
 use std::env::current_exe;
+use texture_atlas::TextureAtlas;
+use texture_atlas::StoredTextureInfo;
+use gfx::format::Format;
+use image::RgbaImage;
+use piston_window::G2d;
 
 pub type RTFont = rt::Font<'static>;
 pub type RTPositionedGlyph = rt::PositionedGlyph<'static>;
 
 pub type FontIdentifier = &'static str;
 pub type ImageIdentifier = String;
+pub type TextureAtlasIdentifier = &'static str;
 
 #[derive(Clone)]
 pub struct TextureInfo {
@@ -44,6 +49,7 @@ pub struct TextureInfo {
 pub struct GraphicsAssets {
     fonts: HashMap<FontIdentifier, RTFont>,
     images: HashMap<ImageIdentifier, image_lib::RgbaImage>,
+    atlases: HashMap<TextureAtlasIdentifier, TextureAtlas>,
     assets_path: PathBuf,
     main_path: PathBuf,
     texture_path: PathBuf,
@@ -73,6 +79,7 @@ impl GraphicsAssets {
         GraphicsAssets {
             fonts : HashMap::new(),
             images : HashMap::new(),
+            atlases : HashMap::new(),
             assets_path,
             main_path,
             texture_path,
@@ -207,9 +214,60 @@ impl GraphicsResources {
     pub fn string_dimensions_no_wrap<'b>(&mut self, font_identifier: FontIdentifier, text: &'b str, size: u32) -> Vec2f {
         self.assets.string_dimensions_no_wrap(font_identifier, text, size)
     }
+
+
+    pub fn atlas_texture(&mut self, atlas : TextureAtlasIdentifier) -> &G2dTexture {
+        &self.assets.atlases.get(atlas).expect("atlas did not exist").texture
+    }
+
+    pub fn texture_from_atlas(&mut self, texture : ImageIdentifier, atlas : TextureAtlasIdentifier) -> StoredTextureInfo {
+        self.assets.texture_from_atlas(texture, atlas, &mut self.factory)
+    }
+
+    pub fn upload_atlases(&mut self, graphics : &mut G2d) {
+        for atlas in self.assets.atlases.values_mut()  {
+            atlas.update(graphics.encoder);
+        }
+    }
 }
 
 impl GraphicsAssets {
+
+    pub fn texture_from_atlas(&mut self, texture : ImageIdentifier, atlas : TextureAtlasIdentifier, factory : &mut gfx_device_gl::Factory) -> StoredTextureInfo {
+        let atlases = &mut self.atlases;
+        let atlas = atlases.entry(atlas).or_insert_with(|| {
+            let texture_settings = TextureSettings::new().mag(Filter::Nearest).min(Filter::Nearest);
+
+            let w = 1024;
+            let h = 1024;
+            let mut texture_data : Vec<u8> = Vec::new();
+            for _i in 0..w * h {
+                texture_data.push(255);
+            }
+
+            let texture = G2dTexture::from_memory_alpha(factory, &texture_data[..], w, h, &texture_settings)
+                .expect("Could not make texture needed for atlas");
+            TextureAtlas::new(texture, w as i32, h as i32)
+        });
+
+        match atlas.get(&texture) {
+            Some(existing) => existing.clone(),
+            None => {
+                // --------------------------- Had to inline the image(...) call here to satisfy the borrow checker for som reason -------------
+                let img = if self.images.contains_key(&texture) {
+                    self.images.get(&texture).unwrap()
+                } else {
+                    let img = GraphicsAssets::read_image(&self.texture_path, texture.clone());
+                    self.images.insert(texture.clone(), img);
+                    self.images.get(&texture).unwrap()
+                };
+                // ---------------------------- rust doesn't like it when you mutate things ----------------------------------------------------
+
+                atlas.load(texture, img).unwrap().clone()
+            }
+        }
+    }
+
     pub fn font(&mut self, identifier: FontIdentifier) -> &RTFont {
         if !self.fonts.contains_key(identifier) {
             let font_path = self.assets_path.join("fonts").join(identifier);

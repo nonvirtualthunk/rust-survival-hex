@@ -57,6 +57,7 @@ impl Hash for ReactionType {
 pub mod reaction_types {
     use super::*;
     use entities::combat::AttackType;
+    use entities::character::AllegianceData;
 
 
     pub const Counterattack: ReactionType = ReactionType {
@@ -72,9 +73,10 @@ pub mod reaction_types {
         condition_func: |view, ent| logic::combat::possible_attacks(view, ent).any_match(|a| a.attack_type == AttackType::Melee) && view.data::<CharacterData>(ent).stamina.cur_value() > Sext::of(0),
         on_event: |world, ent, event| if let GameEvent::FactionTurn { faction, .. } = event.event {
             let view = world.view();
-            let char_data = view.data::<CharacterData>(ent);
+            let allegiance = view.data::<AllegianceData>(ent);
             let modifier_key = "counter-reaction";
-            if faction == char_data.faction {
+            if faction == allegiance.faction {
+                let char_data = view.data::<CharacterData>(ent);
                 if event.is_ended() {
                     if char_data.stamina.cur_value() > Sext::of(0) {
                         if let Some(counter_attack) = logic::combat::counter_attack_ref_to_use(view, ent) {
@@ -108,9 +110,10 @@ pub mod reaction_types {
         condition_func: |view, ent| view.data::<CharacterData>(ent).stamina.cur_value() > Sext::of(0),
         on_event: |world, ent, event| if let GameEvent::FactionTurn { faction, .. } = event.event {
             let view = world.view();
-            let char_data = view.data::<CharacterData>(ent);
+            let allegiance = view.data::<AllegianceData>(ent);
             let modifier_key = "dodge-reaction";
-            if faction == char_data.faction {
+            if faction == allegiance.faction {
+                let char_data = view.data::<CharacterData>(ent);
                 if event.is_ended() {
                     if char_data.stamina.cur_value() > Sext::of(0) {
                         let increase_dodge_by = (world.view().data::<CombatData>(ent).dodge_bonus * 2).max(2);
@@ -154,8 +157,9 @@ pub mod reaction_types {
         condition_func: |view, ent| true,
         on_event: |world, ent, event| if let Some(GameEvent::FactionTurn { faction, .. }) = event.if_ended() {
             let view = world.view();
-            let char_data = view.data::<CharacterData>(ent);
-            if faction == &char_data.faction {
+            let allegiance = view.data::<AllegianceData>(ent);
+            if faction == &allegiance.faction {
+                let char_data = view.data::<CharacterData>(ent);
                 let modifier = world.modify(ent, CombatData::defense_bonus.add(1), "defense reaction");
                 world.modify(ent, ModifierTrackingData::modifiers_by_key.set_key_to(strf("defend-reaction"), modifier), None);
                 world.add_event(GameEvent::ReactionEffectApplied { entity : ent });
@@ -163,8 +167,9 @@ pub mod reaction_types {
             }
         } else if let Some(GameEvent::FactionTurn { faction, .. }) = event.if_ended() {
             let view = world.view();
-            let char_data = view.data::<CharacterData>(ent);
-            if faction == &char_data.faction {
+            let allegiance = view.data::<AllegianceData>(ent);
+            if faction == &allegiance.faction {
+                let char_data = view.data::<CharacterData>(ent);
                 if let Some(prev_modifier) = view.data::<ModifierTrackingData>(ent).modifiers_by_key.get("defend-reaction") {
                     world.disable_modifier(prev_modifier.clone());
                     world.add_event(GameEvent::EffectEnded { entity : None });

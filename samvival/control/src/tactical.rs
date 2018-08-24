@@ -193,7 +193,7 @@ impl TacticalMode {
 
     pub fn selected_player_character(&self, world: &WorldView) -> Option<Entity> {
         if let Some(sel_ref) = self.selected_character {
-            if world.character(sel_ref).faction == self.player_faction {
+            if world.character(sel_ref).allegiance.faction == self.player_faction {
                 Some(sel_ref)
             } else {
                 None
@@ -230,7 +230,7 @@ impl TacticalMode {
         self.animation_elements.iter().any(|e| e.blocking_pcnt_elapsed(self.realtime_clock) < 1.0)
     }
 
-    pub fn advance_event_clock(&mut self, max_event_clock: GameEventClock) {
+    pub fn advance_event_clock(&mut self, max_event_clock: GameEventClock) -> bool {
         let dt = Instant::now().duration_since(self.last_time).subsec_nanos() as f64 / 1e9f64;
         //        println!("Advancing event clock by {}", dt);
         self.last_time = Instant::now();
@@ -250,12 +250,14 @@ impl TacticalMode {
                 self.animation_elements.retain(|e| e.pcnt_elapsed(realtime_clock) < 1.0);
                 // advance the DEC
                 self.display_event_clock += 1;
+                return true;
             }
         }
+        false
     }
 
     pub fn at_latest_event(&self, world: &World) -> bool {
-        self.display_event_clock >= world.current_time - 1
+        self.display_event_clock >= world.current_time()
     }
 
     fn event_started_at(&self, gec: GameEventClock) -> f64 {
@@ -316,7 +318,8 @@ impl TacticalMode {
                 let character_refs: Vec<Entity> = world.view().entities_with_data::<CharacterData>().keys().cloned().collect::<Vec<Entity>>();
 
                 for (cref, cur_data) in world_view.entities_with_data::<CharacterData>() {
-                    if &cur_data.faction == faction && cur_data.is_alive() {
+                    let allegiance = world_view.data::<AllegianceData>(*cref);
+                    if &allegiance.faction == faction && cur_data.is_alive() {
                         // these are enemies, now we get to decide what they want to do
                         self.ai_action(&cref, &cur_data, world, world_view, &character_refs);
                     }
@@ -346,7 +349,8 @@ impl TacticalMode {
         for cref in character_refs.clone() {
             let char_data = world_view.data::<CharacterData>(*cref);
             if char_data.is_alive() {
-                if char_data.faction != self.player_faction {
+                let allegiance = world_view.data::<AllegianceData>(*cref);
+                if allegiance.faction != self.player_faction {
                     living_enemy = true;
                 } else {
                     living_ally = true;
@@ -354,9 +358,9 @@ impl TacticalMode {
             }
         }
         if !living_enemy {
-            self.victory_time = self.victory_time.or(Some(world.current_time-1));
+            self.victory_time = self.victory_time.or(Some(world.next_time -1));
         } else if !living_ally {
-            self.defeat_time = self.defeat_time.or(Some(world.current_time-1));
+            self.defeat_time = self.defeat_time.or(Some(world.next_time -1));
         }
 
         self.skipped_characters.clear();
@@ -371,15 +375,18 @@ impl TacticalMode {
         self.animation_elements.push(AnimationElementWrapper { animation: elem, start_time: None });
     }
 
-    fn render_draw_list(&self, draw_list: DrawList, g: &mut GraphicsWrapper) {
-        for mut quad in draw_list.quads {
+    fn render_draw_list(&self, mut draw_list: DrawList, g: &mut GraphicsWrapper) {
+        for quad in draw_list.quads.iter_mut() {
             quad.offset *= self.tile_radius;
             quad.size = match quad.size {
                 Some(specific_size) => Some(specific_size * self.tile_radius),
                 None => None
             };
-            g.draw_quad(quad);
+//            g.draw_quad(quad);
         }
+
+        g.draw_quads(&draw_list.quads,"test");
+
         for mut text in draw_list.text {
             text.offset *= self.tile_radius;
             g.draw_text(text);
@@ -495,17 +502,15 @@ impl GameMode for TacticalMode {
 
 //        let world_view : &mut WorldView = &mut self.world_view;
 
-        self.create_animations_if_necessary(world_in, g.resources);
+        loop {
+            self.create_animations_if_necessary(world_in, g.resources);
 
-        self.advance_event_clock(world_in.current_time);
-
-        self.update_world_view(world_in);
-
-        self.create_animations_if_necessary(world_in, g.resources);
-
-        self.advance_event_clock(world_in.current_time);
-
-        self.update_world_view(world_in);
+            if self.advance_event_clock(world_in.next_time) {
+                self.update_world_view(world_in);
+            } else {
+                break;
+            }
+        }
 
         if let Some(v) = g.context.viewport {
             self.viewport = v;
@@ -539,7 +544,7 @@ impl GameMode for TacticalMode {
         let culling_rect = Rect::from_corners(min_game_pos.x / self.tile_radius, max_game_pos.y / self.tile_radius, max_game_pos.x / self.tile_radius, min_game_pos.y / self.tile_radius);
 
         // draw list for the map tiles
-        let terrain_draw_list = self.terrain_renderer.render_tiles(world_view, self.display_event_clock, culling_rect);
+        let terrain_draw_list = self.terrain_renderer.render_tiles(world_view, self.player_faction, self.display_event_clock, culling_rect);
         // draw list for items on the map
         let item_draw_list = self.item_renderer.render_items(world_view, g.resources, culling_rect);
         // draw list for the units and built-in unit UI elements
@@ -590,8 +595,8 @@ impl GameMode for TacticalMode {
                             },
                             Some(cur_sel) => {
                                 let sel_data = main_world_view.character(cur_sel);
-                                if target_data.faction != self.player_faction &&
-                                    sel_data.faction == self.player_faction {
+                                if target_data.allegiance.faction != self.player_faction &&
+                                    sel_data.allegiance.faction == self.player_faction {
                                     if let Some(attack_ref) = logic::combat::primary_attack_ref(main_world_view, cur_sel) {
                                         if let Some((path, cost)) = logic::combat::path_to_attack(main_world_view, cur_sel, found_ref, &attack_ref) {
                                             if path.is_empty() {
@@ -633,7 +638,7 @@ impl GameMode for TacticalMode {
                         if let Some(sel_c) = self.selected_character {
                             if let Some(hovered_) = self.hovered_tile(world.view()) {
                                 let cur_sel_data = display_world_view.character(sel_c);
-                                if cur_sel_data.faction == self.player_faction {
+                                if cur_sel_data.allegiance.faction == self.player_faction {
                                     let start_pos = display_world_view.character(sel_c).position.hex;
                                     if let Some(path_result) = logic::movement::path(display_world_view, sel_c, start_pos, clicked_coord) {
                                         let path = path_result.0;
@@ -714,7 +719,7 @@ impl TacticalMode {
     fn select_next_character(&mut self, world : &World) {
         let world_view = world.view();
         let mut player_characters : Vec<Entity> = world_view.entities_with_data::<CharacterData>().iter()
-            .filter(|(k,v)| v.faction == self.player_faction)
+            .filter(|(k,v)| world_view.data::<AllegianceData>(**k).faction == self.player_faction)
             .map(|(k,v)| *k)
             .sorted();
 

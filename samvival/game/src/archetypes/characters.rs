@@ -18,6 +18,7 @@ pub fn character_archetypes() -> ArchetypeLibrary {
         .with(GraphicsData::default())
         .with(ActionData::default())
         .with(ModifierTrackingData::default())
+        .with(ObserverData { vision_range : 10, low_light_vision_range : 6, dark_vision_range : 3})
         .with(IdentityData::of_kind(taxonomy::Person));
 
 

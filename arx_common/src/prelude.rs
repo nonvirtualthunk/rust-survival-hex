@@ -9,6 +9,8 @@ use interpolation;
 pub use itertools::Itertools;
 use std::time::Duration;
 
+use pretty_env_logger;
+
 pub use hex::AxialCoord;
 
 pub type Vec3i = Vector3<i32>;
@@ -222,4 +224,8 @@ impl ToMillis for Duration {
     fn to_millis(&self) -> f64 {
         ((self.as_secs() * 1000) as f64) + self.subsec_millis() as f64
     }
+}
+
+pub fn rust_init() {
+    pretty_env_logger::try_init().ok();
 }

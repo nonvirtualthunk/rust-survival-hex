@@ -60,11 +60,11 @@ impl EntitySelectors {
             Friend { of } =>
                 IsCharacter.matches(of, world) &&
                     IsCharacter.matches(entity, world) &&
-                    world.character(of).faction == world.character(entity).faction,
+                    world.character(of).allegiance.faction == world.character(entity).allegiance.faction,
             Enemy { of } =>
                 IsCharacter.matches(of, world) &&
                     IsCharacter.matches(entity, world) &&
-                    world.character(of).faction == world.character(entity).faction,
+                    world.character(of).allegiance.faction == world.character(entity).allegiance.faction,
             InMoveRange { hex_range, of } => {
                 if let Some(end_point) = position_of(entity, world) {
                     if let Some((_, cost)) = logic::movement::path_to(world, of, end_point) {

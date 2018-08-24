@@ -10,6 +10,7 @@ use std::ops::Deref;
 use noisy_float::types::R32;
 use entities::common::PositionData;
 use entities::common::ActionData;
+use entities::time::TimeOfDay;
 
 
 #[derive(Default, Clone, Debug, PrintFields)]
@@ -21,7 +22,6 @@ impl EntityData for GraphicsData {}
 
 #[derive(Clone, Debug, PrintFields)]
 pub struct CharacterData {
-    pub faction: Entity,
     pub health: Reduceable<i32>,
     pub action_points: Reduceable<i32>,
     pub move_speed: Sext,
@@ -35,26 +35,13 @@ pub struct CharacterData {
 
 impl EntityData for CharacterData {}
 
-//pub trait AsCharacterData<'a> {
-//    fn resolve(&self, view : &'a WorldView) -> &'a CharacterData;
-//}
-//impl <'a> AsCharacterData<'a> for Entity {
-//    fn resolve(&self, view: &'a WorldView) -> &'a CharacterData {
-//        view.data::<CharacterData>(*self)
-//    }
-//}
-//impl <'a> AsCharacterData<'a> for &'a CharacterData {
-//    fn resolve(&self, view: &'a WorldView) -> &'a CharacterData {
-//        self
-//    }
-//}
-
 pub struct Character<'a> {
     pub entity: Entity,
     character: &'a CharacterData,
     pub position: &'a PositionData,
     pub graphics: &'a GraphicsData,
-    pub action: &'a ActionData
+    pub action: &'a ActionData,
+    pub allegiance: &'a AllegianceData
 }
 
 impl<'a> Deref for Character<'a> {
@@ -79,7 +66,8 @@ impl CharacterStore for WorldView {
             character: self.data::<CharacterData>(ent),
             position: self.data::<PositionData>(ent),
             graphics: self.data::<GraphicsData>(ent),
-            action: self.data::<ActionData>(ent)
+            action: self.data::<ActionData>(ent),
+            allegiance: self.data::<AllegianceData>(ent),
         }
     }
 }
@@ -93,7 +81,6 @@ impl CharacterStore for WorldView {
 impl Default for CharacterData {
     fn default() -> Self {
         CharacterData {
-            faction: Entity::default(),
             health: Reduceable::new(1),
             action_points: Reduceable::new(6),
             moves: Sext::zero(),
@@ -120,3 +107,36 @@ impl CharacterData {
     }
 }
 
+
+#[derive(Clone, Default, Debug, PrintFields)]
+pub struct ObserverData {
+    pub vision_range : i32,
+    pub low_light_vision_range : i32,
+    pub dark_vision_range : i32,
+}
+
+impl ObserverData {
+    pub fn vision_range_at_time(&self, time_of_day : TimeOfDay) -> i32 {
+        match time_of_day {
+            TimeOfDay::Dusk | TimeOfDay::Dawn => self.low_light_vision_range,
+            TimeOfDay::Daylight => self.vision_range,
+            TimeOfDay::Night => self.dark_vision_range,
+        }
+    }
+}
+impl EntityData for ObserverData {}
+
+
+#[derive(Clone, Debug, PrintFields)]
+pub struct AllegianceData {
+    pub faction: Entity
+}
+impl EntityData for AllegianceData {}
+
+impl Default for AllegianceData {
+    fn default() -> Self {
+        AllegianceData {
+            faction : Entity::default()
+        }
+    }
+}

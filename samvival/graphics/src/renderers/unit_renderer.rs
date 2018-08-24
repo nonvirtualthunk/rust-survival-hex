@@ -37,7 +37,7 @@ impl UnitRenderer {
 
             // Top half of selection indicator
             if *id == selected_character {
-                let color = world.faction(c.faction).color;
+                let color = world.faction(c.allegiance.faction).color;
                 let pos = c.effective_graphical_pos();
                 quads.push(Quad::new(String::from("ui/selectedTop"), pos.0).centered().color(color));
             }
@@ -94,7 +94,7 @@ impl UnitRenderer {
 
             // Bottom half of selection indicator
             if *id == selected_character {
-                let color = world.faction(c.faction).color;
+                let color = world.faction(c.allegiance.faction).color;
                 let pos = c.effective_graphical_pos();
                 quads.push(Quad::new(String::from("ui/selectedBottom"), pos.0).centered().color(color));
             }

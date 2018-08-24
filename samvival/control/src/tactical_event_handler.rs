@@ -31,7 +31,7 @@ use cgmath::InnerSpace;
 use std::f64::consts;
 
 pub fn animation_elements_for_new_event(world_view: &WorldView, wrapper: &GameEventWrapper<GameEvent>, resources: &mut GraphicsResources) -> Vec<Box<AnimationElement>> {
-    if wrapper.state == GameEventState::Started {
+    if wrapper.is_starting() {
         match wrapper.event {
             GameEvent::Strike { attacker, defender, ref attack, ref strike_result, .. } => {
                 animate_attack(world_view, attacker, defender, &attack, &strike_result, resources)
@@ -51,7 +51,7 @@ pub fn animation_elements_for_new_event(world_view: &WorldView, wrapper: &GameEv
 
 
 fn animate_move(world_view: &WorldView, character: Entity, from: AxialCoord, to: AxialCoord, move_cost: Sext) -> Vec<Box<AnimationElement>> {
-    let duration = 0.25 * move_cost.as_f64();
+    let duration = 0.35;
     let from_pos = from.as_cart_vec();
     let to_pos = to.as_cart_vec();
 //    let delta = (to_pos - from_pos).normalize() * (1.0 / 60.0);
