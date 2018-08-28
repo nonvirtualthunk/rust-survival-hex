@@ -10,6 +10,7 @@ use std::fmt;
 use state::GameState;
 use attack_descriptions::*;
 use state::ControlContext;
+use game::Entity;
 
 
 pub struct CharacterInfoWidget {
@@ -57,13 +58,13 @@ impl CharacterInfoWidget {
             .apply(gui);
 
         let character_stats = vec![
-            CharacterStat::new_reduceable("HP", |cdata| &cdata.health, "Health. Characters fall unconscious if this reaches 0"),
-            CharacterStat::new("AP", |cdata| cdata.action_points.cur_value(), |cdata| cdata.action_points.max_value(),
+            CharacterStat::new_reduceable("HP", |view,ent| view.character(ent).health.clone(), "Health. Characters fall unconscious if this reaches 0"),
+            CharacterStat::new("AP", |view,ent| view.character(ent).action_points.cur_value(), |view,ent| view.character(ent).action_points.max_value(),
                                "Action Points, represents how much more this character can do this turn. Moving and using actions consume AP, AP resets every turn"),
-            CharacterStat::cur_only("Move Speed", |cdata| cdata.move_speed,
+            CharacterStat::cur_only("Move Speed", |view,ent| view.character(ent).movement.move_speed,
                                     "How fast this character moves per action point spent at a normal pace. Max movement at a \
                                     normal pace is therefore AP * Move Speed"),
-            CharacterStat::new("Stamina", |cdata| cdata.stamina.cur_value().as_i32(), |cdata| cdata.stamina.max_value().as_i32(),
+            CharacterStat::new("Stamina", |view,ent| view.character(ent).stamina.cur_value().as_i32(), |view,ent| view.character(ent).stamina.max_value().as_i32(),
                                "How much endurance this character has left for performing strenuous actions. Attacking, reacting, running and the like all \
                                consume some amount of stamina. Normally recovers by 1 each turn."),
         ];
@@ -114,8 +115,8 @@ impl CharacterInfoWidget {
 
             self.character_stats_widget.update(gui, self.character_stats.as_ref(), |stat_w, stat| {
                 let numeral_display = match stat.max_value_func {
-                    Some(ref mvf) => format!("{} / {}", (stat.cur_value_func)(&character), mvf(&character)),
-                    _ => (stat.cur_value_func)(&character)
+                    Some(ref mvf) => format!("{} / {}", (stat.cur_value_func)(world_view, selected), mvf(world_view, selected)),
+                    _ => (stat.cur_value_func)(world_view, selected)
                 };
                 let text = format!("{}: {}", stat.name, numeral_display);
                 stat_w.text.set_widget_type(WidgetType::text(text, 14))
@@ -176,34 +177,34 @@ impl Default for SkillWidget {
 
 pub struct CharacterStat {
     name: Str,
-    cur_value_func: Box<Fn(&CharacterData) -> String>,
-    max_value_func: Option<Box<Fn(&CharacterData) -> String>>,
+    cur_value_func: Box<Fn(&WorldView, Entity) -> String>,
+    max_value_func: Option<Box<Fn(&WorldView, Entity) -> String>>,
     tooltip: Str
 }
 
 impl CharacterStat {
-    fn new<T: std::string::ToString, F: Fn(&CharacterData) -> T + 'static, MF: Fn(&CharacterData) -> T + 'static>(name: Str, f: F, mf: MF, tooltip : Str) -> CharacterStat {
+    fn new<T: std::string::ToString, F: Fn(&WorldView, Entity) -> T + 'static, MF: Fn(&WorldView, Entity) -> T + 'static>(name: Str, f: F, mf: MF, tooltip : Str) -> CharacterStat {
         CharacterStat {
             name,
-            cur_value_func: box move |raw| f(raw).to_string(),
-            max_value_func: Some(box move |raw| mf(raw).to_string()),
+            cur_value_func: box move |view,ent| f(view,ent).to_string(),
+            max_value_func: Some(box move |view,ent| mf(view,ent).to_string()),
             tooltip
         }
     }
 
-    fn cur_only<T : std::string::ToString + 'static>(name: Str, f: fn(&CharacterData) -> T, tooltip : Str) -> CharacterStat {
+    fn cur_only<T : std::string::ToString + 'static>(name: Str, f: fn(&WorldView, Entity) -> T, tooltip : Str) -> CharacterStat {
         CharacterStat {
             name,
-            cur_value_func: box move |raw| f(raw).to_string(),
+            cur_value_func: box move |view,ent| f(view,ent).to_string(),
             max_value_func: None,
             tooltip
         }
     }
 
-    fn new_reduceable<T: ReduceableType + fmt::Display + 'static>(name: Str, f: fn(&CharacterData) -> &Reduceable<T>, tooltip : Str) -> CharacterStat {
+    fn new_reduceable<T: ReduceableType + fmt::Display + 'static>(name: Str, f: fn(&WorldView, Entity) -> Reduceable<T>, tooltip : Str) -> CharacterStat {
         CharacterStat {
-            cur_value_func: box move |cdata| format!("{}", f(cdata).cur_value()),
-            max_value_func: Some(box move |cdata| format!("{}", f(cdata).max_value())),
+            cur_value_func: box move |view,ent| format!("{}", f(view,ent).cur_value()),
+            max_value_func: Some(box move |view,ent| format!("{}", f(view,ent).max_value())),
             name,
             tooltip
         }
@@ -214,7 +215,7 @@ impl Default for CharacterStat {
     fn default() -> Self {
         CharacterStat {
             name: "Uninitialized",
-            cur_value_func: box |cd| { String::from("uninitialized") },
+            cur_value_func: box |view,ent| { String::from("uninitialized") },
             max_value_func: None,
             tooltip: "uninitialized"
         }

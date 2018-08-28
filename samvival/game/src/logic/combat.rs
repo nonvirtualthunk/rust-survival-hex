@@ -5,8 +5,8 @@ use entities::*;
 use entities::Skill;
 use entities::modifiers::*;
 use game::events::*;
-use common::hex::*;
 use common::flood_search;
+use common::hex::CubeCoord;
 use rand::Rng;
 use rand::SeedableRng;
 use rand::StdRng;
@@ -30,6 +30,8 @@ use common::reflect::Field;
 use events::GameEvent;
 use std::collections::HashMap;
 use entities::combat::CombatData;
+use cgmath::InnerSpace;
+use common::hex::CartVec;
 
 pub enum StrikeIndex {
     Strike(usize),
@@ -87,6 +89,8 @@ impl<T: Default> Breakdown<T> where T: ops::Add<Output=T> + Copy + ToStringWithS
 
 #[derive(Default)]
 pub struct StrikeBreakdown {
+    pub attack: Attack,
+    pub weapon: Entity,
     pub to_hit_components: Breakdown<i32>,
     pub to_miss_components: Breakdown<i32>,
     pub damage_bonus_components: Breakdown<i32>,
@@ -100,21 +104,6 @@ pub struct StrikeBreakdown {
 }
 
 impl StrikeBreakdown {
-    //    pub fn to_hit_total(&self) -> i32 { self.to_hit_components.iter().map(|c| c.0).sum() }
-//    pub fn to_miss_total(&self) -> i32 { self.to_miss_components.iter().map(|c| c.0).sum() }
-//    pub fn damage_bonus_total(&self) -> i32 { self.damage_bonus_components.iter().map(|c| c.0).sum() }
-//    pub fn damage_resistance_total(&self) -> f32 { self.damage_resistance_components.iter().map(|c| c.0).sum() }
-//    pub fn damage_absorption_total(&self) -> i32 { self.damage_absorption_components.iter().map(|c| c.0).sum() }
-//    pub fn damage_dice_total<'a>(&'a self) -> impl Iterator<Item = DicePool> + 'a {
-////        let dice_count : i32 = self.dice_count_components.iter().map(|c| c.0).sum();
-////        let die : i32 = self.die_components.iter().map(|c| c.0).sum();
-////        DicePool::of(dice_count.as_u32_or_0(), die.as_u32_or_0())
-//        self.damage_dice_components.iter().map(|dd| dd.0)
-//    }
-//    pub fn ap_cost_total(&self) -> u32 {
-//        let cost : i32 = self.ap_cost_components.iter().map(|c| c.0).sum();
-//        cost.as_u32_or_0()
-//    }
     pub fn to_hit_total(&self) -> i32 { self.to_hit_components.total }
     pub fn to_miss_total(&self) -> i32 { self.to_miss_components.total }
     pub fn damage_bonus_total(&self) -> i32 { self.damage_bonus_components.total }
@@ -162,11 +151,10 @@ pub fn can_attack(world_view: &WorldView, attacker: Entity, defender: Entity, at
     within_range(world_view, attacker, defender, attack, from_position, to_position)
 }
 
-pub fn possible_attack_locations_with_cost(world_view: &WorldView, attacker: Entity, defender: Entity, attack: &Attack) -> HashMap<AxialCoord, f64> {
+
+pub fn possible_attack_locations_with_cost(world_view: &WorldView, hexes: HashMap<AxialCoord,f64>, attacker: Entity, defender: Entity, attack: &Attack) -> HashMap<AxialCoord, f64> {
     let target_pos = world_view.data::<PositionData>(defender).hex;
-    let max_move = logic::movement::max_moves_remaining(world_view, attacker, 1.0);
-    logic::movement::hexes_in_range(world_view, attacker, max_move).into_iter()
-        .filter(|(k, v)| can_attack(world_view, attacker, defender, attack, Some(*k), Some(target_pos))).collect()
+    hexes.into_iter().filter(|(k, v)| can_attack(world_view, attacker, defender, attack, Some(*k), Some(target_pos))).collect()
 }
 
 pub fn does_event_trigger_counterattack(world_view: &WorldView, counterer: Entity, event: &GameEventWrapper<GameEvent>) -> bool {
@@ -181,45 +169,69 @@ pub fn does_event_trigger_counterattack(world_view: &WorldView, counterer: Entit
     false
 }
 
-pub fn closest_attack_location_with_cost(world_view: &WorldView, attacker: Entity, defender: Entity, attack: &Attack) -> Option<(AxialCoord, f64)> {
+
+pub fn closest_attack_location_with_cost(world_view: &WorldView, hexes : HashMap<AxialCoord,f64>, attacker: Entity, defender: Entity, attack: &Attack, nudge_towards: CartVec) -> Option<(AxialCoord, f64)> {
+    let defender_pos = world_view.data::<PositionData>(defender).hex.as_cart_vec();
+    let nudge_delta = (nudge_towards - defender_pos).normalize_s();
+
     // do the min by cost, adjusted ever so slightly by the actual hex in question, this is necessary to make this a stable selection, otherwise there might be many equidistant
     // locations to use
-    possible_attack_locations_with_cost(world_view, attacker, defender, attack).into_iter().min_by_key(|(k, v)| r64(*v + (k.r as f64 * 0.0001) + (k.q as f64 * 0.00013)))
+    possible_attack_locations_with_cost(world_view, hexes, attacker, defender, attack).into_iter()
+        .min_by_key(|(k, v)| {
+            let base_amount = /* *v*/ 0.0;
+            let nudge_amount = (k.as_cart_vec() - defender_pos).normalize_s().0.dot(nudge_delta.0).acos().abs() * 0.01;
+            let stabilizer_epsilon = (k.r as f32 * 0.000001) + (k.q as f32 * 0.0000013);
+            r64(base_amount + nudge_amount as f64)
+        })
 }
 
-pub fn compute_attack_breakdown(world: &World, world_view: &WorldView, attacker: Entity, defender: Entity, attack: &Attack, attack_from : Option<AxialCoord>, ap_remaining : Option<i32>) -> AttackBreakdown {
+
+pub fn compute_attack_breakdown(world: &World, world_view: &WorldView, attacker: Entity, defender: Entity, attack_ref: &AttackRef, attack_from: Option<AxialCoord>, ap_remaining: Option<i32>) -> AttackBreakdown {
     let mut attack_breakdown = AttackBreakdown::default();
 
-    let attacker_data = world_view.character(attacker);
 
-    let ap_remaining = ap_remaining.unwrap_or(attacker_data.action_points.cur_value());
-    let base_attacker_strikes = ap_remaining / attack.ap_cost as i32;
-    let mut attacker_strikes = match attack.attack_type {
-        AttackType::Thrown => base_attacker_strikes.min(1),
-        _ => base_attacker_strikes
-    };
+    if let Some((attack, weapon)) = attack_ref.resolve_attack_and_weapon(world_view, attacker) {
+        let attacker_data = world_view.character(attacker);
 
-    let (defender_counter_attack, mut defender_counters) =
-        combat::counters_for(world_view, defender, attacker, attack);
+        let mut attacker_strikes = max_strikes_remaining(world_view, attacker, &attack, ap_remaining);
 
-    let mut attacker_turn = true;
-    while attacker_strikes > 0 || defender_counters > 0 {
-        if attacker_turn && attacker_strikes > 0 {
-            attack_breakdown.add_strike(compute_strike_breakdown(world, world_view, attacker, defender, attack));
-            attacker_strikes -= 1;
-        } else if !attacker_turn && defender_counters > 0 {
-            attack_breakdown.add_counter(compute_strike_breakdown(world, world_view, defender, attacker, &defender_counter_attack));
-            defender_counters -= 1;
+        let (defender_counter_attack, defender_weapon, mut defender_counters) =
+            combat::counters_for(world_view, defender, attacker, &attack);
+
+        let mut attacker_turn = true;
+        while attacker_strikes > 0 || defender_counters > 0 {
+            if attacker_turn && attacker_strikes > 0 {
+                attack_breakdown.add_strike(compute_strike_breakdown(world, world_view, attacker, defender, &attack, weapon));
+                attacker_strikes -= 1;
+            } else if !attacker_turn && defender_counters > 0 {
+                attack_breakdown.add_counter(compute_strike_breakdown(world, world_view, defender, attacker, &defender_counter_attack, defender_weapon));
+                defender_counters -= 1;
+            }
+            attacker_turn = !attacker_turn;
         }
-        attacker_turn = !attacker_turn;
+    } else {
+        warn!("Computing empty attack breakdown, attack reference was not valid");
     }
 
     attack_breakdown
 }
 
-pub fn compute_strike_breakdown(world: &World, view: &WorldView, attacker_ref: Entity, defender_ref: Entity, attack: &Attack) -> StrikeBreakdown {
+pub fn max_strikes_remaining(world_view: &WorldView, attacker: Entity, attack: &Attack, ap_remaining : Option<i32>) -> i32 {
+
+    let attacker_data = world_view.character(attacker);
+    let ap_remaining = ap_remaining.unwrap_or(attacker_data.action_points.cur_value());
+    let base_attacker_strikes = ap_remaining / attack.ap_cost as i32;
+    match attack.attack_type {
+        AttackType::Thrown => base_attacker_strikes.min(1),
+        _ => base_attacker_strikes
+    }
+}
+
+pub fn compute_strike_breakdown(world: &World, view: &WorldView, attacker_ref: Entity, defender_ref: Entity, attack: &Attack, weapon: Entity) -> StrikeBreakdown {
     let mut ret = StrikeBreakdown::default();
 
+    ret.attack = attack.clone();
+    ret.weapon = weapon;
     ret.damage_types.push(attack.primary_damage_type);
     if let Some(secondary_damage_type) = attack.secondary_damage_type {
         ret.damage_types.push(secondary_damage_type);
@@ -268,18 +280,19 @@ pub fn compute_strike_breakdown(world: &World, view: &WorldView, attacker_ref: E
     ret
 }
 
-pub fn handle_attack(world: &mut World, attacker_ref: Entity, defender_ref: Entity, attack_ref: &AttackReference) {
-    if let Some(attack) = attack_ref.referenced_attack(world.view(), attacker_ref) {
+pub fn handle_attack(world: &mut World, attacker: Entity, defender_ref: Entity, attack_ref: &AttackRef) {
+    if let Some(attack) = attack_ref.resolve(world.view(), attacker) {
         let world_view = world.view();
 
-        let attack_breakdown = compute_attack_breakdown(world, world_view, attacker_ref, defender_ref, attack, None, None);
+        let attack_breakdown = compute_attack_breakdown(world, world_view, attacker, defender_ref, attack_ref, None, None);
 
-        world.start_event(GameEvent::Attack { attacker: attacker_ref, defender: defender_ref });
+        world.start_event(GameEvent::Attack { attacker: attacker, defender: defender_ref });
+
 
         for strike_index in attack_breakdown.ordering {
             match strike_index {
-                StrikeIndex::Strike(i) => handle_strike(world, attacker_ref, defender_ref, attack_ref.entity, attack, &attack_breakdown.strikes[i], i as u8),
-                StrikeIndex::Counter(i) => handle_strike(world, defender_ref, attacker_ref, attack_ref.entity, attack, &attack_breakdown.counters[i], i as u8)
+                StrikeIndex::Strike(i) => handle_strike(world, attacker, defender_ref, &attack_breakdown.strikes[i], i as u8),
+                StrikeIndex::Counter(i) => handle_strike(world, defender_ref, attacker, &attack_breakdown.counters[i], i as u8)
             }
         }
 
@@ -287,24 +300,26 @@ pub fn handle_attack(world: &mut World, attacker_ref: Entity, defender_ref: Enti
             i if i <= 1 => Skill::Melee,
             _ => Skill::Ranged
         };
-        modify(world, attacker_ref, SkillXPMod(attack_skill_type, 1));
-        modify(world, attacker_ref, ReduceStaminaMod(Sext::of(1)));
+        modify(world, attacker, SkillXPMod(attack_skill_type, 1));
+        modify(world, attacker, ReduceStaminaMod(Sext::of(1)));
 
-        world.end_event(GameEvent::Attack { attacker: attacker_ref, defender: defender_ref });
+        world.end_event(GameEvent::Attack { attacker: attacker, defender: defender_ref });
 
         if attack.attack_type == AttackType::Thrown {
             // thrown natural attacks don't cause you to lose an entity when they occur, but otherwise we want to un-equip the weapon
             // and put it in the world
-            if attack_ref.entity != attacker_ref {
-                item::unequip_item(world, attack_ref.entity, attacker_ref, true);
-                item::remove_item_from_inventory(world, attack_ref.entity, attacker_ref);
+            if let Some(weapon) = attack_ref.resolve_weapon(world, attacker) {
+                if weapon != attacker {
+                    item::unequip_item(world, weapon, attacker, true);
+                    item::remove_item_from_inventory(world, weapon, attacker);
 
-                let defender_pos = world_view.data::<PositionData>(defender_ref).hex;
-                let attacker_pos = world_view.data::<PositionData>(attacker_ref).hex;
+                    let defender_pos = world_view.data::<PositionData>(defender_ref).hex;
+                    let attacker_pos = world_view.data::<PositionData>(attacker).hex;
 
-                let drop_pos = *defender_pos.neighbors().iter().min_by_key(|n| n.distance(&attacker_pos)).unwrap();
-                item::place_item_in_world(world, attack_ref.entity, drop_pos);
-            }
+                    let drop_pos = *defender_pos.neighbors().iter().min_by_key(|n| n.distance(&attacker_pos)).unwrap();
+                    item::place_item_in_world(world, weapon, drop_pos);
+                }
+            } else { warn!("Thrown weapon, but could not identify an originating weapon from which the attack came") }
         }
     } else {
         warn!("Attempted an attack with a non-resolveable attack reference");
@@ -318,11 +333,14 @@ Okay, if we start from basis of 3d6 that gives us a normal-ish distribution betw
 Skills don't automatically give a curve, but specific levels give discrete bumps.
 */
 
-pub fn handle_strike(world: &mut World, attacker_ref: Entity, defender_ref: Entity, weapon : Entity, attack : &Attack, strike: &StrikeBreakdown, strike_number: u8) {
+pub fn handle_strike(world: &mut World, attacker_ref: Entity, defender_ref: Entity, strike: &StrikeBreakdown, strike_number: u8) {
     let seed = world.random_seed(13);
     let mut rng: StdRng = SeedableRng::from_seed(seed);
 
     let view = world.view();
+
+    let weapon = strike.weapon;
+    let attack = &strike.attack;
 
     let attacker = view.character(attacker_ref);
     let attacker_combat = view.combat(attacker_ref);
@@ -362,18 +380,18 @@ pub fn handle_strike(world: &mut World, attacker_ref: Entity, defender_ref: Enti
             attacker: attacker_ref,
             defender: defender_ref,
             attack: box attack.clone(),
-            strike_result : box StrikeResult {
-                damage_types : strike.damage_types.clone(),
-                damage_done : damage_total as i32,
-                hit : true,
+            strike_result: box StrikeResult {
+                damage_types: strike.damage_types.clone(),
+                damage_done: damage_total as i32,
+                hit: true,
                 killing_blow: false,
                 strike_number,
-                weapon : if weapon == attacker_ref { None } else { Some(weapon) }
-            }
+                weapon: if weapon == attacker_ref { None } else { Some(weapon) },
+            },
         });
 
         logic::character::apply_damage_to_character(world, defender_ref, damage_total, &strike.damage_types);
-        world.modify(attacker_ref, CharacterData::moves.set_to(Sext::of(0)), None);
+        world.modify(attacker_ref, MovementData::moves.set_to(Sext::of(0)), None);
 
         let killing_blow = !view.data::<CharacterData>(defender_ref).is_alive();
 
@@ -381,28 +399,28 @@ pub fn handle_strike(world: &mut World, attacker_ref: Entity, defender_ref: Enti
             attacker: attacker_ref,
             defender: defender_ref,
             attack: box attack.clone(),
-            strike_result : box StrikeResult {
-                damage_types : strike.damage_types.clone(),
-                damage_done : damage_total as i32,
-                hit : true,
+            strike_result: box StrikeResult {
+                damage_types: strike.damage_types.clone(),
+                damage_done: damage_total as i32,
+                hit: true,
                 killing_blow,
                 strike_number,
-                weapon : if weapon == attacker_ref { None } else { Some(weapon) }
-            }
+                weapon: if weapon == attacker_ref { None } else { Some(weapon) },
+            },
         });
     } else {
         world.add_event(GameEvent::Strike {
             attacker: attacker_ref,
             defender: defender_ref,
             attack: box attack.clone(),
-            strike_result : box StrikeResult {
-                damage_types : Vec::new(),
-                damage_done : 0,
-                hit : false,
-                killing_blow : false,
+            strike_result: box StrikeResult {
+                damage_types: Vec::new(),
+                damage_done: 0,
+                hit: false,
+                killing_blow: false,
                 strike_number,
-                weapon : if weapon == attacker_ref { None } else { Some(weapon) }
-            }
+                weapon: if weapon == attacker_ref { None } else { Some(weapon) },
+            },
         });
     }
 }
@@ -423,89 +441,126 @@ pub fn damage_multiplier_for_skill_level(level: u32) -> f64 {
     level_curve(level)
 }
 
-pub fn counters_for(world_view: &WorldView, defender_ref: Entity, countering_ref: Entity, _countering_attack: &Attack) -> (Attack, u32) {
+pub fn counters_for(world_view: &WorldView, defender_ref: Entity, countering_ref: Entity, _countering_attack: &Attack) -> (Attack, Entity, u32) {
     let defender = world_view.character(defender_ref);
     let defender_combat = world_view.combat(defender_ref);
     let countering = world_view.character(countering_ref);
 
     // can't counter on ranged attacks
     if defender.position.hex.distance(&countering.position.hex) > 1.0 {
-        (Attack::default(), 0)
+        (Attack::default(), defender_ref, 0)
     } else {
-        let counter_attack = counter_attack_ref_to_use(world_view, defender_ref).and_then(|ar| ar.referenced_attack(world_view, defender_ref));
-        if let Some(attack) = counter_attack {
-            if defender_combat.counters_remaining.cur_value() > 0 {
-                (attack.clone(), 1)
+        let counter_attack = counter_attack_ref_to_use(world_view, defender_ref);
+        if let Some(counter_attack) = counter_attack {
+            if let Some((attack, weapon)) = counter_attack.resolve_attack_and_weapon(world_view, defender_ref) {
+                if defender_combat.counters_remaining.cur_value() > 0 {
+                    (attack.clone(), weapon, 1)
+                } else {
+                    (attack.clone(), weapon, 0)
+                }
             } else {
-                (attack.clone(), 0)
+                trace!("Not countering, attack did not resolve");
+                (Attack::default(), defender_ref, 0)
             }
         } else {
             trace!("Not countering, no counter attack to use found");
-            (Attack::default(), 0)
+            (Attack::default(), defender_ref, 0)
         }
     }
 }
 
-pub fn possible_attack_refs(world: &WorldView, attacker: Entity) -> Vec<AttackReference> {
-    let mut res = world.combat(attacker).natural_attacks.iter().enumerate().map(|(i, a)| AttackReference::new(attacker, i)).collect_vec();
-    for item_ref in &world.equipment(attacker).equipped {
+pub fn possible_attack_refs(world: &WorldView, attacker: Entity) -> Vec<AttackRef> {
+    let combat = world.combat(attacker);
+    let mut res = combat.natural_attacks.map(|a| AttackRef::new(*a, attacker));
+    let equipment = world.equipment(attacker);
+    for item_ref in &equipment.equipped {
         let item = world.item(*item_ref);
-        res.extend(item.attacks.iter().enumerate().map(|(i, a)| AttackReference::new(*item_ref, i)));
+        res.extend(item.attacks.iter().map(|a| AttackRef::new(*a, *item_ref)));
     }
+    for special_attack in &combat.special_attacks {
+        // if the special attack is a raw attack, then the reference can just be to itself, and the derived_from is the attacker
+        if world.has_data::<Attack>(*special_attack) {
+            res.push(AttackRef::new(*special_attack, attacker))
+        } else if let Some(derived) = world.data_opt::<DerivedAttackData>(*special_attack) {
+            // it's a derived attack, so see what we can make of it based on its criteria
+            if derived.character_condition.matches(world, attacker) {
+                // if the character is valid, look at all of their equipment
+                for equipped in &equipment.equipped {
+                    // if any piece of equipment matches the weapon condition
+                    if derived.weapon_condition.matches(world, *equipped) {
+                        // look at its item data if any
+                        if let Some(item) = world.data_opt::<ItemData>(*equipped) {
+                            // and examine its attacks
+                            for attack in &item.attacks {
+                                // if any of them match the attack condition, create a new attack reference that links
+                                // the derived attack -> underlying attack
+                                if derived.attack_condition.matches(world, *attack) {
+                                    res.push(AttackRef::new(*special_attack, *attack));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     res
 }
 
-pub fn possible_attacks(world: &WorldView, attacker: Entity) -> Vec<Attack> {
-    possible_attack_refs(world, attacker).iter().flat_map(|ar| ar.referenced_attack(world, attacker).cloned()).collect_vec()
+pub fn character_has_access_to_attack(world: &WorldView, attacker: Entity, attack: Entity) -> bool {
+    world.combat(attacker).natural_attacks.iter().any(|a| a == &attack) ||
+        world.equipment(attacker).equipped.iter().any(|e| world.item(*e).attacks.contains(&attack)) ||
+        world.combat(attacker).special_attacks.iter().any(|a| a == &attack)
 }
 
-pub fn default_attack(world: &WorldView, attacker: Entity) -> Option<AttackReference> {
+pub fn possible_attacks(world: &WorldView, attacker: Entity) -> Vec<Attack> {
+    possible_attack_refs(world, attacker).iter().flat_map(|ar| ar.resolve(world, attacker)).collect_vec()
+}
+
+pub fn default_attack(world: &WorldView, attacker: Entity) -> AttackRef {
     for item_ref in &world.equipment(attacker).equipped {
         let item = world.item(*item_ref);
         if let Some(attack) = item.attacks.first() {
-            return Some(AttackReference::new(*item_ref, 0));
+            return AttackRef::new(*attack, *item_ref);
         }
     }
-    world.combat(attacker).natural_attacks.first().map(|a| AttackReference::new(attacker, 0))
+    world.combat(attacker).natural_attacks.first().map(|a| AttackRef::new(*a, attacker)).unwrap_or(AttackRef::none())
 }
 
-pub fn is_valid_counter_attack(world: &WorldView, counter_attacker: Entity, attack_ref : &AttackReference) -> bool {
-    attack_ref.is_melee(world, counter_attacker)
+pub fn is_valid_counter_attack(world: &WorldView, counter_attacker: Entity, attack_ref: &AttackRef) -> bool {
+    !attack_ref.is_derived_attack(world) && attack_ref.is_melee(world, counter_attacker)
 }
 
-pub fn counter_attack_ref_to_use(world: &WorldView, counter_attacker: Entity) -> Option<AttackReference> {
+pub fn counter_attack_ref_to_use(world: &WorldView, counter_attacker: Entity) -> Option<AttackRef> {
     let combat_data = world.data::<CombatData>(counter_attacker);
     combat_data.active_counterattack.as_option().cloned()
         .or_else(|| primary_attack_ref(world, counter_attacker)
-            .filter(|par| par.is_melee(world, counter_attacker))
+            .filter(|par| is_valid_counter_attack(world, counter_attacker, par))
             .or_else(|| {
                 let mut melee_attacks = possible_attack_refs(world, counter_attacker);
-                melee_attacks.retain(|a| a.is_melee(world, counter_attacker));
+                melee_attacks.retain(|a| is_valid_counter_attack(world, counter_attacker, a));
                 best_attack(world, counter_attacker, &melee_attacks)
             }))
 }
 
-pub fn counter_attack_to_use(world: &WorldView, counter_attacker: Entity) -> Option<&Attack> {
-    counter_attack_ref_to_use(world, counter_attacker).and_then(|ar| ar.referenced_attack(world, counter_attacker))
-}
-
-pub fn primary_attack_ref(world: &WorldView, attacker: Entity) -> Option<AttackReference> {
+pub fn primary_attack_ref(world: &WorldView, attacker: Entity) -> Option<AttackRef> {
     let combat_data = world.data::<CombatData>(attacker);
-    combat_data.active_attack.as_option().cloned().or(default_attack(world, attacker))
+    combat_data.active_attack.as_option().cloned().or(default_attack(world, attacker).as_option().cloned())
 }
 
 pub fn primary_attack(world: &WorldView, attacker: Entity) -> Option<Attack> {
-    primary_attack_ref(world, attacker).and_then(|r| r.referenced_attack(world, attacker).cloned())
+    primary_attack_ref(world, attacker).and_then(|r| r.resolve(world, attacker))
 }
 
-pub fn valid_attacks(world_view: &WorldView, attacker: Entity, attacks_references: &Vec<AttackReference>, defender: Entity) -> Vec<AttackReference> {
+pub fn valid_attacks(world_view: &WorldView, attacker: Entity, attacks_references: &Vec<AttackRef>, defender: Entity) -> Vec<AttackRef> {
     let attacker_c = world_view.character(attacker);
     let defender_c = world_view.character(defender);
 
     let mut ret = vec![];
     for attack_ref in attacks_references {
-        if let Some(attack) = attack_ref.referenced_attack(world_view, attacker) {
-            if within_range(world_view, attacker, defender, attack, None, None) {
+        if let Some(attack) = attack_ref.resolve(world_view, attacker) {
+            if within_range(world_view, attacker, defender, &attack, None, None) {
                 ret.push(attack_ref.clone());
             }
         }
@@ -513,27 +568,107 @@ pub fn valid_attacks(world_view: &WorldView, attacker: Entity, attacks_reference
     ret
 }
 
-pub fn best_attack(view: &WorldView, attacker: Entity, attacks: &Vec<AttackReference>) -> Option<AttackReference> {
-    attacks.iter().cloned().max_by_key(|ar| ar.referenced_attack(view, attacker).map(|ra| r32(ra.damage_dice.avg_roll() / ra.ap_cost.max(1) as f32)).unwrap_or(r32(0.0)))
+pub(crate) mod intern {
+    use super::*;
+
+    pub(crate) fn weapon_attack_derives_from(world: &WorldView, attacker: Entity, attack: Entity) -> Option<Entity> {
+        world.combat(attacker).natural_attacks.iter().find(|a| *a == &attack)
+            .or(world.equipment(attacker).equipped.iter().find(|e| world.item(**e).attacks.contains(&attack)))
+            .cloned()
+    }
 }
 
-pub fn best_attack_against(world_view: &WorldView, attacker: Entity, attacks: &Vec<AttackReference>, defender: Entity) -> Option<AttackReference> {
+pub fn best_attack(view: &WorldView, attacker: Entity, attacks: &Vec<AttackRef>) -> Option<AttackRef> {
+    attacks.iter().cloned().max_by_key(|ar| ar.resolve(view, attacker).map(|ra| r32(ra.damage_dice.avg_roll() / ra.ap_cost.max(1) as f32)).unwrap_or(r32(0.0)))
+}
+
+pub fn best_attack_against(world_view: &WorldView, attacker: Entity, attacks: &Vec<AttackRef>, defender: Entity) -> Option<AttackRef> {
     let attacker = world_view.character(attacker);
     let defender = world_view.character(defender);
     attacks.get(0).map(|x| x.clone())
 }
 
-pub fn path_to_attack(world_view: &WorldView, attacker: Entity, defender: Entity, attack_ref : &AttackReference) -> Option<(Vec<AxialCoord>, f64)>{
-    if let Some(attack) = attack_ref.referenced_attack(world_view, attacker) {
+/// when selecting between multiple equivalent paths, will choose the one that is closest to the nudge_towards parameter
+pub fn path_to_attack(world_view: &WorldView, attacker: Entity, defender: Entity, attack_ref: &AttackRef, nudge_towards : CartVec) -> Option<(Vec<AxialCoord>, f64)> {
+    if let Some(attack) = attack_ref.resolve(world_view, attacker) {
         if logic::combat::can_attack(world_view, attacker, defender, &attack, None, None) {
             Some((Vec::new(), 0.0))
-        } else if let Some((attack_from, cost_to)) = logic::combat::closest_attack_location_with_cost(world_view, attacker, defender, &attack) {
-            logic::movement::path_to(world_view, attacker, attack_from)
+        } else if let Some(movement_type) = logic::movement::default_movement_type(world_view, attacker) {
+            let possible_moves = logic::movement::hexes_reachable_by_character_this_turn(world_view, attacker, movement_type);
+            if let Some((attack_from, cost_to)) = logic::combat::closest_attack_location_with_cost(world_view, possible_moves, attacker, defender, &attack, nudge_towards) {
+                logic::movement::path_to(world_view, attacker, attack_from)
+            } else {
+                None
+            }
         } else {
             None
         }
     } else {
         warn!("path_to_attack used with invalid attack reference");
         None
+    }
+}
+
+pub struct AttackTargets {
+    pub hexes : Vec<AxialCoord>,
+    pub characters : Vec<Entity>
+}
+impl AttackTargets {
+    pub fn none() -> AttackTargets {
+        AttackTargets { hexes : Vec::new(), characters : Vec::new() }
+    }
+}
+
+pub fn targets_for_attack(world: &WorldView, attacker: Entity, attack: AttackRef, originating_on: Entity, attack_from : Option<AxialCoord>) -> AttackTargets {
+    let attack_from = attack_from.unwrap_or_else(|| world.data::<PositionData>(attacker).hex);
+
+    let hex = if let Some(tile) = world.data_opt::<TileData>(originating_on) {
+        tile.position
+    } else if let Some(pos) = world.data_opt::<PositionData>(originating_on) {
+        pos.hex
+    } else {
+        return AttackTargets::none();
+    };
+
+    let attacker_hex : AxialCoord = attack_from;
+    let attacker_hex_f : Vec3f = attacker_hex.as_cube_coord().as_v3f();
+    let hex_f = hex.as_cube_coord().as_v3f();
+    let delta : Vec3f = hex_f - attacker_hex_f;
+    let delta_n = if delta.magnitude2() > 0.0 {
+        delta.normalize()
+    } else {
+        delta
+    };
+
+    if let Some(attack) = attack.resolve(world, attacker) {
+        let all_hexes = match attack.pattern {
+            HexPattern::Single => vec![hex],
+            HexPattern::Line(start_d, length) => {
+                let start_f = hex_f + delta_n * start_d as f32;
+                let start = CubeCoord::rounded(start_f.x, start_f.y, start_f.z);
+                let end_f = start_f + delta_n * length as f32;
+                let end = CubeCoord::rounded(end_f.x, end_f.y, end_f.z);
+
+                let hexes = CubeCoord::hexes_between(start, end).map(|c| c.as_axial_coord());
+                hexes
+            },
+            HexPattern::Arc(start_d, length) => {
+                error!("Arc hex patterns not yet implemented");
+                Vec::new()
+            },
+        };
+
+        let mut characters = Vec::new();
+        for hex in &all_hexes {
+            if let Some(tile) = world.tile_opt(*hex) {
+                if let Some(occupied) = tile.occupied_by {
+                    characters.push(occupied);
+                }
+            }
+        }
+
+        AttackTargets { hexes : all_hexes, characters }
+    } else {
+        return AttackTargets::none();
     }
 }

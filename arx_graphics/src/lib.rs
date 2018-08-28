@@ -41,4 +41,6 @@ pub use text::*;
 
 pub mod texture_atlas;
 
+pub mod prelude;
+
 mod resources;

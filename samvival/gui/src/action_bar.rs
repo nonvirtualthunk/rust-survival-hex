@@ -1,3 +1,5 @@
+use common::prelude::*;
+use game::prelude::*;
 use gui::*;
 use game::entities::actions::*;
 use common::color::Color;
@@ -6,19 +8,53 @@ use std::collections::HashMap;
 use state::GameState;
 use state::ControlContext;
 use control_events::ControlEvents;
+use game::entities::Attack;
+use game::entities::AttackRef;
+use game::entities::MovementType;
+use game::entities::MovementTypeRef;
 
 
-//pub enum PlayerActions {
-//    MoveAndAttack(Attack),
-//}
+#[derive(PartialEq, Clone, Debug, Hash)]
+pub enum PlayerActionType {
+    MoveAndAttack(MovementTypeRef, AttackRef),
+    InteractWithInventory,
+    Move(MovementTypeRef),
+    Wait
+}
 
+impl PlayerActionType {
+    pub fn name(&self, world : &WorldView, character : Entity) -> String {
+        match self {
+            PlayerActionType::MoveAndAttack(move_ref, attack_ref) => format!("Move and {}", attack_ref.resolve(world, character).map(|a| a.name.capitalized()).unwrap_or_else(|| String::from("Attack"))),
+            PlayerActionType::InteractWithInventory => String::from("Open Inventory"),
+            PlayerActionType::Move(move_ref) => move_ref.resolve(world).map(|mt| mt.name.capitalized()).unwrap_or_else(|| String::from("Unknown move type")),
+            PlayerActionType::Wait => String::from("Wait"),
+        }
+    }
+    pub fn description(&self, world : &WorldView, character : Entity) -> String {
+        match self {
+            PlayerActionType::MoveAndAttack(move_ref, attack_ref) => format!("Move (if necessary) and {} an enemy", attack_ref.resolve(world, character).map(|a| a.verb.unwrap_or(a.name)).unwrap_or(String::from("Attack"))),
+            PlayerActionType::InteractWithInventory => format!("Transfer items from your inventory to or from another. Can be used to drop items on the ground or pick them up."),
+            PlayerActionType::Move(move_ref) => format!("{} across terrain to another location", move_ref.resolve(world).map(|m| m.name.as_str()).unwrap_or("move")),
+            PlayerActionType::Wait => format!("Do nothing for the moment"),
+        }
+    }
+    pub fn icon(&self, world : &WorldView, character : Entity) -> String {
+        match self {
+            PlayerActionType::MoveAndAttack(move_ref, attack_ref) => format!("ui/attack_icon"),
+            PlayerActionType::InteractWithInventory => format!("ui/interact_with_inventory_icon"),
+            PlayerActionType::Move(move_ref) => format!("ui/move_icon"),
+            PlayerActionType::Wait => format!("ui/clock_icon")
+        }
+    }
+}
 
 
 #[derive(Default)]
 pub struct ActionBar {
     pub action_list : ListWidget<ActionButton>,
-    pub actions : Vec<ActionType>,
-    pub selected_actions : HashMap<Entity, ActionType>
+    pub actions : Vec<PlayerActionType>,
+    pub selected_actions : HashMap<Entity, PlayerActionType>
 }
 impl DelegateToWidget for ActionBar {
     fn as_widget(&mut self) -> &mut Widget { self.action_list.as_widget() }
@@ -86,7 +122,7 @@ impl ActionBar {
         }
     }
 
-    pub fn update(&mut self, gui : &mut GUI, actions : Vec<ActionType>, game_state : &GameState, control_context : &mut ControlContext) {
+    pub fn update(&mut self, gui : &mut GUI, view : &WorldView, actions : Vec<PlayerActionType>, game_state : &GameState, control_context : &mut ControlContext) {
         if let Some(selected_char) = game_state.selected_character {
             self.action_list.set_showing(true).reapply(gui);
 
@@ -104,16 +140,16 @@ impl ActionBar {
 
             if selection_changed || self.actions != actions {
                 self.actions = actions;
-                let selected_name = self.selected_action_for(selected_char).name;
+                let selected_action = self.selected_action_for(view, selected_char);
                 self.action_list.update(gui, self.actions.as_ref(), |action_button, action| {
-                    action_button.icon.set_widget_type(WidgetType::image(action.icon));
-                    if action.name == selected_name {
+                    action_button.icon.set_widget_type(WidgetType::image(action.icon(view, selected_char)));
+                    if action == &selected_action {
                         action_button.icon.set_border(Border { color : Color::new(0.1,0.7,0.1,1.0), sides : BorderSides::all(), width : 2});
                     } else {
                         action_button.icon.set_border(Border { color : Color::black(), sides : BorderSides::all(), width : 2});
                     }
-                    action_button.info_name.set_text(format!("{}", action.name));
-                    action_button.info_description.set_text(format!("{}", action.description));
+                    action_button.info_name.set_text(format!("{}", action.name(view, selected_char)));
+                    action_button.info_description.set_text(format!("{}", action.description(view, selected_char)));
                 });
             }
 
@@ -122,7 +158,17 @@ impl ActionBar {
         }
     }
 
-    pub fn selected_action_for(&self, char : Entity) -> &ActionType {
-        self.selected_actions.get(&char).unwrap_or(&action_types::MoveAndAttack)
+    pub fn selected_action_for(&self, view : &WorldView, character : Entity) -> PlayerActionType {
+        use game::logic;
+
+        if let Some(selected) = self.selected_actions.get(&character).cloned() {
+            return selected;
+        } else if let Some(default_move) = logic::movement::default_movement_type(view, character) {
+            if let Some(default_attack) = logic::combat::primary_attack_ref(view, character) {
+                return PlayerActionType::MoveAndAttack(default_move, default_attack);
+            }
+        }
+
+        PlayerActionType::Wait
     }
 }

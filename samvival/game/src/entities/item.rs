@@ -8,11 +8,16 @@ use entities::common::Taxon;
 
 #[derive(Clone, Default, Debug, PrintFields)]
 pub struct ItemData {
-    pub attacks : Vec<Attack>,
+    pub attacks : Vec<Entity>,
     pub in_inventory_of: Option<Entity>
 }
 
-impl EntityData for ItemData {}
+impl EntityData for ItemData {
+    fn nested_entities(&self) -> Vec<Entity> {
+        self.attacks.clone()
+    }
+}
+
 
 pub trait ItemDataStore {
     fn item(&self, ent : Entity) -> &ItemData;

@@ -19,18 +19,110 @@ use game::world::WorldView;
 use logic::movement;
 use events::GameEvent;
 use game::SettableField;
+use game::reflect::*;
 use std::collections::HashSet;
+use entities::movement::MovementData;
+use entities::movement::MovementTypeRef;
+use common::ExtendedCollection;
 
 
-pub fn max_moves_remaining(world_view : &WorldView, mover : Entity, multiplier: f64) -> Sext {
+pub fn max_moves_remaining(world_view : &WorldView, mover : Entity, movement_type : MovementTypeRef) -> Sext {
     let cd = world_view.data::<CharacterData>(mover);
-    cd.moves + Sext::of_rounded(cd.move_speed.as_f64() * cd.action_points.cur_value() as f64 * multiplier)
+    max_moves_for_ap_expenditure(world_view, mover, movement_type, cd.action_points.cur_value())
+}
+
+pub fn max_moves_per_turn(world_view: &WorldView, mover : Entity, movement_type : MovementTypeRef) -> Sext {
+    let cd = world_view.data::<CharacterData>(mover);
+    max_moves_for_ap_expenditure(world_view, mover, movement_type, cd.action_points.max_value())
+}
+
+pub fn max_moves_for_ap_expenditure(world_view: &WorldView, mover : Entity, movement_type : MovementTypeRef, ap : i32) -> Sext {
+    if let Some(mt) = movement_type.resolve(world_view) {
+        let md = world_view.data::<MovementData>(mover);
+        md.moves + md.move_speed * mt.move_multiplier * ap + mt.move_bonus
+    } else {
+        warn!("max_moves_remaining of unresolveable movement type is always 0");
+        Sext::of(0)
+    }
 }
 
 pub fn hexes_in_range(world_view : &WorldView, mover : Entity, range : Sext) -> HashMap<AxialCoord, f64> {
+    use std::time::*;
+
     let mover_c = world_view.character(mover);
     let start_position = mover_c.position.hex;
-    flood_search(start_position, range.as_f64(), |from, to| move_cost_to_f32(world_view, &mover_c, to) as f64, |&from| from.neighbors_vec())
+
+//    const cw : usize = 60;
+//    const cwi : i32 = cw as i32;
+//
+//    let start = Instant::now();
+//    let mut flat_move_costs : [f32;cw*cw] = [0.0;cw*cw];
+//    for (ent, tile) in world_view.entities_with_data::<TileData>() {
+//        if tile.position.distance(&start_position) <= range.as_f32() {
+//            let dq = tile.position.q - start_position.q;
+//            let dr = tile.position.r - start_position.r;
+//
+//            let cost = if tile.occupied_by.is_none() {
+//                tile.move_cost.as_f32()
+//            } else {
+//                10000000.0
+//            };
+//
+//            flat_move_costs[((dq + (cw as i32)/2) * cwi + (dr + (cw as i32)/2)) as usize] = cost;
+//        }
+//    }
+
+//    let mut move_costs = HashMap::with_capacity(1000);
+//    for (ent, tile) in world_view.entities_with_data::<TileData>() {
+//        if tile.position.distance(&start_position) <= range.as_f32() {
+//            let cost = if tile.occupied_by.is_none() {
+//                tile.move_cost.as_f32()
+//            } else {
+//                10000000.0
+//            };
+//            move_costs.insert(tile.position, cost);
+//        }
+//    }
+//    println!("Initial move cost map building took {:?}", Instant::now().duration_since(start));
+
+
+    let tile_index = world_view.entity_index::<AxialCoord>();
+
+    flood_search(start_position, range.as_f64(), move |from, to| {
+        let cost = if let Some(tile) = tile_index.get(&to).and_then(|t| world_view.data_opt::<TileData>(*t)) {
+            if tile.occupied_by.is_none() {
+                tile.move_cost.as_f32()
+            } else { 10000.0 }
+        } else { 10000.0 };
+        cost as f64
+    }, |&from| from.neighbors_vec())
+
+//    flood_search(start_position, range.as_f64(), move |from, to| *(move_costs.get(&to).unwrap_or(&1000000.0)) as f64, |&from| from.neighbors_vec())
+
+//    flood_search(start_position, range.as_f64(), move |from, to| {
+//        let dq = to.q - start_position.q;
+//        let dr = to.r - start_position.r;
+//        let raw_cost = flat_move_costs[((dq + (cw as i32)/2) * (cw as i32)+ (dr + (cw as i32)/2)) as usize];
+//        (if raw_cost > 0.0 {
+//            raw_cost
+//        } else {
+//            10000000.0
+//        }) as f64
+//    }, |&from| from.neighbors_vec())
+}
+
+pub fn hexes_reachable_by_character_this_turn(world_view: &WorldView, mover : Entity, movement_type : MovementTypeRef) -> HashMap<AxialCoord, f64> {
+    let moves = max_moves_remaining(world_view, mover, movement_type);
+    hexes_in_range(world_view, mover, moves)
+}
+
+/// returns all the hexes reachable by the given entity this turn using their default movement type
+pub fn hexes_reachable_by_character_this_turn_default(world_view: &WorldView, mover:Entity) -> HashMap<AxialCoord, f64> {
+    if let Some(movement_type) = default_movement_type(world_view, mover) {
+        hexes_reachable_by_character_this_turn(world_view, mover, movement_type)
+    } else {
+        HashMap::new()
+    }
 }
 
 pub fn path_to(world_view: &WorldView, mover : Entity, to : AxialCoord) -> Option<(Vec<AxialCoord>, f64)> {
@@ -54,7 +146,7 @@ pub fn path_adjacent_to(world_view: &WorldView, mover : Entity, to : Entity) -> 
 
 pub fn portion_of_path_traversable_this_turn(view : &WorldView, mover : Entity, path : &Vec<AxialCoord>) -> Vec<AxialCoord> {
     let character = view.character(mover);
-    let mut moves = character.moves;
+    let mut moves = character.movement.moves;
     let mut ret = Vec::new();
     let mut ap_remaining = character.action_points.cur_value();
     if let Some(start) = path.first() { ret.push(*start) }
@@ -63,7 +155,7 @@ pub fn portion_of_path_traversable_this_turn(view : &WorldView, mover : Entity, 
         let hex_cost = move_cost_to(view, mover, hex);
         while hex_cost > moves && ap_remaining > 0 {
             ap_remaining -= 1;
-            moves += character.move_speed;
+            moves += character.movement.move_speed;
         }
 
         if moves >= hex_cost {
@@ -84,10 +176,10 @@ pub fn hex_ap_cost(world : &WorldView, mover : Entity, hex : AxialCoord) -> u32 
 
 pub fn ap_cost_for_move_cost(world : &WorldView, mover : Entity, move_cost : Sext) -> u32 {
     let mover = world.character(mover);
-    let mut moves = mover.moves;
+    let mut moves = mover.movement.moves;
     let mut ap_cost = 0;
     while moves < move_cost {
-        moves += mover.move_speed;
+        moves += mover.movement.move_speed;
         ap_cost += 1;
     }
     ap_cost
@@ -107,11 +199,11 @@ pub fn handle_move(world : &mut World, mover : Entity, path : &[AxialCoord]) {
             // how many ap must be changed to move points in order to enter the given hex
             let ap_required = movement::hex_ap_cost(world.view(), mover, hex);
             if ap_required as i32 <= view.character(mover).action_points.cur_value() {
-                let moves_converted = view.character(mover).move_speed * ap_required;
-                let net_moves_lost = hex_cost - moves_converted;
+                let moves_converted = view.character(mover).movement.move_speed * ap_required;
+                let net_moves_lost : Sext = hex_cost - moves_converted;
                 modify(world, mover, ReduceActionsMod(ap_required));
-                modify(world, mover, ReduceMoveMod(net_moves_lost));
-                world.modify(mover, PositionData::hex.set_to(hex), "movement");
+                world.modify(mover, MovementData::moves.sub(net_moves_lost), None);
+                world.modify(mover, PositionData::hex.set_to(hex), None);
                 modify(world, prev_hex_ent, SetHexOccupantMod(None));
                 modify(world, hex_ent, SetHexOccupantMod(Some(mover)));
 
@@ -192,5 +284,19 @@ pub fn move_cost_to_f32(world: &WorldView, mover : &Character, to: &AxialCoord) 
         }
     } else {
         10000000.0
+    }
+}
+
+pub fn default_movement_type(world: &WorldView, mover : Entity) -> Option<MovementTypeRef> {
+    world.data_opt::<MovementData>(mover).and_then(|md| md.active_movement_type)
+        .or(movement_types_available(world, mover).first().cloned())
+}
+
+pub fn movement_types_available(world: &WorldView, mover : Entity) -> Vec<MovementTypeRef> {
+    if let Some(move_data) = world.data_opt::<MovementData>(mover) {
+        move_data.movement_types.map(|mt| MovementTypeRef::of_movement_and_mover(*mt, mover))
+    } else {
+        warn!("attempted to get the movement types available for an entity with no movement data. This may be fine, but worth mentioning");
+        Vec::new()
     }
 }

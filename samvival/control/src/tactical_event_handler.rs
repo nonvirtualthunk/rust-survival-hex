@@ -74,7 +74,7 @@ fn animate_attack(world_view: &WorldView, attacker: Entity, defender: Entity, at
     let raw_delta: CartVec = defender_pos - attacker_pos;
 
     let dist: f64 = if attacker_data.position.hex == defender_data.position.hex { 0.0 } else { raw_delta.magnitude() as f64 };
-    let delta: CartVec = raw_delta.normalize() * 0.5;
+    let delta: CartVec = raw_delta.normalize_s() * 0.5;
 
     let base_duration = 0.5;
     let blocking_duration = if strike_result.hit { base_duration * 0.5 } else { base_duration };
@@ -96,7 +96,7 @@ fn animate_attack(world_view: &WorldView, attacker: Entity, defender: Entity, at
 
             if let Some(weapon) = strike_result.weapon {
                 let ident = world_view.data::<IdentityData>(weapon);
-                let item_image = ItemRenderer::image_for(resources, &ident.kind);
+                let item_image = ItemRenderer::image_for(resources, &ident.main_kind());
 
                 let baseline_rotation = consts::PI / 4.0;
                 let rotation = f64::atan2(delta.y as f64, delta.x as f64);
@@ -133,8 +133,8 @@ fn animate_attack(world_view: &WorldView, attacker: Entity, defender: Entity, at
 
             animation_group = animation_group.with_animation(fire_weapon_body_move, None);
 
-            if let Some(projectile_kind) = attack.ammunition_kind {
-                let item_image = ItemRenderer::image_for(resources, &projectile_kind);
+            if let Some(projectile_kind) = &attack.ammunition_kind {
+                let item_image = ItemRenderer::image_for(resources, projectile_kind);
 
                 let baseline_rotation = consts::PI / 4.0;
                 let rotation = f64::atan2(delta.y as f64, delta.x as f64);

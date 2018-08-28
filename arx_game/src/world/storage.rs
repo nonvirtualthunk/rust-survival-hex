@@ -192,7 +192,7 @@ impl<T: EntityData> DataContainer<T> {
 pub(crate) struct EntityContainer(pub(crate) Entity, pub(crate) GameEventClock);
 
 #[derive(Clone)]
-pub(crate) struct EntityIndex<T : Hash + Eq + Clone> {
+pub struct EntityIndex<T : Hash + Eq + Clone> {
     pub(crate) index : HashMap<T, Entity>
 }
 
@@ -207,5 +207,10 @@ impl <T : Hash + Eq + Clone> EntityIndex<T> {
         if other.index.len() > self.index.len() {
             self.index = other.index.clone();
         }
+    }
+
+    #[inline]
+    pub fn get(&self, k : &T) -> Option<&Entity> {
+        self.index.get(k)
     }
 }

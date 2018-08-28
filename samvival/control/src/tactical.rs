@@ -63,6 +63,7 @@ use gui::Key;
 
 use game::logic::faction::is_enemy;
 use std::collections::HashSet;
+use gui::state::GameState;
 
 #[derive(PartialOrd, PartialEq, Copy, Clone)]
 pub struct Cost(pub R32);
@@ -267,7 +268,7 @@ impl TacticalMode {
     fn ai_action(&mut self, ai_ref: &Entity, cdata: &CharacterData, world: &mut World, world_view: &WorldView, _all_characters: &Vec<Entity>) {
         let ai = world_view.character(*ai_ref);
 
-        if ai.move_speed == Sext::of(0) {
+        if ai.movement.move_speed == Sext::of(0) {
 
         } else {
             let closest_enemy = world_view.entities_with_data::<CharacterData>().iter()
@@ -331,6 +332,7 @@ impl TacticalMode {
         let character_refs = world_view.entities_with_data::<CharacterData>().keys();
 
         for cref in character_refs.clone() {
+            world.modify(*cref, MovementData::moves.set_to(Sext::of(0)), None);
             modify(world, *cref, ResetCharacterTurnMod);
         }
 
@@ -404,7 +406,7 @@ impl TacticalMode {
         }
     }
 
-    fn create_move_ui_draw_list(&mut self, world_in: &mut World) -> DrawList {
+    fn create_move_ui_draw_list(&mut self, world_in: &mut World, game_state : &GameState) -> DrawList {
         let is_animating = !self.at_latest_event(world_in);
         if is_animating {
             DrawList::none()
@@ -421,13 +423,13 @@ impl TacticalMode {
                     if let Some(hovered_occupant) = hovered_tile.occupied_by {
                         if logic::faction::is_enemy(world_view, hovered_occupant, selected) {
                             if let Some(attack_ref) = logic::combat::primary_attack_ref(world_view, selected) {
-                                let path = logic::combat::path_to_attack(world_view, selected, hovered_occupant, &attack_ref).map(|t| t.0)
+                                let path = logic::combat::path_to_attack(world_view, selected, hovered_occupant, &attack_ref, game_state.mouse_cart_vec()).map(|t| t.0)
                                     .or_else(|| logic::movement::path_adjacent_to(world_view, selected, hovered_occupant).map(|t| t.0));
 //                                    .map(|path| logic::movement::portion_of_path_traversable_this_turn(world_view, selected, &path));
 
                                 if let Some(path) = path {
                                     for hex in path {
-                                        draw_list = draw_list.add_quad(Quad::new_cart(String::from("ui/feet"), hex.as_cart_vec()).centered());
+                                        draw_list = draw_list.with_quad(Quad::new_cart(String::from("ui/feet"), hex.as_cart_vec()).centered());
                                     }
                                 }
                             }
@@ -436,7 +438,7 @@ impl TacticalMode {
                         if let Some(path_result) = logic::movement::path(world_view, selected, sel_c.position.hex, hovered_hex) {
                             let path = path_result.0;
                             for hex in path {
-                                draw_list = draw_list.add_quad(Quad::new_cart(String::from("ui/feet"), hex.as_cart_vec()).centered());
+                                draw_list = draw_list.with_quad(Quad::new_cart(String::from("ui/feet"), hex.as_cart_vec()).centered());
                             }
                         }
                     }
@@ -455,6 +457,8 @@ impl TacticalMode {
     }
 
     fn current_game_state(&self, world: &World) -> gui::state::GameState {
+        let mouse_game_pos = self.screen_pos_to_game_pos(self.mouse_pos);
+
         gui::state::GameState {
             display_event_clock: self.display_event_clock,
             selected_character: self.selected_character,
@@ -464,7 +468,8 @@ impl TacticalMode {
             hovered_hex_coord : AxialCoord::from_cartesian(&self.mouse_game_pos(), self.tile_radius),
             animating: !self.at_latest_event(world),
             mouse_pixel_pos: self.mouse_pos,
-            mouse_game_pos: self.screen_pos_to_game_pos(self.mouse_pos)
+            mouse_game_pos,
+            mouse_cart_vec: CartVec::new(mouse_game_pos.x / self.tile_radius, mouse_game_pos.y / self.tile_radius)
         }
     }
 
@@ -553,12 +558,12 @@ impl GameMode for TacticalMode {
         let ui_draw_list = self.gui.draw(world_view, self.current_game_state(world_in));
 
         // draw list for hover hex and foot icons
-        let movement_ui_draw_list = self.create_move_ui_draw_list(world_in);
+//        let movement_ui_draw_list = self.create_move_ui_draw_list(world_in, &self.current_game_state(world_in));
 
         self.render_draw_list(terrain_draw_list, g);
         self.render_draw_list(item_draw_list, g);
         self.render_draw_list(ui_draw_list, g);
-        self.render_draw_list(movement_ui_draw_list, g);
+//        self.render_draw_list(movement_ui_draw_list, g);
         self.render_draw_list(unit_draw_list, g);
         self.render_draw_list(anim_draw_list, g);
 
@@ -598,13 +603,13 @@ impl GameMode for TacticalMode {
                                 if target_data.allegiance.faction != self.player_faction &&
                                     sel_data.allegiance.faction == self.player_faction {
                                     if let Some(attack_ref) = logic::combat::primary_attack_ref(main_world_view, cur_sel) {
-                                        if let Some((path, cost)) = logic::combat::path_to_attack(main_world_view, cur_sel, found_ref, &attack_ref) {
+                                        if let Some((path, cost)) = logic::combat::path_to_attack(main_world_view, cur_sel, found_ref, &attack_ref, self.current_game_state(world).mouse_cart_vec()) {
                                             if path.is_empty() {
                                                 println!("no movement needed, attacking");
                                                 logic::combat::handle_attack(world, cur_sel, found_ref, &attack_ref);
                                             } else {
                                                 logic::movement::handle_move(world, cur_sel, &path);
-                                                if let Some(attack) = attack_ref.referenced_attack(main_world_view, cur_sel) {
+                                                if let Some(attack) = attack_ref.resolve(main_world_view, cur_sel) {
                                                     if logic::combat::can_attack(main_world_view, cur_sel, found_ref, &attack, None, None) {
                                                         println!("Can attack from new position, attacking");
                                                         logic::combat::handle_attack(world, cur_sel, found_ref, &attack_ref);

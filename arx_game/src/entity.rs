@@ -8,6 +8,7 @@ use std::fmt::Formatter;
 use std::fmt::Error;
 use std::any::TypeId;
 use std::collections::HashMap;
+use world::view::WorldView;
 
 pub static ENTITY_ID_COUNTER: AtomicUsize = ATOMIC_USIZE_INIT;
 
@@ -28,7 +29,15 @@ impl Entity {
     }
 }
 
-pub trait EntityData: Clone + Any + Default + Debug {}
+pub trait EntityData: Clone + Any + Default + Debug {
+    fn nested_entities(&self) -> Vec<Entity> {
+        Vec::new()
+    }
+
+    fn parent_entity(&self) -> Option<Entity> {
+        None
+    }
+}
 
 
 #[derive(Clone)]
@@ -50,7 +59,15 @@ impl EntityBuilder {
 
     pub fn with<T: EntityData>(mut self, new_data: T) -> Self {
         self.initializations_by_type_id.insert(TypeId::of::<T>(), Rc::new(move |world: &mut World, entity: Entity| {
-            world.attach_data(entity, new_data.clone())
+            world.attach_data(entity, new_data.clone());
+        }));
+        self
+    }
+
+    pub fn with_creator<T: EntityData, F : Fn(&mut World) -> T + 'static>(mut self, new_data_func: F) -> Self {
+        self.initializations_by_type_id.insert(TypeId::of::<T>(), Rc::new(move |world: &mut World, entity: Entity| {
+            let new_data = (new_data_func)(world);
+            world.attach_data(entity, new_data);
         }));
         self
     }

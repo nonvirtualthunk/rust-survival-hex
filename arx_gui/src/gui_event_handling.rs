@@ -144,12 +144,15 @@ impl GUI {
                     self.mark_widget_modified(wid);
                 }
             } else {
-                let widget_state = self.widget_reification(wid);
-                if widget_state.widget.callbacks.non_empty() {
-                    for callback in &widget_state.widget.callbacks {
-                        trace!("Executing callback for widget {}", wid);
-                        (func)(callback.id(), event);
+                if let Some(widget_state) = self.widget_reification_opt(wid) {
+                    if widget_state.widget.callbacks.non_empty() {
+                        for callback in &widget_state.widget.callbacks {
+                            trace!("Executing callback for widget {}", wid);
+                            (func)(callback.id(), event);
+                        }
                     }
+                } else {
+                    warn!("Attempted to reify widget({:?}) to handle event callbacks, but no reification found", wid);
                 }
             }
 

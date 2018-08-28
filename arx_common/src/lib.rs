@@ -15,6 +15,8 @@ extern crate anymap;
 #[macro_use] extern crate spectral;
 extern crate pretty_env_logger;
 #[macro_use] extern crate log;
+#[macro_use] extern crate lazy_static;
+
 
 pub mod hex;
 pub use hex::*;
@@ -39,3 +41,6 @@ pub use search::*;
 
 pub mod reflect;
 pub use reflect::*;
+
+pub mod functions;
+pub use functions::*;

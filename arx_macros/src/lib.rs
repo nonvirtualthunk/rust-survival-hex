@@ -8,6 +8,7 @@ extern crate quote;
 use proc_macro2::TokenStream;
 use syn::{DeriveInput, Data, Fields};
 //use syn::*;
+use syn::Visibility;
 
 use std::env;
 
@@ -45,7 +46,9 @@ fn internal_derive_entity_data_fields(input: DeriveInput) -> TokenStream {
                     //
                     //      const foo : Field<TestData,i32> = Field::new("foo",|t| &t.foo, |t,v| { t.foo = v; });
                     //
-                    fields.named.iter().map(|f| {
+                    fields.named.iter()
+                        .filter(|f| if let Visibility::Public(_) = f.vis { true } else { false })
+                        .map(|f| {
                         let field_name = &f.ident;
                         let field_type = &f.ty;
 

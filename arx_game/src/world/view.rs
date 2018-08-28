@@ -96,6 +96,11 @@ impl WorldView {
         index.index.get(key).cloned()
     }
 
+    pub fn entity_index<I: Hash + Eq + Clone + 'static>(&self) -> &EntityIndex<I> {
+        self.entity_indices.get::<EntityIndex<I>>()
+            .unwrap_or_else(|| panic!(format!("Index on {:?} not created", unsafe {std::intrinsics::type_name::<I>()})))
+    }
+
     pub fn has_data<T : EntityData>(&self, entity : Entity) -> bool {
         self.has_data_r::<T>(&entity)
     }

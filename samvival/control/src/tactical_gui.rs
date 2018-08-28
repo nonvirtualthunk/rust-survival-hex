@@ -10,7 +10,7 @@ use game::core::ReduceableType;
 use game::core::GameEventClock;
 use game::GameEvent;
 use game::logic::movement::hexes_in_range;
-use game::entities::AttackReference;
+use game::entities::AttackRef;
 use game::logic::faction::is_enemy;
 use std::ops;
 use std::fmt;
@@ -43,6 +43,7 @@ use gui::messages_widget::MessagesDisplay;
 use gui::messages_widget::Message;
 use gui::inventory_widget::*;
 use game::entities::inventory::InventoryData;
+use action_ui_handlers::*;
 
 
 pub struct TacticalEventBundle<'a, 'b> {
@@ -65,7 +66,7 @@ pub struct TacticalGui {
     event_bus_handle : ConsumerHandle,
     character_info_widget : CharacterInfoWidget,
     targeting_draw_list : DrawList,
-    last_targeting_info : Option<(GameState, ActionType)>,
+    last_targeting_info : Option<(GameState, PlayerActionType)>,
     attack_details_widget : AttackDetailsWidget,
     messages_display : MessagesDisplay,
     inventory_widget: inventory_widget::InventoryDisplay,
@@ -121,7 +122,8 @@ impl TacticalGui {
         }
     }
 
-    pub fn draw(&mut self, view: & WorldView, game_state : GameState) -> DrawList {
+
+    pub fn draw_selected_character_overlay(&mut self, view: & WorldView, game_state : &GameState) -> DrawList {
         if let Some(selected) = game_state.selected_character {
             let cdata = view.character(selected);
             // if it's not the player's turn, don't display UI
@@ -129,115 +131,55 @@ impl TacticalGui {
                 return DrawList::none();
             }
 
-            let action_type = self.action_bar.selected_action_for(selected);
+            let action_type = self.action_bar.selected_action_for(view, selected);
 
             if let Some((last_state, last_action_type)) = self.last_targeting_info.as_ref() {
-                if last_state == &game_state && last_action_type == action_type {
+                if last_state == game_state && last_action_type == &action_type {
                     return self.targeting_draw_list.clone()
                 }
             }
 
-            let range = cdata.max_moves_remaining(1.0);
             let current_position = cdata.position.hex;
 
             let visibility = view.world_data::<VisibilityData>().visibility_for(game_state.player_faction);
 
-            let mut draw_list = DrawList::none();
 
-            if action_type == &action_types::MoveAndAttack {
-                let main_attack = combat::primary_attack(view, selected);
-                if let Some(attack) = main_attack {
-                    let hexes = hexes_in_range(view, selected, cdata.max_moves_remaining(1.0));
-
-                    let ap_per_strike = attack.ap_cost;
-                    let ap_remaining = cdata.action_points.cur_value();
-                    let cur_move = cdata.moves.as_f64();
-                    let move_speed = cdata.move_speed.as_f64();
-                    let max_possible_strikes = cdata.action_points.max_value() / ap_per_strike as i32;
-
-                    let is_thrown = attack.attack_type == AttackType::Thrown;
-                    let strikes_at_cost = |move_cost : &f64| -> i32 {
-                        let additional_move_required = *move_cost - cur_move;
-                        let additional_ap_required = (additional_move_required / move_speed).ceil() as i32;
-                        let raw = (ap_remaining - additional_ap_required) / ap_per_strike as i32;
-                        if is_thrown {
-                            raw.min(1)
-                        } else {
-                            raw
-                        }
-                    };
-
-
-                    let strike_count_colors = [Color::new(0.2, 0.6, 0.2, 0.8), Color::new(0.25, 0.4, 0.15, 0.8), Color::new(0.3, 0.35, 0.1, 0.8), Color::new(0.35,0.35,0.1,0.8)];
-
-                    let color_for_strike_count = |sc : i32| if sc == 0 { Color::new(0.4,0.4,0.4,0.8) } else { strike_count_colors[(max_possible_strikes - sc).min(3) as usize] };
-                    for (hex,cost) in &hexes {
-                        if visibility.visible_hexes.contains(&hex) {
-//                        if hex != &current_position{
-                            if let Some(tile) = view.entity_by_key(hex) {
-                                let strikes_in_this_tile = strikes_at_cost(cost);
-                                let neighbors = hex.neighbors_vec();
-                                for q in 0 .. 6 {
-                                    let mut draw_color = None;
-                                    if let Some(neighbor_cost) = hexes.get(&neighbors[q]) {
-                                        let neighbor_strikes = strikes_at_cost(neighbor_cost);
-                                        if neighbor_strikes < strikes_in_this_tile {
-                                            draw_color = Some(color_for_strike_count(strikes_in_this_tile));
-                                        }
-                                    } else if view.tile_opt(neighbors[q]).map(|h| h.occupied_by.is_none()).unwrap_or(true) || strikes_in_this_tile > 0 {
-                                        draw_color = Some(color_for_strike_count(strikes_in_this_tile));
-                                    }
-
-                                    if let Some(color) = draw_color {
-                                        draw_list = draw_list.add_quad(Quad::new(format!("ui/hex/hex_edge_{}", q), hex.as_cart_vec().0).color(color).centered());
-                                    }
-                                }
-                            }
-//                        }
-                        }
-                    }
-
-                    for (entity, cdata) in view.entities_with_data::<CharacterData>() {
-                        let character = view.character(*entity);
-                        if visibility.visible_hexes.contains(&character.position.hex) {
-                            if logic::combat::within_range(view, selected, *entity, &attack, None, None)  && logic::combat::is_valid_attack_target(view, selected, *entity, &attack) {
-                                if is_enemy(view, *entity, selected) {
-                                    let hex = character.position.hex;
-                                    for q in 0 .. 6 {
-                                        draw_list = draw_list.add_quad(Quad::new(format!("ui/hex/hex_edge_{}", q), hex.as_cart_vec().0).color(Color::new(0.7,0.1,0.1,0.75)).centered());
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    warn!("No attack possible, whatsoever, for entity {}", selected);
-                }
+            let draw_list = if let PlayerActionType::MoveAndAttack(_,attack_ref) = &action_type {
+                move_and_attack_handler::draw_move_and_attack_overlay(view, &game_state, attack_ref.clone())
             } else {
-                let entity_selectors = (action_type.target)(selected, view);
-                for selector in entity_selectors {
-                    let EntitySelector(pieces) = selector;
-                    if pieces.contains(&EntitySelectors::IsTile) {
-                        let range_limiter = pieces.iter().find(|s| { if let EntitySelectors::InMoveRange {..} = s { true } else { false } });
-                        if let Some(range_limit) = range_limiter {
-                            // trim the selector down to remove the range limiter, we've pre-emptively taken care of that
-                            let selector = EntitySelector(pieces.iter().cloned().filter(|s| if let EntitySelectors::InMoveRange {..} = s { false } else { true } ).collect_vec());
+                DrawList::none()
+//                let entity_selectors = (action_type.target)(selected, view);
+//                for selector in entity_selectors {
+//                    let EntitySelector(pieces) = selector;
+//                    if pieces.contains(&EntitySelectors::IsTile) {
+//                        let range_limiter = pieces.iter().find(|s| { if let EntitySelectors::InMoveRange {..} = s { true } else { false } });
+//                        if let Some(range_limit) = range_limiter {
+//                            // trim the selector down to remove the range limiter, we've pre-emptively taken care of that
+//                            let selector = EntitySelector(pieces.iter().cloned().filter(|s| if let EntitySelectors::InMoveRange {..} = s { false } else { true } ).collect_vec());
+//
+//                            draw_list = self.draw_boundary_at_hex_range(view, selected, current_position, range, draw_list, &selector);
+//                        } else {
+//                            warn!("Tile selector without range limiter, this should not generally be the case")
+//                        }
+//                    }
+//                }
+            };
 
-                            draw_list = self.draw_boundary_at_hex_range(view, selected, current_position, range, draw_list, &selector);
-                        } else {
-                            warn!("Tile selector without range limiter, this should not generally be the case")
-                        }
-                    }
-                }
-            }
-
-            self.last_targeting_info = Some((game_state, action_type.clone()));
+            self.last_targeting_info = Some((game_state.clone(), action_type.clone()));
             self.targeting_draw_list = draw_list.clone();
 
             draw_list
         } else {
             DrawList::none()
         }
+    }
+
+    pub fn draw(&mut self, view: & WorldView, game_state : GameState) -> DrawList {
+        let main_draw_list = self.draw_selected_character_overlay(view, &game_state);
+
+        let draw_list = main_draw_list.with_quad(Quad::new_cart(String::from("ui/hoverHex"), game_state.hovered_hex_coord.as_cart_vec()).centered());
+
+        draw_list
     }
 
     pub fn toggle_inventory(&mut self, gui : &mut GUI) {
@@ -264,25 +206,25 @@ impl TacticalGui {
         }
     }
 
-    fn draw_boundary_at_hex_range(&self, view : &WorldView, selected : Entity, current_position : AxialCoord, range : Sext, mut draw_list : DrawList, selector : &EntitySelector) -> DrawList {
-        let hexes = hexes_in_range(view, selected, range);
-        for (hex,cost) in &hexes {
-            if hex != &current_position {
-                if let Some(tile) = view.entity_by_key(hex) {
-                    if selector.matches(tile, view) {
-                        let neighbors = hex.neighbors_vec();
-                        for q in 0 .. 6 {
-                            if !hexes.contains_key(&neighbors[q]) {
-                                draw_list = draw_list.add_quad(Quad::new(format!("ui/hex/hex_edge_{}", q), hex.as_cart_vec().0).color(Color::new(0.1,0.6,0.1,0.6)).centered());
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        draw_list
-    }
+//    fn draw_boundary_at_hex_range(&self, view : &WorldView, selected : Entity, current_position : AxialCoord, range : Sext, mut draw_list : DrawList, selector : &EntitySelectors) -> DrawList {
+//        let hexes = hexes_in_range(view, selected, range);
+//        for (hex,cost) in &hexes {
+//            if hex != &current_position {
+//                if let Some(tile) = view.entity_by_key(hex) {
+//                    if selector.matches(tile, view) {
+//                        let neighbors = hex.neighbors_vec();
+//                        for q in 0 .. 6 {
+//                            if !hexes.contains_key(&neighbors[q]) {
+//                                draw_list = draw_list.add_quad(Quad::new(format!("ui/hex/hex_edge_{}", q), hex.as_cart_vec().0).color(Color::new(0.1,0.6,0.1,0.6)).centered());
+//                            }
+//                        }
+//                    }
+//                }
+//            }
+//        }
+//
+//        draw_list
+//    }
 
 
     pub fn update_gui(&mut self, world: &mut World, world_view : &WorldView, gui: &mut GUI, frame_id: Option<Wid>, game_state: GameState) {
@@ -298,8 +240,16 @@ impl TacticalGui {
             let char = world_view.character(selected);
 
             if char.allegiance.faction == game_state.player_faction {
-                let actions = vec![action_types::MoveAndAttack, action_types::Move, action_types::Run, action_types::InteractWithInventory];
-                self.action_bar.update(gui, actions, &game_state, &mut control);
+                let mut actions = Vec::new();
+                if let Some(attack_ref) = combat::primary_attack_ref(world_view, selected) {
+                    if let Some(move_ref) = movement::default_movement_type(world_view, selected) {
+                        actions.push(PlayerActionType::MoveAndAttack(move_ref, attack_ref));
+                    }
+                }
+                actions.push(PlayerActionType::InteractWithInventory);
+                actions.push(PlayerActionType::Wait);
+
+                self.action_bar.update(gui, world_view, actions, &game_state, &mut control);
 //                self.reaction_bar.set_x(Positioning::left_of(self.character_info_widget.as_widget(), 1.ux())).as_widget().reapply(gui);
 //                self.reaction_bar.set_y(Positioning::constant(2.ux())).as_widget().reapply(gui);
                 let reactions = vec![reaction_types::Defend, reaction_types::Dodge, reaction_types::Block, reaction_types::Counterattack];
@@ -309,7 +259,9 @@ impl TacticalGui {
                 self.reaction_bar.set_showing(false).reapply(gui);
             }
 
-            TacticalGui::update_attack_details(&mut self.attack_details_widget, world, &world_view, gui, &game_state, selected);
+            if let PlayerActionType::MoveAndAttack(_, attack_ref) = self.action_bar.selected_action_for(&world_view, selected) {
+                update_move_and_attack_widgets(&mut self.attack_details_widget, world, &world_view, gui, &game_state, selected, attack_ref);
+            }
 
 
             let inv_data = world_view.data::<InventoryData>(selected);
@@ -409,26 +361,5 @@ impl TacticalGui {
                 self.defeat_widget.set_showing(true).reapply(gui);
             }
         }
-    }
-
-    pub fn update_attack_details(attack_details_widget : &mut AttackDetailsWidget, world: &World, view : &WorldView, gui : &mut GUI, game_state : &GameState, selected : Entity) {
-        use game::logic::*;
-        if let Some(hovered_char) = view.tile_opt(game_state.hovered_hex_coord).and_then(|e| e.occupied_by) {
-            if ! game_state.animating && faction::is_enemy(view, selected, hovered_char) {
-                if let Some(attack) = combat::primary_attack(view, selected) {
-                    attack_details_widget.set_position(Positioning::constant((game_state.mouse_pixel_pos.x + 20.0).px()), Positioning::constant((game_state.mouse_pixel_pos.y + 20.0).px()));
-                    attack_details_widget.set_showing(true);
-                    if let Some((attack_from, cost)) = logic::combat::closest_attack_location_with_cost(view, selected, hovered_char, &attack) {
-                        let current_ap = view.data::<CharacterData>(selected).action_points.cur_value();
-                        let ap_remaining_after_move = (current_ap - logic::movement::ap_cost_for_move_cost(view, selected, Sext::of_rounded_up(cost)) as i32).max(0);
-                        attack_details_widget.update(gui, world, view, selected, hovered_char, &attack, Some(attack_from), ap_remaining_after_move);
-                    } else {
-                        attack_details_widget.update(gui, world, view, selected, hovered_char, &attack, None, 0);
-                    }
-                }
-                return;
-            }
-        }
-        attack_details_widget.hide(gui);
     }
 }

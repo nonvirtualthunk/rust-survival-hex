@@ -80,7 +80,7 @@ pub mod reaction_types {
                 if event.is_ended() {
                     if char_data.stamina.cur_value() > Sext::of(0) {
                         if let Some(counter_attack) = logic::combat::counter_attack_ref_to_use(view, ent) {
-                            if let Some(counter_attack) = counter_attack.referenced_attack(view, ent) {
+                            if let Some(counter_attack) = counter_attack.resolve(view, ent) {
                                 let increase_counters_by = view.data::<CharacterData>(ent).action_points.max_value() / counter_attack.ap_cost as i32;
                                 let modifier = world.modify(ent, CombatData::counters_remaining.increase_by(increase_counters_by), "counterattack reaction");
 

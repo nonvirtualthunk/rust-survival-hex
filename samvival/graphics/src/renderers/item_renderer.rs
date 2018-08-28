@@ -15,6 +15,7 @@ use std::collections::HashMap;
 
 use game::entities::Taxon;
 use graphics::ImageIdentifier;
+use std::collections::VecDeque;
 
 
 pub struct ItemRenderer {
@@ -58,32 +59,46 @@ impl ItemRenderer {
     }
 
     pub fn image_for(resources : &mut GraphicsResources, kind : &Taxon) -> ImageIdentifier {
-        let mut taxon = Some(kind);
-        while taxon.is_some() {
-            let image_ident = format!("entities/items/{}", taxon.unwrap().name);
-            if resources.is_valid_texture(image_ident.clone()) {
-                return image_ident;
-            } else {
-                taxon = taxon.and_then(|t| t.parent);
+        let mut taxon_queue = VecDeque::new();
+        taxon_queue.push_front(kind);
+
+        while ! taxon_queue.is_empty() {
+            if let Some(taxon) = taxon_queue.pop_back() {
+                let image_ident = format!("entities/items/{}", taxon.name());
+                if resources.is_valid_texture(image_ident.clone()) {
+                    return image_ident;
+                } else {
+                    for parent in taxon.parents() {
+                        taxon_queue.push_front(parent);
+                    }
+                }
             }
         }
+
         strf("entities/items/default")
     }
 
     pub fn cached_image_for(item_images_by_taxon : &mut HashMap<Taxon, ImageIdentifier>, resources : &mut GraphicsResources, ident_data : &IdentityData) -> ImageIdentifier {
-        if let Some(item_image) = item_images_by_taxon.get(&ident_data.kind) {
+        if let Some(item_image) = item_images_by_taxon.get(ident_data.main_kind()) {
             item_image.clone()
         } else {
-            let mut taxon = Some(&ident_data.kind);
-            while taxon.is_some() {
-                let image_ident = format!("entities/items/{}", taxon.unwrap().name);
-                if resources.is_valid_texture(image_ident.clone()) {
-                    item_images_by_taxon.insert(ident_data.kind.clone(), image_ident.clone());
-                    return image_ident;
-                } else {
-                    taxon = taxon.and_then(|t| t.parent);
+            let mut taxon_queue = VecDeque::new();
+            taxon_queue.push_front(ident_data.main_kind());
+
+            while ! taxon_queue.is_empty() {
+                if let Some(taxon) = taxon_queue.pop_back() {
+                    let image_ident = format!("entities/items/{}", taxon.name());
+                    if resources.is_valid_texture(image_ident.clone()) {
+                        item_images_by_taxon.insert(ident_data.main_kind().clone(), image_ident.clone());
+                        return image_ident;
+                    } else {
+                        for parent in taxon.parents() {
+                            taxon_queue.push_front(parent);
+                        }
+                    }
                 }
             }
+
             strf("entities/items/default")
         }
     }

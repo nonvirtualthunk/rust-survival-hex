@@ -185,7 +185,12 @@ impl DrawList {
         }
     }
 
-    pub fn add_quad(mut self, quad: Quad) -> Self {
+    pub fn add_quad(&mut self, quad: Quad) -> &mut Self {
+        self.quads.push(quad);
+        self
+    }
+
+    pub fn with_quad(mut self, quad: Quad) -> Self {
         self.quads.push(quad);
         self
     }

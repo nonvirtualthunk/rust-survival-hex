@@ -5,7 +5,7 @@ use game::prelude::*;
 use common::color::Color;
 use game::logic::combat;
 use game::entities::combat::Attack;
-use game::entities::combat::AttackReference;
+use game::entities::combat::AttackRef;
 use state::ControlContext;
 use control_events::ControlEvents;
 use common::hex::AxialCoord;
@@ -36,32 +36,38 @@ impl AttackDescriptionsWidget {
 
 
     pub fn update(&mut self, gui: &mut GUI, view: &WorldView, character: Entity, control: &mut ControlContext) {
-        let attacks = possible_attacks(view, character);
-        let active_attack = primary_attack(view, character);
+        let attack_refs = possible_attack_refs(view, character);
+        let active_attack = primary_attack_ref(view, character);
 
-        let counter_to_use = combat::counter_attack_to_use(view, character);
+        let counter_to_use = combat::counter_attack_ref_to_use(view, character);
 
-        self.attack_list.update(gui, attacks.as_ref(), |widget, attack| {
-            if active_attack.as_ref() == Some(attack) {
+        self.attack_list.update(gui, attack_refs.as_ref(), |widget, attack_ref| {
+            if active_attack.as_ref() == Some(attack_ref) {
                 widget.active_indicator.set_showing(true);
             } else {
                 widget.active_indicator.set_showing(false);
             }
-            widget.counter_indicator.set_showing(counter_to_use == Some(attack));
+            widget.counter_indicator.set_showing(counter_to_use.as_ref() == Some(attack_ref));
 
-            widget.name.set_text(attack.name.capitalized());
-            widget.to_hit.set_text(format!("{} to hit", attack.to_hit_bonus.to_string_with_sign()));
-            widget.damage.set_text(format!("{} {} {} {}",
-                                           attack.damage_dice,
-                                           attack.damage_bonus.sign_str(),
-                                           attack.damage_bonus.abs(),
-                                           attack.primary_damage_type.to_string()));
+            if let Some(attack) = attack_ref.resolve(view, character) {
+                widget.name.set_text(attack.name.capitalized());
+                widget.to_hit.set_text(format!("{} to hit", attack.to_hit_bonus.to_string_with_sign()));
+                widget.damage.set_text(format!("{} {} {} {}",
+                                               attack.damage_dice,
+                                               attack.damage_bonus.sign_str(),
+                                               attack.damage_bonus.abs(),
+                                               attack.primary_damage_type.to_string()));
+            } else {
+                widget.name.set_text("Unknown, attack referenced was not present");
+                widget.to_hit.set_text(format!("N/A"));
+                widget.damage.set_text(format!("N/A"));
+            }
         });
 
         for event in gui.events_for(self.attack_list.as_widget_immut()) {
             if let UIEvent::WidgetEvent{ event, .. } = event {
                 if let WidgetEvent::ListItemClicked(index, button) = event {
-                    if let Some(attack_ref) = AttackReference::of_attack(view, character, &attacks[*index]).as_option() {
+                    if let Some(attack_ref) = attack_refs[*index].as_option() {
                         match button {
                             MouseButton::Left => control.event_bus.push_event(ControlEvents::AttackSelected(attack_ref.clone())),
                             _ => control.event_bus.push_event(ControlEvents::CounterattackSelected(attack_ref.clone()))
@@ -195,13 +201,13 @@ impl AttackDetailsWidget {
         }
     }
 
-    pub fn update(&mut self, gui: &mut GUI, world: &World, view: &WorldView, attacker: Entity, defender: Entity, attack: &Attack, attacking_from : Option<AxialCoord>, ap_remaining: i32) {
+    pub fn update(&mut self, gui: &mut GUI, world: &World, view: &WorldView, attacker: Entity, defender: Entity, attack_ref: &AttackRef, attacking_from : Option<AxialCoord>, ap_remaining: i32) {
 //        self.to_hit_div.reapply(gui);
 //        self.damage_div.reapply(gui);
 //        self.to_hit_details_div.reapply(gui);
 //        self.damage_details_div.reapply(gui);
 
-        let attack_breakdown = combat::compute_attack_breakdown(world, view, attacker, defender, attack, attacking_from, Some(ap_remaining));
+        let attack_breakdown = combat::compute_attack_breakdown(world, view, attacker, defender, attack_ref, attacking_from, Some(ap_remaining));
 
         if let Some(strike) = attack_breakdown.strikes.first() {
             self.for_all_widgets(|w| { w.set_showing(true); });
@@ -209,7 +215,7 @@ impl AttackDetailsWidget {
                 v.components.iter().filter(|t| t.0 != "+0").map(|(bonus, description)| format!("{}  {}", bonus, description)).join("\n")
             };
 
-            self.name.set_text(format!("{} x {}", attack.name.capitalized(), attack_breakdown.strikes.len()));
+            self.name.set_text(format!("{} x {}", strike.attack.name.capitalized(), attack_breakdown.strikes.len()));
             self.to_hit.set_text(format!("{} to hit", (strike.to_hit_total() - strike.to_miss_total()).to_string_with_sign()));
             let combined_dice_str = strike.damage_dice_total().map(|dd| dd.to_string()).join(" + ");
             let net_damage_mod = strike.damage_bonus_total() - strike.damage_absorption_total();

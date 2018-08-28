@@ -94,47 +94,10 @@ impl Game {
 
 
     pub fn init_world() -> (World, Entity) {
-        let mut raw_world = World::new();
+        let mut raw_world = create_world();
         let world = &mut raw_world;
-        // -------- entity data --------------
-        world.register::<TileData>();
-        world.register::<CharacterData>();
-        world.register::<CombatData>();
-        world.register::<EquipmentData>();
-        world.register::<InventoryData>();
-        world.register::<SkillData>();
-        world.register::<ItemData>();
-        world.register::<FactionData>();
-        world.register::<PositionData>();
-        world.register::<GraphicsData>();
-        world.register::<IdentityData>();
-        world.register::<ActionData>();
-        world.register::<ModifierTrackingData>();
-        world.register::<AttributeData>();
-        world.register::<AllegianceData>();
-        world.register::<ObserverData>();
 
-        register_custom_ability_data(world);
-        // -------- world data ---------------
-        world.register::<MapData>();
-        world.register::<TurnData>();
-        world.register::<TimeData>();
-        world.register::<VisibilityData>();
-
-        world.register_index::<AxialCoord>();
-
-        world.register_event_type::<GameEvent>();
-        {
-            let events = world.events::<GameEvent>().next();
-        }
-
-        world.attach_world_data(MapData {
-            min_tile_bound: AxialCoord::new(-30, -30),
-            max_tile_bound: AxialCoord::new(30, 30),
-        });
-        world.attach_world_data(VisibilityData::default());
-
-        for tile in terrain::generator::generate() {
+        for tile in terrain::generator::generate(70) {
             let tile = tile.with(DebugData { name : strf("world tile") }).create(world);
             let pos = world.data::<TileData>(tile).position;
             world.index_entity(tile, pos);
@@ -172,39 +135,17 @@ impl Game {
 
 
         let char_base = |name: Str| character_archetypes.with_name("human").clone()
-            .with(IdentityData::new(name, taxonomy::Person));
+            .with(IdentityData::new(name, &taxonomy::Person));
 
         let archer = char_base("gunnar")
             .with(CharacterData {
                 sprite: String::from("elf/archer"),
                 name: String::from("Archer"),
-                move_speed: Sext::of_parts(1, 0), // one and 0 sixths
                 health: Reduceable::new(25),
                 action_points: Reduceable::new(8),
                 ..Default::default()
             })
             .with(AllegianceData { faction : player_faction })
-            .with(CombatData {
-                ranged_accuracy_bonus: 2,
-                natural_attacks: vec![
-                    Attack {
-                        name: "punch",
-                        attack_type: AttackType::Melee,
-                        ap_cost: 3,
-                        damage_dice: DicePool {
-                            die: 1,
-                            count: 1,
-                        },
-                        damage_bonus: 0,
-                        to_hit_bonus: 0,
-                        primary_damage_type: DamageType::Bludgeoning,
-                        secondary_damage_type: None,
-                        range: 1,
-                        min_range: 0,
-                        ammunition_kind: None,
-                    }],
-                ..Default::default()
-            })
             .with(ActionData {
                 active_reaction: reaction_types::Dodge.clone(),
                 ..Default::default()
@@ -224,35 +165,11 @@ impl Game {
             .with(CharacterData {
                 sprite: String::from("human/spearman"),
                 name: String::from("Spearman"),
-                move_speed: Sext::of_parts(1, 0), // one and 0 sixths
                 health: Reduceable::new(45),
                 action_points: Reduceable::new(8),
                 ..Default::default()
             })
             .with(AllegianceData { faction : player_faction })
-            .with(CombatData {
-                ranged_accuracy_bonus: 0,
-                melee_accuracy_bonus: 1,
-                melee_damage_bonus: 1,
-                natural_attacks: vec![
-                    Attack {
-                        name: "punch",
-                        attack_type: AttackType::Melee,
-                        ap_cost: 3,
-                        damage_dice: DicePool {
-                            die: 1,
-                            count: 1,
-                        },
-                        damage_bonus: 0,
-                        to_hit_bonus: 0,
-                        primary_damage_type: DamageType::Bludgeoning,
-                        secondary_damage_type: None,
-                        range: 1,
-                        min_range: 0,
-                        ammunition_kind: None,
-                    }],
-                ..Default::default()
-            })
             .with(ActionData {
                 active_reaction: reaction_types::Counterattack.clone(),
                 ..Default::default()
@@ -264,36 +181,23 @@ impl Game {
         logic::item::equip_item(world, spear, spearman, true);
         logic::movement::place_entity_in_world(world, spearman, AxialCoord::new(1, -1));
 
+        let special_attack = EntityBuilder::new()
+            .with(DerivedAttackData {
+                character_condition: EntitySelectors::Any,
+                weapon_condition: EntitySelectors::IsA(&taxonomy::weapons::ReachWeapon),
+                attack_condition: EntitySelectors::IsA(&taxonomy::attacks::StabbingAttack).and(EntitySelectors::IsA(&taxonomy::attacks::ReachAttack)),
+                kind: DerivedAttackKind::PiercingStrike,
+            }).create(world);
 
-        let monster_base = EntityBuilder::new()
-            .with(CharacterData {
-                sprite: String::from("void/monster"),
-                name: String::from("Monster"),
-                move_speed: Sext::of_rounded(0.75),
-                action_points: Reduceable::new(6),
-                health: Reduceable::new(16),
-                ..Default::default()
-            })
+        world.modify(spearman, CombatData::special_attacks.append(special_attack), None);
+
+
+        let monster_base = character_archetypes.with_name("mud monster").clone()
             .with(AllegianceData { faction : enemy_faction })
-            .with(CombatData {
-                natural_attacks: vec![Attack {
-                    name: "slam",
-                    damage_dice: DicePool {
-                        count: 1,
-                        die: 4,
-                    },
-                    ..Default::default()
-                }],
-                ..Default::default()
-            })
-            .with(SkillData::default())
-            .with(EquipmentData::default())
-            .with(GraphicsData::default())
-            .with(PositionData::default())
-            .with(IdentityData::of_kind(taxon("mud monster", &taxonomy::Monster)));
+            .with(DebugData { name : strf("monster") });
 
         let create_monster_at = |world_in: &mut World, pos: AxialCoord| {
-            let monster = monster_base.clone().with(DebugData { name : strf("monster") }).create(world_in);
+            let monster = monster_base.clone().create(world_in);
 
             logic::movement::place_entity_in_world(world_in, monster, pos);
 
@@ -306,12 +210,12 @@ impl Game {
         let spawner = EntityBuilder::new()
             .with(CharacterData {
                 sprite: strf("void/summoner_monolith"),
-                name: String::from("Summoning Stone"),
-                move_speed: Sext::of(0),
+                name: strf("Summoning Stone"),
                 action_points: Reduceable::new(1),
                 health: Reduceable::new(100),
                 ..Default::default()
             })
+            .with(MovementData { move_speed : Sext::of(0), ..Default::default() })
             .with(AllegianceData { faction : enemy_faction })
             .with(PositionData::default())
             .with(CombatData { dodge_bonus : -10, .. Default::default() })

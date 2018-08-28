@@ -275,28 +275,28 @@ impl GUI {
                                 let border_width = widget.border.width;
 
                                 if widget.border.sides.has_side(Alignment::Left) {
-                                    internal_state.draw_list = internal_state.draw_list.add_quad(
+                                    internal_state.draw_list = internal_state.draw_list.with_quad(
                                         Quad::new(String::from("ui/blank"), border_start)
                                             .color(widget.border.color)
                                             .size(v2(border_width as f32, effective_dim.y))
                                     )
                                 }
                                 if widget.border.sides.has_side(Alignment::Right) {
-                                    internal_state.draw_list = internal_state.draw_list.add_quad(
+                                    internal_state.draw_list = internal_state.draw_list.with_quad(
                                         Quad::new(String::from("ui/blank"), border_start + v2(effective_dim.x - border_width as f32, 0.0))
                                             .color(widget.border.color)
                                             .size(v2(border_width as f32, effective_dim.y))
                                     )
                                 }
                                 if widget.border.sides.has_side(Alignment::Top) {
-                                    internal_state.draw_list = internal_state.draw_list.add_quad(
+                                    internal_state.draw_list = internal_state.draw_list.with_quad(
                                         Quad::new(String::from("ui/blank"), border_start + v2(0.0, effective_dim.y - border_width as f32))
                                             .color(widget.border.color)
                                             .size(v2(effective_dim.x, border_width as f32))
                                     )
                                 }
                                 if widget.border.sides.has_side(Alignment::Bottom) {
-                                    internal_state.draw_list = internal_state.draw_list.add_quad(
+                                    internal_state.draw_list = internal_state.draw_list.with_quad(
                                         Quad::new(String::from("ui/blank"), border_start)
                                             .color(widget.border.color)
                                             .size(v2(effective_dim.x, border_width as f32))
@@ -308,7 +308,7 @@ impl GUI {
                                     Some(image) => {
                                         match segment {
                                             ImageSegmentation::None => {
-                                                internal_state.draw_list = internal_state.draw_list.add_quad(
+                                                internal_state.draw_list = internal_state.draw_list.with_quad(
                                                     Quad::new(image.clone(), inner_pixel_offset - v2(0.0, effective_internal_dim.y))
                                                         .color(widget.color * color_multiplier)
                                                         .size(effective_internal_dim)
@@ -320,17 +320,17 @@ impl GUI {
                                                 let endcap_size = dim.y * 0.5;
                                                 let middle_size = dim.x - endcap_size * 2.0;
                                                 if middle_size > 0.0 {
-                                                    internal_state.draw_list = internal_state.draw_list.add_quad(
+                                                    internal_state.draw_list = internal_state.draw_list.with_quad(
                                                         Quad::new(image.clone(), start)
                                                             .color(widget.color * color_multiplier)
                                                             .sub_rect(Rect::new(0.0, 0.0, 0.5, 1.0))
                                                             .size(v2(endcap_size, dim.y))
-                                                    ).add_quad(
+                                                    ).with_quad(
                                                         Quad::new(image.clone(), start + v2(endcap_size + middle_size, 0.0))
                                                             .color(widget.color * color_multiplier)
                                                             .sub_rect(Rect::new(0.5, 0.0, -0.5, 1.0))
                                                             .size(v2(endcap_size, dim.y))
-                                                    ).add_quad(
+                                                    ).with_quad(
                                                         Quad::new(image.clone(), start + v2(endcap_size, 0.0))
                                                             .color(widget.color * color_multiplier)
                                                             .sub_rect(Rect::new(0.5, 0.0, 0.5, 1.0))
@@ -338,12 +338,12 @@ impl GUI {
                                                     );
                                                 } else {
                                                     let endcap_size = dim.x * 0.5;
-                                                    internal_state.draw_list = internal_state.draw_list.add_quad(
+                                                    internal_state.draw_list = internal_state.draw_list.with_quad(
                                                         Quad::new(image.clone(), start)
                                                             .color(widget.color * color_multiplier)
                                                             .sub_rect(Rect::new(0.0, 0.0, 0.5, 1.0))
                                                             .size(v2(endcap_size, dim.y))
-                                                    ).add_quad(
+                                                    ).with_quad(
                                                         Quad::new(image.clone(), start + v2(endcap_size, 0.0))
                                                             .color(widget.color * color_multiplier)
                                                             .sub_rect(Rect::new(0.5, 0.0, -0.5, 1.0))
@@ -356,7 +356,7 @@ impl GUI {
                                     }
                                     None => {
                                         trace!(target: "gui_redraw_quads", "\tAdding no image quad at {:?} with dimensions {:?}", inner_pixel_offset - v2(0.0, effective_internal_dim.y), effective_internal_dim);
-                                        internal_state.draw_list = internal_state.draw_list.add_quad(
+                                        internal_state.draw_list = internal_state.draw_list.with_quad(
                                             Quad::new(String::from("ui/blank"), inner_pixel_offset - v2(0.0, effective_internal_dim.y))
                                                 .color(widget.color * color_multiplier)
                                                 .size(effective_internal_dim)

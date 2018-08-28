@@ -1,6 +1,6 @@
 use game::prelude::*;
 use common::hex::*;
-use entities::combat::AttackReference;
+use entities::combat::AttackRef;
 use entities::combat::DamageType;
 use entities::reactions::ReactionType;
 use entities::combat::AttackType;
@@ -24,8 +24,8 @@ pub enum GameEvent {
     FactionTurn { turn_number : u32, faction : Entity },
     EffectEnded { entity : Option<Entity> },
     WorldStart,
-    SelectedAttackChanged { entity : Entity, attack_ref : AttackReference },
-    SelectedCounterattackChanged { entity : Entity, attack_ref : AttackReference },
+    SelectedAttackChanged { entity : Entity, attack_ref : AttackRef },
+    SelectedCounterattackChanged { entity : Entity, attack_ref : AttackRef },
     SelectedReactionChanged { entity : Entity, reaction_type : ReactionType },
     ReactionEffectApplied { entity : Entity }
 }

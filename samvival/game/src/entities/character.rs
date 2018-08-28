@@ -11,6 +11,7 @@ use noisy_float::types::R32;
 use entities::common::PositionData;
 use entities::common::ActionData;
 use entities::time::TimeOfDay;
+use entities::movement::MovementData;
 
 
 #[derive(Default, Clone, Debug, PrintFields)]
@@ -24,9 +25,6 @@ impl EntityData for GraphicsData {}
 pub struct CharacterData {
     pub health: Reduceable<i32>,
     pub action_points: Reduceable<i32>,
-    pub move_speed: Sext,
-    // represented in sexts
-    pub moves: Sext,
     pub stamina: Reduceable<Sext>,
     pub stamina_recovery: Sext,
     pub sprite: String,
@@ -41,7 +39,8 @@ pub struct Character<'a> {
     pub position: &'a PositionData,
     pub graphics: &'a GraphicsData,
     pub action: &'a ActionData,
-    pub allegiance: &'a AllegianceData
+    pub allegiance: &'a AllegianceData,
+    pub movement: &'a MovementData,
 }
 
 impl<'a> Deref for Character<'a> {
@@ -68,6 +67,7 @@ impl CharacterStore for WorldView {
             graphics: self.data::<GraphicsData>(ent),
             action: self.data::<ActionData>(ent),
             allegiance: self.data::<AllegianceData>(ent),
+            movement: self.data::<MovementData>(ent)
         }
     }
 }
@@ -83,8 +83,6 @@ impl Default for CharacterData {
         CharacterData {
             health: Reduceable::new(1),
             action_points: Reduceable::new(6),
-            moves: Sext::zero(),
-            move_speed: Sext::of(1),
             stamina: Reduceable::new(Sext::of(6)),
             stamina_recovery: Sext::of(1),
             sprite: strf("default/defaultium"),
@@ -98,13 +96,6 @@ impl CharacterData {
         self.health.cur_value() > 0
     }
     pub fn can_act(&self) -> bool { self.action_points.cur_value() > 0 }
-
-    pub fn max_moves_remaining(&self, multiplier: f64) -> Sext {
-        self.moves + Sext::of_rounded(self.move_speed.as_f64() * self.action_points.cur_value() as f64 * multiplier)
-    }
-    pub fn max_moves_per_turn(&self, multiplier: f64) -> Sext {
-        self.move_speed * self.action_points.max_value()
-    }
 }
 
 

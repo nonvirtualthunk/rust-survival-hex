@@ -449,6 +449,13 @@ impl GUI {
         if self.focused_widget == Some(wid) {
             self.focused_widget = None;
         }
+        if self.moused_over_widget == Some(wid) {
+            self.moused_over_widget = None;
+        }
+        if self.hover_widget == Some(wid) {
+            self.hover_widget = None;
+        }
+
         self.modified_set.remove(&wid);
         self.top_level_widgets.remove(&wid);
 

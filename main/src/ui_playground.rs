@@ -216,60 +216,69 @@ pub fn generate_hex_images() {
     };
 
     for rounded in vec![true, false] {
-        for q in 0 .. 6 {
-            let mut image : image::RgbaImage = image::RgbaImage::new(w, h);
+        for narrow in vec![true, false] {
+            for q in 0 .. 6 {
+                let mut image : image::RgbaImage = image::RgbaImage::new(w, h);
 
-            for x in 0 .. w {
-                for y in 0 .. h {
-                    let xf = (((x as i32 -0) as i32 - w as i32/2) as f32 / (w+1) as f32) * 2.0;
-                    let yf = (((y as i32 +0) as i32 - h as i32/2) as f32 / (w+1) as f32) * 2.0;
+                let dist_thresh_mult = if narrow { 0.5 } else { 1.0 };
+                let hard_dist = 0.2 * dist_thresh_mult;
+                let hard_end = 1.0 - hard_dist;
+                let clear_fade_dist = 0.3 * dist_thresh_mult;
+                let clear_fade_end = hard_end - clear_fade_dist;
+                for x in 0 .. w {
+                    for y in 0 .. h {
+                        let xf = (((x as i32 -0) as i32 - w as i32/2) as f32 / (w+1) as f32) * 2.0;
+                        let yf = (((y as i32 +0) as i32 - h as i32/2) as f32 / (w+1) as f32) * 2.0;
 
-                    let mut pixel_ref = image.get_pixel_mut(x,y);
-                    if AxialCoord::from_cart_coord(CartVec(v2(xf,yf))) == AxialCoord::new(0,0) {
-                        if (slice_func)(xf,yf) == q {
-                            let mut dist = xf*xf + yf*yf;
-                            if dist != 0.0 {
-                                dist = dist.sqrt();
-                            }
+                        let mut pixel_ref = image.get_pixel_mut(x,y);
+                        if AxialCoord::from_cart_coord(CartVec(v2(xf,yf))) == AxialCoord::new(0,0) {
+                            if (slice_func)(xf,yf) == q {
+                                let mut dist = xf*xf + yf*yf;
+                                if dist != 0.0 {
+                                    dist = dist.sqrt();
+                                }
 
-                            let mut angle = f32::atan2(yf, xf) + PI * 2.0;
-                            while angle > PI / 3.0 {
-                                angle -= PI / 3.0;
-                            }
+                                let mut angle = f32::atan2(yf, xf) + PI * 2.0;
+                                while angle > PI / 3.0 {
+                                    angle -= PI / 3.0;
+                                }
 
-                            let max_d = 3.0f32.sqrt() / (3f32.sqrt() * angle.cos() + angle.sin());
-                            let pcnt = dist / max_d;
+                                let max_d = 3.0f32.sqrt() / (3f32.sqrt() * angle.cos() + angle.sin());
+                                let pcnt = dist / max_d;
 
-                            let effective_dist = if rounded { dist } else { pcnt };
-                            let (b,a) = if effective_dist > 0.8 {
-                                (200,255)
-                            } else if effective_dist > 0.5 {
-                                (255,(((effective_dist - 0.5) / 0.3) * 255.0) as u8)
+
+                                let effective_dist = if rounded { dist } else { pcnt };
+                                let (b,a) = if effective_dist > hard_end {
+                                    (200,255)
+                                } else if effective_dist > clear_fade_end {
+                                    (255,(((effective_dist - clear_fade_end) / clear_fade_dist) * 255.0) as u8)
+                                } else {
+                                    (255,0)
+                                };
+
+                                pixel_ref[0] = b;
+                                pixel_ref[1] = b;
+                                pixel_ref[2] = b;
+                                pixel_ref[3] = a;
                             } else {
-                                (255,0)
-                            };
-
-                            pixel_ref[0] = b;
-                            pixel_ref[1] = b;
-                            pixel_ref[2] = b;
-                            pixel_ref[3] = a;
+                                pixel_ref[0] = 0;
+                                pixel_ref[1] = 0;
+                                pixel_ref[2] = 0;
+                                pixel_ref[3] = 0;
+                            }
                         } else {
                             pixel_ref[0] = 0;
                             pixel_ref[1] = 0;
                             pixel_ref[2] = 0;
                             pixel_ref[3] = 0;
                         }
-                    } else {
-                        pixel_ref[0] = 0;
-                        pixel_ref[1] = 0;
-                        pixel_ref[2] = 0;
-                        pixel_ref[3] = 0;
                     }
                 }
-            }
 
-            let rounded_prefix = if rounded { "_rounded" } else { "" };
-            image.save(Path::new(&format!("/tmp/hex_edge{}_{}.png", rounded_prefix, q))).expect("could not save");
+                let narrow_prefix = if narrow { "_narrow" } else { "" };
+                let rounded_prefix = if rounded { "_rounded" } else { "" };
+                image.save(Path::new(&format!("/tmp/hex_edge{}{}_{}.png", rounded_prefix, narrow_prefix, q))).expect("could not save");
+            }
         }
     }
 }

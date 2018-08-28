@@ -4,7 +4,7 @@ use events::GameEvent;
 use game::prelude::*;
 use entities::modify;
 use entities::combat::CombatData;
-use entities::combat::AttackReference;
+use entities::combat::AttackRef;
 use entities::PositionData;
 use entities::tile::*;
 use game::reflect::*;
@@ -42,7 +42,7 @@ pub fn equip_item(world: &mut World, item : Entity, character : Entity, trigger_
 
 
     if world_view.data::<CombatData>(character).active_attack.is_none() {
-        let item_attack_ref = AttackReference::of_primary_from(world.view(), item);
+        let item_attack_ref = AttackRef::of_primary_from(world.view(), item);
         if item_attack_ref.is_some() {
             world.modify(character, CombatData::active_attack.set_to(item_attack_ref), "item equipped");
         }
@@ -73,11 +73,14 @@ pub fn unequip_item(world: &mut World, item : Entity, from_character : Entity, t
     if is_item_equipped_by(world, item, from_character) {
         modify(world, from_character, UnequipItemMod(item));
 
-        if world.view().data::<CombatData>(from_character).active_attack.entity == item {
-            world.modify(from_character, CombatData::active_attack.set_to(AttackReference::none()), "item unequipped");
+        let active_attack = world.view().data::<CombatData>(from_character).active_attack.attack_entity;
+        let active_counter_attack = world.view().data::<CombatData>(from_character).active_counterattack.attack_entity;
+        // attack entity is no longer the entity that conatins the attack, that's why this is crashing, we should not be targeting the referenced entity directly
+        if world.data::<ItemData>(item).attacks.contains(&active_attack) {
+            world.modify(from_character, CombatData::active_attack.set_to(AttackRef::none()), "item unequipped");
         }
-        if world.view().data::<CombatData>(from_character).active_counterattack.entity == item {
-            world.modify(from_character, CombatData::active_counterattack.set_to(AttackReference::none()), "item unequipped");
+        if world.data::<ItemData>(item).attacks.contains(&active_counter_attack) {
+            world.modify(from_character, CombatData::active_counterattack.set_to(AttackRef::none()), "item unequipped");
         }
 
         if trigger_event {

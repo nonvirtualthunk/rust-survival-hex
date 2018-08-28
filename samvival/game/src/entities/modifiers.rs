@@ -10,7 +10,7 @@ use game::modifiers::DynamicModifier;
 use entities::*;
 use game::world::World;
 use entities::combat::CombatData;
-use entities::combat::AttackReference;
+use entities::combat::AttackRef;
 
 
 pub fn modify<T : EntityData, CM : ConstantModifier<T>>(world : &mut World, ent : Entity, modifier : CM) {
@@ -48,24 +48,10 @@ impl ConstantModifier<CharacterData> for ReduceStaminaMod {
     }
 }
 
-pub struct ReduceMoveMod(pub Sext);
-impl ConstantModifier<CharacterData> for ReduceMoveMod {
-    fn modify(&self, data: &mut CharacterData) {
-        data.moves = data.moves - self.0;
-    }
-}
-
-pub struct EndMoveMod;
-impl ConstantModifier<CharacterData> for EndMoveMod {
-    fn modify(&self, data: &mut CharacterData) {
-        data.moves = Sext::zero();
-    }
-}
 
 pub struct ResetCharacterTurnMod;
 impl ConstantModifier<CharacterData> for ResetCharacterTurnMod {
     fn modify(&self, data: &mut CharacterData) {
-        data.moves = Sext::zero();
         data.action_points.reset();
         data.stamina.recover_by(data.stamina_recovery);
     }
@@ -106,7 +92,7 @@ impl ConstantModifier<ItemData> for ItemHeldByMod{
     }
 }
 
-pub struct SetActiveAttackMod(pub AttackReference);
+pub struct SetActiveAttackMod(pub AttackRef);
 impl ConstantModifier<CombatData> for SetActiveAttackMod {
     fn modify(&self, data: &mut CombatData) {
         data.active_attack = self.0.clone();

@@ -14,6 +14,8 @@ pub mod reactions;
 pub mod attributes;
 pub mod custom_ability_data;
 pub mod visibility;
+pub mod movement;
+pub mod selectors;
 
 pub mod fields;
 
@@ -31,5 +33,7 @@ pub use entities::common::*;
 pub use entities::attributes::*;
 pub use entities::custom_ability_data::*;
 pub use entities::visibility::*;
+pub use entities::movement::*;
+pub use entities::selectors::*;
 
 pub use entities::modifiers::modify;

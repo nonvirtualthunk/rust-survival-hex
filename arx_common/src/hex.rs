@@ -49,7 +49,8 @@ impl CartVec {
         CartVec(v2(x,y))
     }
 
-    pub fn normalize(&self) -> CartVec {
+    // safe normalization, with a (0,0) result for 0 length vector
+    pub fn normalize_s(&self) -> CartVec {
         let magnitude_squared = self.0.x * self.0.x + self.0.y * self.0.y;
         if magnitude_squared != 0.0 {
             let magnitude = magnitude_squared.sqrt();
@@ -99,6 +100,43 @@ impl AxialCoord {
     }
     pub fn from_cart_coord(coord : CartVec) -> AxialCoord {
         AxialCoord::from_cartesian(coord.deref(), 1.0)
+    }
+
+    pub fn side_closest_to(&self, other : &AxialCoord, tie_breaker : &AxialCoord) -> usize {
+        if other == self {
+            warn!("Looking for side closest to self");
+            return 0;
+        }
+        let self_cube = self.as_cube_coord();
+        let delta_a = (other.as_cube_coord() - self_cube).as_v3f();
+        let delta_b = (tie_breaker.as_cube_coord() - self_cube).as_v3f();
+        let delta = delta_a + delta_b * 0.01;
+        let a = delta.x - delta.y;
+        let b = delta.y - delta.z;
+        let c = delta.z - delta.x;
+
+        if a.abs() > b.abs() && a.abs() > c.abs() {
+            if a < 0.0 {
+                3
+            } else {
+                0
+            }
+        } else if b.abs() > a.abs() && b.abs() > c.abs() {
+            if b < 0.0 {
+                5
+            } else {
+                2
+            }
+        } else {
+            if c < 0.0 {
+                1
+            } else {
+                4
+            }
+        }
+//[CubeCoord { x: 1, y: -1, z: 0 }, CubeCoord { x: 1, y: 0, z: -1 }, CubeCoord { x: 0, y: 1, z: -1 },
+//        CubeCoord { x: -1, y: 1, z: 0 }, CubeCoord { x: -1, y: 0, z: 1 }, CubeCoord { x: 0, y: -1, z: 1 }];
+
     }
 }
 
@@ -172,6 +210,26 @@ impl CubeCoord {
     pub fn ring(center : CubeCoord, radius : u32) -> impl Iterator<Item=CubeCoord> {
         RingIterator::new(center, radius)
     }
+
+    pub fn as_v3f(&self) -> Vec3f {
+        v3(self.x as f32,self.y as f32,self.z as f32)
+    }
+
+    pub fn hexes_between(start : CubeCoord, end : CubeCoord) -> Vec<CubeCoord> {
+        let start_f = v3(start.x as f32 + 1e-6, start.y as f32 + 2e-6, start.z as f32 - 3e-6);
+        let hex_dist = start.distance(&end);
+        let end_f = v3(end.x as f32 + 1e-6, end.y as f32 + 2e-6, end.z as f32 - 3e-6);
+        let delta = end_f - start_f;
+
+        let mut ret = Vec::new();
+        for i in 0 ..= hex_dist {
+            let pcnt = (i as f32) / (hex_dist as f32);
+            let point = start_f + delta * pcnt;
+            let hex = CubeCoord::rounded(point.x, point.y, point.z);
+            ret.push(hex);
+        }
+        ret
+    }
 }
 
 struct RingIterator {
@@ -233,6 +291,22 @@ impl Add<CubeCoord> for CubeCoord {
     }
 }
 
+impl<'a, 'b> Sub<&'b CubeCoord> for &'a CubeCoord {
+    type Output = CubeCoord;
+
+    fn sub(self, rhs: &'b CubeCoord) -> Self::Output {
+        CubeCoord::new(self.x - rhs.x, self.y - rhs.y, self.z - rhs.z)
+    }
+}
+
+impl Sub<CubeCoord> for CubeCoord {
+    type Output = CubeCoord;
+
+    fn sub(self, rhs: CubeCoord) -> Self::Output {
+        CubeCoord::new(self.x - rhs.x, self.y - rhs.y, self.z - rhs.z)
+    }
+}
+
 impl Mul<i32> for CubeCoord {
     type Output = CubeCoord;
 
@@ -240,6 +314,7 @@ impl Mul<i32> for CubeCoord {
         CubeCoord::new(self.x * rhs, self.y * rhs, self.z * rhs)
     }
 }
+
 
 #[test]
 fn test_basic_functionality() {

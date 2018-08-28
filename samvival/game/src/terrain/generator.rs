@@ -12,7 +12,9 @@ use cgmath::InnerSpace;
 use noise::NoiseFn;
 
 
-pub fn generate() -> Vec<EntityBuilder> {
+pub fn generate(radius: i32) -> Vec<EntityBuilder> {
+    let r = radius;
+
     let mut ret = Vec::new();
 
     let mut height_noise = RidgedMulti::new();
@@ -23,8 +25,8 @@ pub fn generate() -> Vec<EntityBuilder> {
     let forest_noise = OpenSimplex::new();
     let forest_worley = Worley::new();
 
-    for x in -70..70 {
-        for y in -70..70 {
+    for x in -r .. r {
+        for y in -r.. r {
             let coord = AxialCoord::new(x, y);
             if coord.as_cart_vec().magnitude2() < 60.0 * 60.0 {
                 let mut tile_data = TileData {

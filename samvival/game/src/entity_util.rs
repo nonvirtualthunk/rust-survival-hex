@@ -17,8 +17,3 @@ pub fn position_of(entity : Entity, world : &WorldView) -> Option<AxialCoord> {
         None
     }
 }
-
-pub fn max_remaining_move(entity : Entity, world : &WorldView) -> Sext {
-    let char = world.character(entity);
-    char.moves + char.move_speed * char.action_points.cur_value()
-}

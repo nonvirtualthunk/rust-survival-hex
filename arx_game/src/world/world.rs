@@ -705,7 +705,7 @@ impl World {
     }
 
     pub fn raw_data<T : EntityData>(&self, entity : Entity) -> &T {
-        self.raw_data_opt::<T>(entity).unwrap_or_else(|| panic!(format!("Attempted to get raw data of type {:?}, but entity had none", unsafe {std::intrinsics::type_name::<T>()})))
+        self.raw_data_opt::<T>(entity).unwrap_or_else(|| panic!(format!("Attempted to get raw data of type {:?}, but entity {:?} had none", unsafe {std::intrinsics::type_name::<T>()}, entity)))
     }
     pub fn raw_data_opt<T : EntityData>(&self, entity : Entity) -> Option<&T> {
         self.data.get::<DataContainer<T>>().expect("Attempted to get raw data where type not registered").storage.get(&entity)

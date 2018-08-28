@@ -81,7 +81,7 @@ impl EntityData for AttributeData {}
 
 
 impl AttributeData {
-//    pub const attributes: Field<AttributeData, Vec<AttributeValue>> = Field::new(stringify!( attributes ), |t| &t.attributes, |t| &mut t.attributes, |t, v| { t.attributes = v; });
+    pub const attributes: Field<AttributeData, Vec<AttributeValue>> = Field::new(stringify!( attributes ), |t| &t.attributes, |t| &mut t.attributes, |t, v| { t.attributes = v; });
 
     pub fn set_value(attr : &AttributeType, value : i32) -> Box<FieldModifier<AttributeData, Vec<AttributeValue>>> {
         FieldModifier::permanent(&AttributeData::attributes, SetAttributeValue { attr : attr.clone(), value })

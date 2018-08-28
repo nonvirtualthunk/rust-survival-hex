@@ -4,7 +4,7 @@ use common::hex::*;
 use game::prelude::*;
 use common::EventBus;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub struct GameState {
     pub display_event_clock: GameEventClock,
     pub selected_character: Option<Entity>,
@@ -14,9 +14,12 @@ pub struct GameState {
     pub hovered_hex_coord: AxialCoord,
     pub animating: bool,
     pub mouse_pixel_pos: Vec2f,
-    pub mouse_game_pos: Vec2f
+    pub mouse_game_pos: Vec2f,
+    pub mouse_cart_vec: CartVec
 }
-
+impl GameState {
+    pub fn mouse_cart_vec(&self) -> CartVec { self.mouse_cart_vec }
+}
 
 
 pub struct ControlContext<'a> {

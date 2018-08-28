@@ -232,7 +232,7 @@ impl Into<f64> for Oct {
 
 
 
-#[derive(Clone, Copy, Debug, Add, Sub, Div, AddAssign, SubAssign, MulAssign, PartialOrd, Ord, PartialEq, Eq, Hash, Default)]
+#[derive(Clone, Copy, Debug, Add, Sub, Div, AddAssign, SubAssign, MulAssign, PartialOrd, Ord, PartialEq, Eq, Hash, Default, Neg)]
 pub struct Sext(i64);
 
 impl Sext {
