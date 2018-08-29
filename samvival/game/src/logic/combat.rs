@@ -32,6 +32,7 @@ use std::collections::HashMap;
 use entities::combat::CombatData;
 use cgmath::InnerSpace;
 use common::hex::CartVec;
+use game::reflect::*;
 
 pub enum StrikeIndex {
     Strike(usize),
@@ -316,8 +317,8 @@ pub fn handle_attack(world: &mut World, attacker: Entity, defender_ref: Entity, 
             i if i <= 1 => Skill::Melee,
             _ => Skill::Ranged
         };
-        modify(world, attacker, SkillXPMod(attack_skill_type, 1));
-        modify(world, attacker, ReduceStaminaMod(Sext::of(1)));
+        world.modify(attacker, SkillData::skill_xp.add_to_key(attack_skill_type, 1), None);
+        world.modify(attacker, CharacterData::stamina.reduce_by(Sext::of(1)), None);
 
         world.end_event(GameEvent::Attack { attacker: attacker, defender: defender_ref });
 

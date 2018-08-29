@@ -35,10 +35,15 @@ pub fn derive_print_entity_data_fields(input: proc_macro::TokenStream) -> proc_m
 }
 
 fn internal_derive_entity_data_fields(input: DeriveInput) -> TokenStream {
+
+}
+
+
+fn internal_derive_entity_data_fields(input: DeriveInput) -> TokenStream {
     // Used in the quasi-quotation below as `#struct_name`.
     let struct_name = input.ident;
 
-    let exec_tokens : Vec<TokenStream> = match input.data {
+    let (exec_tokens, visit_all_tokens, visit_by_name_tokens): (Vec<TokenStream>,Vec<TokenStream>,Vec<TokenStream>) = match input.data {
         Data::Struct(ref data) => {
             match data.fields {
                 Fields::Named(ref fields) => {
@@ -46,7 +51,7 @@ fn internal_derive_entity_data_fields(input: DeriveInput) -> TokenStream {
                     //
                     //      const foo : Field<TestData,i32> = Field::new("foo",|t| &t.foo, |t,v| { t.foo = v; });
                     //
-                    fields.named.iter()
+                    let exec_tokens = fields.named.iter()
                         .filter(|f| if let Visibility::Public(_) = f.vis { true } else { false })
                         .map(|f| {
                         let field_name = &f.ident;
@@ -56,9 +61,31 @@ fn internal_derive_entity_data_fields(input: DeriveInput) -> TokenStream {
                             pub const #field_name : Field<#struct_name, #field_type> =
                                 Field::new(stringify!(#field_name), |t| &t.#field_name, |t| &mut t.#field_name, |t,v| { t.#field_name = v; });
                         }
-                    }).collect()
+                    }).collect();
+
+                    let visit_all_tokens = fields.named.iter()
+                        .filter(|f| if let Visibility::Public(_) = f.vis { true } else { false })
+                        .map(|f| {
+                            let field_name = &f.ident;
+
+                            quote! {
+                                if let Some(res) = visitor.visit(& #struct_name::#field_name, arg) { return Some(res) }
+                            }
+                        }).collect();
+
+                    let visit_by_name_tokens = fields.named.iter()
+                        .filter(|f| if let Visibility::Public(_) = f.vis { true } else { false })
+                        .map(|f| {
+                            let field_name = &f.ident;
+
+                            quote! {
+                                stringify!(#field_name) => visitor.visit(& #struct_name::#field_name, arg),
+                            }
+                        }).collect();
+
+                    (exec_tokens, visit_all_tokens, visit_by_name_tokens)
                 },
-                _ => vec![quote! {}]
+                _ => (vec![quote! {}], vec![quote!{}], vec![quote!{}])
             }
         },
         _ => {
@@ -67,7 +94,7 @@ fn internal_derive_entity_data_fields(input: DeriveInput) -> TokenStream {
     };
 
 
-    let raw = quote! {
+    let raw_a = quote! {
         impl #struct_name {
             #(
                 #exec_tokens
@@ -75,5 +102,28 @@ fn internal_derive_entity_data_fields(input: DeriveInput) -> TokenStream {
         }
     };
 
-    raw
+    let raw_b = quote! {
+        impl VisitableFields for #struct_name {
+            fn visit_field_named<U, A, V : FieldVisitor<Self, U, A>>(name : &str, visitor : V, arg: &mut A) -> Option<U> {
+                match name {
+                    #(
+                        #visit_by_name_tokens
+                    )*
+                    _ => None
+                }
+            }
+
+            fn visit_all_fields<U, A, V : FieldVisitor<Self, U, A>>(visitor : V, arg : &mut A) -> Option<U> {
+                #(
+                    #visit_all_tokens
+                )*
+                None
+            }
+        }
+    };
+
+    quote! {
+        #raw_a
+        #raw_b
+    }
 }

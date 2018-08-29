@@ -12,6 +12,7 @@
 #![feature(type_ascription)]
 #![feature(nll)]
 #![feature(vec_remove_item)]
+#![feature(specialization)]
 
 extern crate arx_common as common;
 extern crate either;

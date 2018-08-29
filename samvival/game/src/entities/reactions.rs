@@ -11,7 +11,15 @@ use entities::CharacterData;
 use entities::CombatData;
 use entities::ModifierTrackingData;
 
+
 pub enum EventTrigger {}
+
+//pub enum ReactionTypeRef {
+//    Counterattack,
+//    Dodge,
+//    Block,
+//    Defend
+//}
 
 #[derive(Clone)]
 pub struct ReactionType {
@@ -26,6 +34,8 @@ pub struct ReactionType {
     pub costs: Str,
     pub on_event: fn(&mut World, Entity, &GameEventWrapper<GameEvent>),
 }
+
+
 
 impl Default for ReactionType {
     fn default() -> Self {

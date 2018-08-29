@@ -27,10 +27,11 @@ use game::logic;
 use game::logic::movement;
 use game::Entity;
 use game::world_util::*;
-use game::ConstantModifier;
+//use game::ConstantModifier;
 use game::entities::modifiers::*;
 use game::logic::visibility::VisibilityComputor;
 use game;
+use game::entities::CharacterData;
 use gui;
 
 use game::logic::combat::*;
@@ -64,6 +65,7 @@ use gui::Key;
 use game::logic::faction::is_enemy;
 use std::collections::HashSet;
 use gui::state::GameState;
+use game::entities::time::TurnData;
 
 #[derive(PartialOrd, PartialEq, Copy, Clone)]
 pub struct Cost(pub R32);
@@ -310,7 +312,7 @@ impl TacticalMode {
 
         for (faction, faction_data) in world_view.entities_with_data::<FactionData>() {
             if faction != &self.player_faction {
-                SetActiveFactionMod(*faction).apply_to_world(world);
+                world.modify_world(TurnData::active_faction.set_to(*faction), None);
                 world.end_event(GameEvent::FactionTurn { turn_number : current_turn, faction : prev_faction });
                 world.start_event(GameEvent::FactionTurn { turn_number : current_turn, faction : *faction });
 
@@ -329,26 +331,27 @@ impl TacticalMode {
         }
 
         // recompute the character set, some may have been created, hypothetically
-        let character_refs = world_view.entities_with_data::<CharacterData>().keys();
+        let character_refs = world_view.entities_with_data::<CharacterData>();
 
-        for cref in character_refs.clone() {
+        for (cref, cdat) in character_refs {
             world.modify(*cref, MovementData::moves.set_to(Sext::of(0)), None);
-            modify(world, *cref, ResetCharacterTurnMod);
+            world.modify(*cref, CharacterData::action_points.reset(), None);
+            world.modify(*cref, CharacterData::stamina.recover_by(cdat.stamina_recovery), None);
         }
 
         let turn_number = current_turn + 1;
-        SetTurnNumberMod(turn_number).apply_to_world(world);
+        world.modify_world(TurnData::turn_number.set_to(turn_number), None);
 
         world.add_event(GameEvent::TurnStart { turn_number });
 
         // back to the player's turn
-        SetActiveFactionMod(self.player_faction).apply_to_world(world);
+        world.modify_world(TurnData::active_faction.set_to(self.player_faction), None);
         world.end_event(GameEvent::FactionTurn { turn_number : current_turn, faction : prev_faction });
         world.start_event(GameEvent::FactionTurn { turn_number : current_turn, faction : self.player_faction });
 
         let mut living_enemy = false;
         let mut living_ally = false;
-        for cref in character_refs.clone() {
+        for cref in character_refs.keys() {
             let char_data = world_view.data::<CharacterData>(*cref);
             if char_data.is_alive() {
                 let allegiance = world_view.data::<AllegianceData>(*cref);

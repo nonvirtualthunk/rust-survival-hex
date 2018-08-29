@@ -2,11 +2,12 @@ use game::Entity;
 use game::entity::EntityData;
 use game::world::WorldView;
 use enum_map::EnumMap;
+use std::collections::HashMap;
 
 #[derive(Clone, Debug, Default, PrintFields)]
 pub struct SkillData {
-    pub skill_bonuses: EnumMap<Skill, u32>,
-    pub skill_xp : EnumMap<Skill, u32>
+    pub skill_bonuses: HashMap<Skill, i32>,
+    pub skill_xp : HashMap<Skill, i32>
 }
 impl EntityData for SkillData {}
 
@@ -21,20 +22,17 @@ impl SkillDataStore for WorldView {
 }
 
 impl SkillData {
-    pub fn skill_level(&self, skill : Skill) -> u32 {
-        self.skill_bonuses[skill] + Skill::level_for_xp(self.skill_xp[skill])
+    pub fn skill_level(&self, skill : Skill) -> i32 {
+        self.skill_bonuses.get(&skill).unwrap_or(&0) + Skill::level_for_xp(self.cur_skill_xp(skill))
     }
-    pub fn cur_skill_xp(&self, skill : Skill) -> u32 {
-        self.skill_xp[skill]
-    }
-    pub fn skill_xp_up(&mut self, skill : Skill, xp : u32) {
-        self.skill_xp[skill] = self.skill_xp[skill] + xp;
+    pub fn cur_skill_xp(&self, skill : Skill) -> i32 {
+        *self.skill_xp.get(&skill).unwrap_or(&0)
     }
 
-    pub fn skill_levels(&self) -> Vec<(Skill, u32)> {
+    pub fn skill_levels(&self) -> Vec<(Skill, i32)> {
         let mut res = Vec::new();
         for (skill,xp) in &self.skill_xp {
-            res.push((skill, self.skill_level(skill)));
+            res.push((*skill, self.skill_level(*skill)));
         }
         res
     }
@@ -44,7 +42,7 @@ impl SkillData {
 
 
 
-#[derive(Enum, Debug, Clone, Copy, PartialEq)]
+#[derive(Enum, Debug, Clone, PartialEq, Eq, Hash, Copy, Serialize, Deserialize)]
 pub enum Skill {
     Dodge = 0,
     Melee = 1,
@@ -56,12 +54,12 @@ pub enum Skill {
 }
 
 impl Skill {
-    pub fn xp_required_for_level(lvl : u32) -> u32 {
+    pub fn xp_required_for_level(lvl : i32) -> i32 {
         let lvl = (lvl + 1) as f64; // shift over by 1 so that getting to level 1 doesn't cost 0 xp
-        ((0.5 * lvl.powf(2.0) - 0.5 * lvl) * 10.0) as u32
+        ((0.5 * lvl.powf(2.0) - 0.5 * lvl) * 10.0) as i32
     }
 
-    pub fn level_for_xp(xp : u32) -> u32 {
+    pub fn level_for_xp(xp : i32) -> i32 {
         for i in 0 .. 100 {
             if Skill::xp_required_for_level(i) > xp {
                 return i - 1;

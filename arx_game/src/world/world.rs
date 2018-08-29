@@ -55,14 +55,14 @@ pub struct IndexApplication {
     index_func: Rc<Fn(&World, &mut WorldView)>
 }
 
-#[derive(Debug,Clone,Copy,PartialEq,Eq,Hash)]
+#[derive(Debug,Clone,Copy,PartialEq,Eq,Hash, Serialize, Deserialize)]
 pub enum ModifierReferenceType {
     Permanent,
     Dynamic,
     Archetype
 }
-#[derive(Debug, Clone)]
-pub struct ModifierReference(pub(crate) TypeId, pub(crate) ModifierReferenceType, pub(crate) usize);
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModifierReference(pub(crate) usize, pub(crate) ModifierReferenceType, pub(crate) usize);
 
 pub struct World {
     pub(crate) entities: Vec<EntityContainer>,
@@ -167,12 +167,14 @@ impl World {
             let ModifierReference(_, modifier_type, index) = modifier_ref;
             match modifier_type {
                 ModifierReferenceType::Dynamic => {
-                    all_modifiers.dynamic_modifiers.get_mut(index).expect("cannot disable a non-existent modifier").disabled_at = Some(world.next_time);
+                    panic!("Disabling dynamic modifiers not re-implemented yet");
+//                    all_modifiers.dynamic_modifiers.get_mut(index).expect("cannot disable a non-existent modifier").disabled_at = Some(world.next_time);
                 },
                 ModifierReferenceType::Permanent => {
-                    trace!("Disabling modifier with reference {:?} and marking disabled at to {:?}", modifier_ref, world.next_time);
-                    let modifier = all_modifiers.modifiers.get_mut(index).expect("cannot disable a non-existent modifier").disabled_at = Some(world.next_time);
-                    all_modifiers.modifiers_by_disabled_at.entry(world.next_time).or_insert_with(|| Vec::new()).push(index);
+                    panic!("Disabling permanent modifiers not re-implemented yet");
+//                    trace!("Disabling modifier with reference {:?} and marking disabled at to {:?}", modifier_ref, world.next_time);
+//                    let modifier = all_modifiers.modifiers.get_mut(index).expect("cannot disable a non-existent modifier").disabled_at = Some(world.next_time);
+//                    all_modifiers.modifiers_by_disabled_at.entry(world.next_time).or_insert_with(|| Vec::new()).push(index);
                 },
                 ModifierReferenceType::Archetype => { warn!("it makes no sense to attempt to disable a modifier archetype") }
             }
@@ -585,7 +587,7 @@ impl World {
             });
             all_modifiers.dynamic_entity_set.insert(entity);
             self.total_dynamic_modifier_count += 1;
-            ModifierReference(TypeId::of::<T>(), ModifierReferenceType::Dynamic, index)
+            ModifierReference(self.total_dynamic_modifier_count, ModifierReferenceType::Dynamic, index - 1)
         } else {
             let index = all_modifiers.modifiers.len();
             all_modifiers.modifiers.push(ModifierContainer {
@@ -598,13 +600,16 @@ impl World {
             });
             trace!("Creating modifier with count {}, incrementing", self.total_modifier_count);
             self.total_modifier_count += 1;
-            ModifierReference(TypeId::of::<T>(), ModifierReferenceType::Permanent, index)
+            ModifierReference(self.total_dynamic_modifier_count, ModifierReferenceType::Permanent, index - 1)
         }
     }
 
     pub fn disable_modifier(&mut self, modifier_ref: ModifierReference) {
-        let application_capabilities = self.modifier_application_by_type.get(&modifier_ref.0).expect("attempted to disable modifier of unregistered data type, should be impossible");
-        (application_capabilities.disable_func)(self, modifier_ref);
+        for disable_func in self.modifier_application_by_type.values().map(|c| c.disable_func).clone().collect_vec() {
+            (disable_func)(self, modifier_ref.clone());
+        }
+//        let application_capabilities = self.modifier_application_by_type.get(&modifier_ref.0).expect("attempted to disable modifier of unregistered data type, should be impossible");
+//        (application_capabilities.disable_func)(self, modifier_ref);
     }
 
     pub fn add_world_modifier<T: EntityData, S: Into<Option<Str>>>(&mut self, modifier: Box<Modifier<T>>, description: S) -> ModifierReference {
@@ -612,32 +617,32 @@ impl World {
         self.add_modifier::<T, Option<Str>>(tmp, modifier, description.into())
     }
 
-    pub fn add_constant_modifier<T: EntityData, CM: ConstantModifier<T> + 'static>(&mut self, entity: Entity, constant_modifier: CM) {
-        self.add_modifier(entity, box ConstantModifierWrapper { inner: constant_modifier, _ignored: PhantomData }, None);
-    }
-
-    pub fn add_limited_modifier<T: EntityData, CM: LimitedModifier<T> + 'static>(&mut self, entity: Entity, limited_modifier: CM) {
-        self.add_modifier(entity, box LimitedModifierWrapper { inner: limited_modifier, _ignored: PhantomData }, None);
-    }
-
-    pub fn add_dynamic_modifier<T: EntityData, CM: DynamicModifier<T> + 'static>(&mut self, entity: Entity, dynamic_modifier: CM) {
-        self.add_modifier(entity, box DynamicModifierWrapper { inner: dynamic_modifier, _ignored: PhantomData }, None);
-    }
-
-    pub fn add_constant_world_modifier<T: EntityData, CM: ConstantModifier<T> + 'static>(&mut self, constant_modifier: CM) {
-        let entity = self.self_entity;
-        self.add_modifier(entity, box ConstantModifierWrapper { inner: constant_modifier, _ignored: PhantomData }, None);
-    }
-
-    pub fn add_limited_world_modifier<T: EntityData, CM: LimitedModifier<T> + 'static>(&mut self, limited_modifier: CM) {
-        let entity = self.self_entity;
-        self.add_modifier(entity, box LimitedModifierWrapper { inner: limited_modifier, _ignored: PhantomData }, None);
-    }
-
-    pub fn add_dynamic_world_modifier<T: EntityData, CM: DynamicModifier<T> + 'static>(&mut self, dynamic_modifier: CM) {
-        let entity = self.self_entity;
-        self.add_modifier(entity, box DynamicModifierWrapper { inner: dynamic_modifier, _ignored: PhantomData }, None);
-    }
+//    pub fn add_constant_modifier<T: EntityData, CM: ConstantModifier<T> + 'static>(&mut self, entity: Entity, constant_modifier: CM) {
+//        self.add_modifier(entity, box ConstantModifierWrapper { inner: constant_modifier, _ignored: PhantomData }, None);
+//    }
+//
+//    pub fn add_limited_modifier<T: EntityData, CM: LimitedModifier<T> + 'static>(&mut self, entity: Entity, limited_modifier: CM) {
+//        self.add_modifier(entity, box LimitedModifierWrapper { inner: limited_modifier, _ignored: PhantomData }, None);
+//    }
+//
+//    pub fn add_dynamic_modifier<T: EntityData, CM: DynamicModifier<T> + 'static>(&mut self, entity: Entity, dynamic_modifier: CM) {
+//        self.add_modifier(entity, box DynamicModifierWrapper { inner: dynamic_modifier, _ignored: PhantomData }, None);
+//    }
+//
+//    pub fn add_constant_world_modifier<T: EntityData, CM: ConstantModifier<T> + 'static>(&mut self, constant_modifier: CM) {
+//        let entity = self.self_entity;
+//        self.add_modifier(entity, box ConstantModifierWrapper { inner: constant_modifier, _ignored: PhantomData }, None);
+//    }
+//
+//    pub fn add_limited_world_modifier<T: EntityData, CM: LimitedModifier<T> + 'static>(&mut self, limited_modifier: CM) {
+//        let entity = self.self_entity;
+//        self.add_modifier(entity, box LimitedModifierWrapper { inner: limited_modifier, _ignored: PhantomData }, None);
+//    }
+//
+//    pub fn add_dynamic_world_modifier<T: EntityData, CM: DynamicModifier<T> + 'static>(&mut self, dynamic_modifier: CM) {
+//        let entity = self.self_entity;
+//        self.add_modifier(entity, box DynamicModifierWrapper { inner: dynamic_modifier, _ignored: PhantomData }, None);
+//    }
 
     pub fn add_callback<E: GameEventType + 'static>(&mut self, event_callback: EventCallback<E>) {
         self.events.add_callback(event_callback);
@@ -676,6 +681,10 @@ impl World {
         if !self.has_data::<T>(entity) {
             self.attach_data::<T>(entity, T::default());
         }
+    }
+
+    pub fn ensure_world_data<T: EntityData>(&mut self) {
+        self.ensure_data::<T>(self.self_entity);
     }
 
     pub fn attach_data<T: EntityData>(&mut self, entity: Entity, data: T) {

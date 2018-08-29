@@ -197,15 +197,15 @@ pub fn handle_move(world : &mut World, mover : Entity, path : &[AxialCoord]) {
             let hex_ent = view.entity_by_key(&hex).expect("hex must exist");
             let hex_cost = view.tile(hex).move_cost;
             // how many ap must be changed to move points in order to enter the given hex
-            let ap_required = movement::hex_ap_cost(world.view(), mover, hex);
-            if ap_required as i32 <= view.character(mover).action_points.cur_value() {
+            let ap_required = movement::hex_ap_cost(world.view(), mover, hex) as i32;
+            if ap_required <= view.character(mover).action_points.cur_value() {
                 let moves_converted = view.character(mover).movement.move_speed * ap_required;
                 let net_moves_lost : Sext = hex_cost - moves_converted;
-                modify(world, mover, ReduceActionsMod(ap_required));
+                world.modify(mover, CharacterData::action_points.reduce_by(ap_required), None);
                 world.modify(mover, MovementData::moves.sub(net_moves_lost), None);
                 world.modify(mover, PositionData::hex.set_to(hex), None);
-                modify(world, prev_hex_ent, SetHexOccupantMod(None));
-                modify(world, hex_ent, SetHexOccupantMod(Some(mover)));
+                world.modify(prev_hex_ent, TileData::occupied_by.set_to(None), None);
+                world.modify(hex_ent, TileData::occupied_by.set_to(Some(mover)), None);
 
 //                modify(world, mover, SkillXPMod(Skill::ForestSurvival, 1));
                 // advance the event clock
@@ -224,7 +224,7 @@ pub fn place_entity_in_world(world: &mut World, character : Entity, pos : AxialC
     let view = world.view();
     if let Some(tile) = view.tile_ent_opt(pos) {
         if tile.occupied_by.is_none() {
-            modify(world, tile.entity, SetHexOccupantMod(Some(character)));
+            world.modify(tile.entity, TileData::occupied_by.set_to(Some(character)), None);
             world.modify(character, PositionData::hex.set_to(pos), "placement");
 
             world.add_event(GameEvent::EntityAppears { entity: character, at : pos });

@@ -237,7 +237,7 @@ impl Default for Attack {
     }
 }
 
-#[derive(Clone, PartialEq, Hash, Debug)]
+#[derive(Clone, PartialEq, Hash, Debug, Serialize, Deserialize)]
 pub struct AttackRef {
     pub attack_entity: Entity,
     derived_from: Entity

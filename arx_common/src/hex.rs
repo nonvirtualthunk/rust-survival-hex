@@ -23,7 +23,7 @@ pub fn axial_delta(n: usize) -> &'static AxialCoord {
     &AXIAL_DELTAS[n]
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Default)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Default, Serialize, Deserialize)]
 pub struct AxialCoord {
     pub q: i32,
     pub r: i32
@@ -34,7 +34,7 @@ impl fmt::Display for AxialCoord {
     }
 }
 
-#[derive(Copy,Clone,PartialEq,Debug,Add,Sub,Mul)]
+#[derive(Copy,Clone,PartialEq,Debug,Add,Sub,Mul, Serialize, Deserialize)]
 pub struct CartVec(pub Vec2f);
 impl Deref for CartVec {
     type Target = Vec2f;
@@ -171,7 +171,7 @@ impl PerfectHashable for AxialCoord {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct CubeCoord {
     pub x: i32,
     pub y: i32,

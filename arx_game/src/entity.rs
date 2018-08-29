@@ -9,12 +9,14 @@ use std::fmt::Error;
 use std::any::TypeId;
 use std::collections::HashMap;
 use world::view::WorldView;
+use common::reflect::Field;
+use serde;
 
 pub static ENTITY_ID_COUNTER: AtomicUsize = ATOMIC_USIZE_INIT;
 
 type EntityId = usize;
 
-#[derive(Clone, Copy, Debug, Ord, PartialOrd, PartialEq, Eq, Hash, Default)]
+#[derive(Clone, Copy, Debug, Ord, PartialOrd, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub struct Entity(pub EntityId);
 
 impl fmt::Display for Entity {
@@ -31,7 +33,24 @@ impl Entity {
     pub fn as_opt(&self) -> Option<Entity> { if self.is_sentinel() { None } else { Some(*self) }}
 }
 
-pub trait EntityData: Clone + Any + Default + Debug {
+
+pub trait FieldVisitor<E, U, A> {
+    fn visit<T : 'static + Clone + serde::Serialize>(&self, field: &'static Field<E,T>, arg : &mut A) -> Option<U>;
+}
+
+pub trait VisitableFields {
+    fn visit_field_named<U, A, V : FieldVisitor<Self, U, A>>(name : &str, visitor : V, arg: &mut A) -> Option<U> {
+        warn!("Default implementation of visit_field_named called");
+        None
+    }
+
+    fn visit_all_fields<U, A, V : FieldVisitor<Self, U, A>>(visitor : V, arg : &mut A) -> Option<U> {
+        warn!("default implementation of visit_all_fields called");
+        None
+    }
+}
+
+pub trait EntityData: Clone + Any + Default + Debug + VisitableFields {
     fn nested_entities(&self) -> Vec<Entity> {
         Vec::new()
     }
@@ -85,8 +104,9 @@ impl EntityBuilder {
 }
 
 
-#[derive(Clone,Debug,Default)]
+#[derive(Clone,Debug,Default,PrintFields)]
 pub struct DebugData {
     pub name : String
 }
+impl DebugData { pub const name : Field < DebugData , String > = Field :: new ( stringify ! ( name ) , | t | & t . name , | t | & mut t . name , | t , v | { t . name = v ; } ) ; } impl VisitableFields for DebugData { fn visit_field_named < U , A , V : FieldVisitor < Self , U , A >> ( name : & str , visitor : V , arg : & mut A ) -> Option < U > { match name { stringify ! ( name ) => visitor . visit ( & DebugData . name , arg ) , _ => None } } fn visit_all_fields < U , A , V : FieldVisitor < Self , U , A >> ( visitor : V , arg : & mut A ) -> Option < U > { if let Some ( res ) = visitor . visit ( & DebugData . name , arg ) { return Some ( res ) } None } }
 impl EntityData for DebugData {}

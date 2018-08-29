@@ -19,7 +19,7 @@ pub trait ReduceableType: ops::Sub<Output=Self> + ops::Add<Output=Self> + Copy +
 
 impl<T> ReduceableType for T where T: ops::Sub<Output=T> + ops::Add<Output=T> + Copy + Default + Into<f64> + PartialOrd<Self> {}
 
-#[derive(Clone, Default, Debug, PartialEq)]
+#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Reduceable<T: ReduceableType> {
     base_value: T,
     reduced_by: T,
@@ -232,7 +232,7 @@ impl Into<f64> for Oct {
 
 
 
-#[derive(Clone, Copy, Debug, Add, Sub, Div, AddAssign, SubAssign, MulAssign, PartialOrd, Ord, PartialEq, Eq, Hash, Default, Neg)]
+#[derive(Clone, Copy, Debug, Add, Sub, Div, AddAssign, SubAssign, MulAssign, PartialOrd, Ord, PartialEq, Eq, Hash, Default, Neg, Serialize, Deserialize)]
 pub struct Sext(i64);
 
 impl Sext {

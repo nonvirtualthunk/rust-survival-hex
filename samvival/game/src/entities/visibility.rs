@@ -12,7 +12,7 @@ pub struct VisibilityData {
 impl EntityData for VisibilityData {}
 
 
-#[derive(Debug,Clone,Default)]
+#[derive(Debug,Clone,Default, Serialize, Deserialize)]
 pub struct Visibility {
     pub visible_hexes : HashSet<AxialCoord>,
     pub revealed_hexes : HashSet<AxialCoord>,

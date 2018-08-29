@@ -10,6 +10,7 @@ use std::fmt::Error;
 use std::any::TypeId;
 use std::any::Any;
 use std::collections::VecDeque;
+use erased_serde;
 
 /// conceptually, we're breaking up modifiers into several broad types: permanent (movement, damage, temperature),
 /// limited (fixed duration spell, poison), and dynamic (+1 attacker per adjacent ally, -1 move at night). Permanent
@@ -48,92 +49,92 @@ pub enum ModifierType {
     Dynamic,
 }
 
-pub trait ConstantModifier<T: EntityData>: Sized + 'static {
-    fn modify(&self, data: &mut T);
+//pub trait ConstantModifier<T: EntityData>: Sized + 'static {
+//    fn modify(&self, data: &mut T);
+//
+//    fn apply_to(self, entity: Entity, world: &mut World) {
+//        world.add_constant_modifier(entity, self);
+//    }
+//    fn apply_to_world(self, world: &mut World) {
+//        world.add_constant_world_modifier(self);
+//    }
+//
+//    fn wrap(self) -> Box<Modifier<T>> {
+//        box ConstantModifierWrapper {
+//            inner: self,
+//            _ignored: PhantomData,
+//        }
+//    }
+//}
 
-    fn apply_to(self, entity: Entity, world: &mut World) {
-        world.add_constant_modifier(entity, self);
-    }
-    fn apply_to_world(self, world: &mut World) {
-        world.add_constant_world_modifier(self);
-    }
-
-    fn wrap(self) -> Box<Modifier<T>> {
-        box ConstantModifierWrapper {
-            inner: self,
-            _ignored: PhantomData,
-        }
-    }
-}
-
-pub(crate) struct ConstantModifierWrapper<T: EntityData, CM: ConstantModifier<T>> {
-    pub(crate) inner: CM,
-    pub(crate) _ignored: PhantomData<T>,
-}
-
-impl<T: EntityData, CM: ConstantModifier<T>> Modifier<T> for ConstantModifierWrapper<T, CM> {
-    fn modify(&self, data: &mut T, world: &WorldView) {
-        self.inner.modify(data);
-    }
-
-    fn is_active(&self, world: &WorldView) -> bool {
-        true
-    }
-
-    fn modifier_type(&self) -> ModifierType {
-        ModifierType::Permanent
-    }
-}
-
-pub trait LimitedModifier<T: EntityData>: Sized + 'static {
-    fn modify(&self, data: &mut T);
-
-    fn is_active(&self, world: &WorldView) -> bool;
-}
-
-pub(crate) struct LimitedModifierWrapper<T: EntityData, LM: LimitedModifier<T>> {
-    pub(crate) inner: LM,
-    pub(crate) _ignored: PhantomData<T>,
-}
-
-impl<T: EntityData, LM: LimitedModifier<T>> Modifier<T> for LimitedModifierWrapper<T, LM> {
-    fn modify(&self, data: &mut T, world: &WorldView) {
-        self.inner.modify(data);
-    }
-
-    fn is_active(&self, world: &WorldView) -> bool {
-        self.inner.is_active(world)
-    }
-
-    fn modifier_type(&self) -> ModifierType {
-        ModifierType::Limited
-    }
-}
-
-pub trait DynamicModifier<T: EntityData> {
-    fn modify(&self, data: &mut T, world: &WorldView);
-
-    fn is_active(&self, world: &WorldView) -> bool;
-}
-
-pub(crate) struct DynamicModifierWrapper<T: EntityData, DM: DynamicModifier<T>> {
-    pub(crate) inner: DM,
-    pub(crate) _ignored: PhantomData<T>,
-}
-
-impl<T: EntityData, LM: DynamicModifier<T>> Modifier<T> for DynamicModifierWrapper<T, LM> {
-    fn modify(&self, data: &mut T, world: &WorldView) {
-        self.inner.modify(data, world);
-    }
-
-    fn is_active(&self, world: &WorldView) -> bool {
-        self.inner.is_active(world)
-    }
-
-    fn modifier_type(&self) -> ModifierType {
-        ModifierType::Dynamic
-    }
-}
+//pub(crate) struct ConstantModifierWrapper<T: EntityData, CM: ConstantModifier<T>> {
+//    pub(crate) inner: CM,
+//    pub(crate) _ignored: PhantomData<T>,
+//}
+//
+//impl<T: EntityData, CM: ConstantModifier<T>> Modifier<T> for ConstantModifierWrapper<T, CM> {
+//    fn modify(&self, data: &mut T, world: &WorldView) {
+//        self.inner.modify(data);
+//    }
+//
+//    fn is_active(&self, world: &WorldView) -> bool {
+//        true
+//    }
+//
+//    fn modifier_type(&self) -> ModifierType {
+//        ModifierType::Permanent
+//    }
+//}
+//
+//pub trait LimitedModifier<T: EntityData>: Sized + 'static {
+//    fn modify(&self, data: &mut T);
+//
+//    fn is_active(&self, world: &WorldView) -> bool;
+//}
+//
+//pub(crate) struct LimitedModifierWrapper<T: EntityData, LM: LimitedModifier<T>> {
+//    pub(crate) inner: LM,
+//    pub(crate) _ignored: PhantomData<T>,
+//}
+//
+//impl<T: EntityData, LM: LimitedModifier<T>> Modifier<T> for LimitedModifierWrapper<T, LM> {
+//    fn modify(&self, data: &mut T, world: &WorldView) {
+//        self.inner.modify(data);
+//    }
+//
+//    fn is_active(&self, world: &WorldView) -> bool {
+//        self.inner.is_active(world)
+//    }
+//
+//    fn modifier_type(&self) -> ModifierType {
+//        ModifierType::Limited
+//    }
+//}
+//
+//pub trait DynamicModifier<T: EntityData> {
+//    fn modify(&self, data: &mut T, world: &WorldView);
+//
+//    fn is_active(&self, world: &WorldView) -> bool;
+//}
+//
+//pub(crate) struct DynamicModifierWrapper<T: EntityData, DM: DynamicModifier<T>> {
+//    pub(crate) inner: DM,
+//    pub(crate) _ignored: PhantomData<T>,
+//}
+//
+//impl<T: EntityData, LM: DynamicModifier<T>> Modifier<T> for DynamicModifierWrapper<T, LM> {
+//    fn modify(&self, data: &mut T, world: &WorldView) {
+//        self.inner.modify(data, world);
+//    }
+//
+//    fn is_active(&self, world: &WorldView) -> bool {
+//        self.inner.is_active(world)
+//    }
+//
+//    fn modifier_type(&self) -> ModifierType {
+//        ModifierType::Dynamic
+//    }
+//}
 
 pub enum Transformation {
     Add(Box<Any>),
@@ -143,10 +144,12 @@ pub enum Transformation {
     Reduce(Box<Any>),
     Recover(Box<Any>),
     SetKey(Box<Any>, Box<Any>),
+    AddToKey(Box<Any>, Box<Any>),
     RemoveKey(Box<Any>),
     Append(Box<Any>),
     Remove(Box<Any>),
     Custom(String),
+    Reset
 }
 
 //pub trait CloneToAny {
@@ -286,10 +289,12 @@ impl fmt::Display for Transformation {
             Transformation::Recover(a) => write!(f, "recovered {}", Transformation::as_string(a, false, false)),
             Transformation::Reduce(a) => write!(f, "reduced {}", Transformation::as_string(a, false, false)),
             Transformation::Custom(s) => write!(f, "{}", s),
-            Transformation::SetKey(_, v) => write!(f, "{}", Transformation::as_string(v, true, false)),
+            Transformation::SetKey(_, v) => write!(f, "{}", Transformation::as_string(v, false, false)),
+            Transformation::AddToKey(_, v) => write!(f, "{}", Transformation::as_string(v, true, false)),
             Transformation::RemoveKey(_) => write!(f, "removed"),
             Transformation::Append(a) => write!(f, "appended {}", Transformation::as_string(a, false, false)),
             Transformation::Remove(a) => write!(f, "removed {}", Transformation::as_string(a, false, false)),
+            Transformation::Reset => write!(f, "reset"),
         }
     }
 }
@@ -328,7 +333,7 @@ impl FieldModification {
     }
 }
 
-pub trait Modifier<T: EntityData> {
+pub trait Modifier<T: EntityData> : erased_serde::Serialize {
     fn modify(&self, data: &mut T, world: &WorldView);
 
     fn is_active(&self, world: &WorldView) -> bool;
@@ -339,6 +344,7 @@ pub trait Modifier<T: EntityData> {
         Vec::with_capacity(0)
     }
 }
+serialize_trait_object!(<T: EntityData> Modifier<T>);
 
 
 pub struct FieldLogs<T: EntityData> {

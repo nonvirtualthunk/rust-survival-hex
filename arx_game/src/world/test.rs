@@ -24,26 +24,34 @@ mod test {
     impl FooData { pub const a : Field < FooData , i32 > = Field :: new ( stringify ! ( a ) , | t | & t . a , | t | &mut t . a, | t , v | { t . a = v ; } ) ; pub const b : Field < FooData , Vec < f32 > > = Field :: new ( stringify ! ( b ) , | t | & t . b , | t | &mut t . b, | t , v | { t . b = v ; } ) ; }
     impl BarData { pub const x : Field < BarData , f32 > = Field :: new ( stringify ! ( x ) , | t | & t . x , | t | &mut t . x, | t , v | { t . x = v ; } ) ; }
 
+    impl FooData { } impl VisitableFields for FooData { fn visit_field_named < U , A , V : FieldVisitor < Self , U , A >> ( name : & str , visitor : V , arg : & mut A ) -> Option < U > { match name { _ => None } } fn visit_all_fields < U , A , V : FieldVisitor < Self , U , A >> ( visitor : V , arg : & mut A ) -> Option < U > { None } }
+    impl BarData { } impl VisitableFields for BarData { fn visit_field_named < U , A , V : FieldVisitor < Self , U , A >> ( name : & str , visitor : V , arg : & mut A ) -> Option < U > { match name { _ => None } } fn visit_all_fields < U , A , V : FieldVisitor < Self , U , A >> ( visitor : V , arg : & mut A ) -> Option < U > { None } }
 
     impl EntityData for FooData {}
 
     impl EntityData for BarData {}
 
+    #[derive(Serialize)]
     struct AddToAModifier {
         delta_a: i32
     }
 
-    impl ConstantModifier<FooData> for AddToAModifier {
-        fn modify(&self, data: &mut FooData) {
+    impl Modifier<FooData> for AddToAModifier {
+        fn modify(&self, data: &mut FooData, world: &WorldView) {
             data.a += self.delta_a;
         }
+
+        fn is_active(&self, world: &WorldView) -> bool { true }
+
+        fn modifier_type(&self) -> ModifierType { ModifierType::Permanent }
     }
 
+    #[derive(Serialize)]
     pub struct MultiplyByOtherEntityModifier {
         other_entity: Entity
     }
 
-    impl DynamicModifier<FooData> for MultiplyByOtherEntityModifier {
+    impl Modifier<FooData> for MultiplyByOtherEntityModifier {
         fn modify(&self, data: &mut FooData, world: &WorldView) {
 //            println!("Applying dynamic modifier: {:?}, {:?}", data.a , world.data::<FooData>(self.other_entity).a);
             data.a = data.a * world.data::<FooData>(self.other_entity).a;
@@ -52,26 +60,38 @@ mod test {
         fn is_active(&self, world: &WorldView) -> bool {
             true
         }
+
+        fn modifier_type(&self) -> ModifierType { ModifierType::Dynamic }
     }
 
+    #[derive(Serialize)]
     pub struct AddBarDataModifier {
         delta: f32
     }
 
-    impl ConstantModifier<BarData> for AddBarDataModifier {
-        fn modify(&self, data: &mut BarData) {
+    impl Modifier<BarData> for AddBarDataModifier {
+        fn modify(&self, data: &mut BarData, world: &WorldView) {
             data.x += self.delta;
         }
+
+        fn is_active(&self, world: &WorldView) -> bool { true }
+
+        fn modifier_type(&self) -> ModifierType { ModifierType::Permanent }
     }
 
     use spectral::prelude::*;
 
+    #[derive(Serialize)]
     pub struct AddFooBValueModifier {}
 
-    impl ConstantModifier<FooData> for AddFooBValueModifier {
-        fn modify(&self, data: &mut FooData) {
+    impl Modifier<FooData> for AddFooBValueModifier {
+        fn modify(&self, data: &mut FooData, world: &WorldView) {
             data.b.push(1.0);
         }
+
+        fn is_active(&self, world: &WorldView) -> bool { true }
+
+        fn modifier_type(&self) -> ModifierType { ModifierType::Permanent }
     }
 
     #[test]
@@ -103,7 +123,7 @@ mod test {
         assert_eq!(*test_data_1, initial_data);
         assert_eq!(test_data_1.a, 1);
 
-        world.add_constant_modifier(ent1, AddToAModifier { delta_a: 4 });
+        world.add_modifier(ent1, box AddToAModifier { delta_a: 4 }, None);
         world.add_event(CoreEvent::TimePassed);
 
         assert_eq!(test_data_1.a, 5);
@@ -112,12 +132,12 @@ mod test {
         assert_eq!(view.data::<FooData>(ent1).a, 5);
         assert_eq!(view.data::<FooData>(ent2).a, 4);
 
-        world.add_dynamic_modifier(ent1, MultiplyByOtherEntityModifier { other_entity: ent2 });
+        world.add_modifier(ent1, box MultiplyByOtherEntityModifier { other_entity: ent2 }, None);
         world.add_event(CoreEvent::TimePassed);
 
         assert_eq!(test_data_1.a, 20);
 
-        world.add_constant_modifier(ent2, AddToAModifier { delta_a: 1 });
+        world.add_modifier(ent2, box AddToAModifier { delta_a: 1 }, None);
         world.add_event(CoreEvent::TimePassed);
 
         assert_that!(&test_data_2.a).is_equal_to(5);
@@ -163,7 +183,7 @@ mod test {
         assert_that(&foo_data_1.a).is_equal_to(1);
         assert_that(&bar_data_1.x).is_equal_to(bar_data_2.x);
 
-        world.add_modifier(ent1, AddBarDataModifier { delta: 2.0 }.wrap(), "test");
+        world.add_modifier(ent1, box AddBarDataModifier { delta: 2.0 }, "test");
         world.add_event(CoreEvent::TimePassed);
 
         // show up in chronological order, first created first in list
@@ -174,12 +194,12 @@ mod test {
         assert_that(&bar_data_1.x).is_not_equal_to(bar_data_2.x);
         assert_that(&bar_data_1.x).is_equal_to(3.0);
 
-        world.add_dynamic_modifier(ent1, MultiplyByOtherEntityModifier { other_entity: ent2 });
+        world.add_modifier(ent1, box MultiplyByOtherEntityModifier { other_entity: ent2 }, None);
         world.add_event(CoreEvent::TimePassed);
 
         assert_that(&foo_data_1.a).is_equal_to(2);
 
-        world.add_constant_modifier(ent2, AddFooBValueModifier {});
+        world.add_modifier(ent2, box AddFooBValueModifier {}, None);
         world.add_event(CoreEvent::TimePassed);
 
         assert_that(&bar_data_1.x).is_equal_to(3.0);

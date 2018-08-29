@@ -27,6 +27,9 @@ extern crate itertools;
 #[macro_use] extern crate arx_macros;
 extern crate arx_game as game;
 extern crate noise;
+#[macro_use] extern crate erased_serde;
+#[macro_use] extern crate serde_derive;
+#[macro_use] extern crate serde;
 
 extern crate num;
 extern crate cgmath;

@@ -1,15 +1,15 @@
-use entities::modifiers::EquipItemMod;
-use entities::modifiers::ItemHeldByMod;
+//use entities::modifiers::EquipItemMod;
+//use entities::modifiers::ItemHeldByMod;
 use events::GameEvent;
 use game::prelude::*;
-use entities::modify;
+//use entities::modify;
 use entities::combat::CombatData;
 use entities::combat::AttackRef;
 use entities::PositionData;
 use entities::tile::*;
 use game::reflect::*;
 use entities::inventory::EquipmentData;
-use entities::modifiers::UnequipItemMod;
+//use entities::modifiers::UnequipItemMod;
 use entities::item::ItemData;
 use common::hex::*;
 use entities::inventory::InventoryData;
@@ -71,7 +71,7 @@ pub fn is_item_in_inventory_of(world: &WorldView, item : Entity, character : Ent
 
 pub fn unequip_item(world: &mut World, item : Entity, from_character : Entity, trigger_event : bool) {
     if is_item_equipped_by(world, item, from_character) {
-        modify(world, from_character, UnequipItemMod(item));
+        world.modify(from_character, EquipmentData::equipped.remove(item), None);
 
         let active_attack = world.view().data::<CombatData>(from_character).active_attack.attack_entity;
         let active_counter_attack = world.view().data::<CombatData>(from_character).active_counterattack.attack_entity;

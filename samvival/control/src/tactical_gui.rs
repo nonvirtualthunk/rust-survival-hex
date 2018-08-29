@@ -312,7 +312,8 @@ impl TacticalGui {
                     },
                     ControlEvents::ReactionSelected(reaction_type) => {
                         println!("Selected reaction type : {:?}", reaction_type);
-                        world.modify(selected, ActionData::active_reaction.set_to(reaction_type.clone()), "reaction selected");
+                        // SERIALIZATION PASS: creation a reaction type reference concept
+//                        world.modify(selected, ActionData::active_reaction.set_to(reaction_type.clone()), "reaction selected");
                         world.add_event(GameEvent::SelectedReactionChanged { entity : selected, reaction_type : reaction_type.clone() });
                     },
                     ControlEvents::ItemTransferRequested { item , from, to } => {

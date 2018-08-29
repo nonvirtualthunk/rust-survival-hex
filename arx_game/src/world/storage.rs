@@ -180,7 +180,7 @@ impl<T: EntityData> ModifiersContainer<T> {
 
     pub fn register_modifier_archetype(&mut self, modifier: Rc<Modifier<T>>) -> ModifierReference {
         self.modifier_archetypes.push(ModifierArchetypeContainer { modifier });
-        ModifierReference(TypeId::of::<T>(), ModifierReferenceType::Archetype, self.modifier_archetypes.len() - 1)
+        ModifierReference(0, ModifierReferenceType::Archetype, self.modifier_archetypes.len() - 1)
     }
 }
 
@@ -234,35 +234,30 @@ impl<T: Hash + Eq + Clone> EntityIndex<T> {
 
 #[cfg(test)]
 mod test {
-    use ron::ser;
-    use ron;
-    use erased_serde;
+    use serde;
 
-//    pub trait TestTrait: erased_serde::Serialize {
-//        fn moo(&self);
-//    }
-//
-//    #[derive(Serialize, Deserialize)]
-//    pub struct Foo {
-//        pub i: i32
-//    }
-//
-//    impl TestTrait for Foo {
-//        fn moo(&self) { println!("Foo with {}", self.i) }
-//    }
-//
-//    #[derive(Serialize, Deserialize, PrintFields)]
-    #[derive(Clone,Debug,Default,PrintFields)]
-    pub struct Bar {
-        pub f: f32,
-        pub b: i32,
+
+    struct Foo<T> {
+        t: T
     }
-//
-//    impl TestTrait for Bar {
-//        fn moo(&self) { println!("Bar with {}", self.f) }
+
+    pub trait MaybeDeserialize<U> {
+        fn deserialize<'de, S: serde::Deserializer<'de>>(&self, deserializer: S) -> Option<U>;
+    }
+
+    use std;
+
+//    impl<T> MaybeDeserialize<T> for Foo<T> where T: std::ops::Add<T> + std::fmt::Display + Clone {
+//        fn deserialize<'de, S: serde::Deserializer<'de>>(&self, deserializer: S) -> Option<T> {
+//            Some(self.t.clone())
+//        }
 //    }
-
-
+//
+//    impl<T, U> MaybeDeserialize<T> for U {
+//        default fn deserialize<'de, S: serde::Deserializer<'de>>(&self, deserializer: S) -> Option<T> {
+//            None
+//        }
+//    }
 
     use EntityData;
     use common::reflect::Field;
@@ -277,108 +272,305 @@ mod test {
     use std::fmt::Formatter;
     use std::fmt::Error;
     use serde::de::SeqAccess;
+    use reflect::FieldModifier;
+    use Modifier;
+    use reflect::FieldTransformation;
+    use std::ops;
+    use reflect::transformations;
+    use serde::de::Error as Serror;
+
+    pub trait DeserializeAddTransformation<'de, T> {
+        fn deserialize_add<V>(&self, seq : &mut V) -> Result<Box<FieldTransformation<T>>, V::Error> where V : SeqAccess<'de> ;
+    }
+    impl <'de, E:EntityData,T> DeserializeAddTransformation<'de, T> for Field<E,T> {
+        default fn deserialize_add<V>(&self, seq: & mut V) -> Result<Box<FieldTransformation<T>>, <V as SeqAccess<'de>>::Error> where V: SeqAccess<'de> {
+            Err(V::Error::custom("attempted to deserialize add for invalid field type"))
+        }
+    }
+    impl <'de, E : EntityData, T> DeserializeAddTransformation<'de, T> for Field<E, T> where  T: Clone + ops::Add<Output=T> + serde::Serialize + serde::Deserialize<'de> {
+        fn deserialize_add<V>(&self, seq : &mut V) -> Result<Box<FieldTransformation<T>>, V::Error> where V : SeqAccess<'de>   {
+            let add : transformations::Add<T> = seq.next_element()?.ok_or_else(||panic!("deserialize add transformation failed"))?;
+            Ok(box add)
+        }
+    }
+
+    pub trait DeserializeSetToTransformation<'de, T> {
+        fn deserialize_set_to<V>(&self, seq : &mut V) -> Result<Box<FieldTransformation<T>>, V::Error> where V : SeqAccess<'de> ;
+    }
+    impl <'de, E:EntityData,T> DeserializeSetToTransformation<'de, T> for Field<E,T> {
+        default fn deserialize_set_to<V>(&self, seq: & mut V) -> Result<Box<FieldTransformation<T>>, <V as SeqAccess<'de>>::Error> where V: SeqAccess<'de> {
+            Err(V::Error::custom("attempted to deserialize set_to for invalid field type"))
+        }
+    }
+    impl <'de, E : EntityData, T> DeserializeSetToTransformation<'de, T> for Field<E, T> where  T: Clone + serde::Serialize + serde::Deserialize<'de> {
+        fn deserialize_set_to<V>(&self, seq : &mut V) -> Result<Box<FieldTransformation<T>>, V::Error> where V : SeqAccess<'de>   {
+            let set_to : transformations::SetTo<T> = seq.next_element()?.ok_or_else(||panic!("deserialize set_to transformation failed"))?;
+            Ok(box set_to)
+        }
+    }
+
+    trait CanDeserializeToTransform<T> {
+        fn deserialize_to_transform<'de, V>(&self, seq : &mut V) -> Result<Box<FieldTransformation<T>>, V::Error> where V : SeqAccess<'de>;
+    }
+    impl <E: EntityData, T> CanDeserializeToTransform<T> for Field<E, T> {
+        fn deserialize_to_transform<'de, V>(&self, seq : &mut V) -> Result<Box<FieldTransformation<T>>, V::Error> where V : SeqAccess<'de>   {
+            let transform_name : String = seq.next_element()?.ok_or_else(||panic!("couldn't get transform name"))?;
+            match transform_name.as_str() {
+                "add" => self.deserialize_add(seq),
+                "set" => self.deserialize_set_to(seq),
+                _ => panic!("unsupported transform name")
+            }
+        }
+    }
+
+
+    #[derive(Clone, Default, PrintFields, Debug)]
+    pub struct Bar {
+        pub f: f32,
+        pub b: i32,
+    }
 
     impl Bar {
         pub const f: Field<Bar, f32> = Field::new(stringify!( f ), |t| &t.f, |t| &mut t.f, |t, v| { t.f = v; });
         pub const b: Field<Bar, i32> = Field::new(stringify!( b ), |t| &t.b, |t| &mut t.b, |t, v| { t.b = v; });
-
-//        pub fn visit_all_fields<T>
     }
-    impl EntityData for Bar {}
+    impl VisitableFields for Bar {
+        fn visit_field_named<U, A, V : FieldVisitor<Self, U, A>>(name : &str, visitor : V, arg: &mut A) -> Option<U> {
+            match name {
+                "f" => visitor.visit(&Bar::f, arg),
+                "b" => visitor.visit(&Bar::b, arg),
+                _ => None
+            }
+        }
+        fn visit_all_fields<U, A, V: FieldVisitor<Self, U, A>>(visitor: V, arg : &mut A) -> Option<U> {
+            if let Some(res) = visitor.visit(& Bar::f, arg) { return Some(res) }
+            if let Some(res) = visitor.visit(& Bar::b, arg) { return Some(res) }
 
-
-    pub trait ApplyField : erased_serde::Serialize {
-        fn print(&self, bar : &Bar);
-    }
-
-    use FieldTransformation;
-
-    pub struct FieldContainer<T : 'static + fmt::Debug + Serialize> {
-        pub field : &'static Field<Bar, T>,
-        pub transform : Box<FieldTransformation<T>>,
-    }
-
-    impl <T : 'static + fmt::Debug + Serialize> ApplyField for FieldContainer<T> {
-        fn print(&self, bar : &Bar) {
-            println!("Printing: {:?} -> {:?}", (self.field.getter)(bar), self.set_to)
+            None
         }
     }
 
-    impl <T : 'static + Serialize + fmt::Debug> Serialize for FieldContainer<T> {
-        fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> where
-            S: Serializer {
-            let mut state = serializer.serialize_tuple(3)?;
-            state.serialize_element(&self.field.name)?;
-            state.serialize_element(&self.transform.name())?;
-            state.serialize_element(&self.set_to)?;
-            state.end()
+
+
+    #[derive(Default)]
+    struct EFieldVisitor<E> { _phantom : std::marker::PhantomData<E> }
+    impl <'de, 'a, E : EntityData, V : SeqAccess<'de>> FieldVisitor<E, Result<Box<Modifier<E>>, V::Error>, V> for EFieldVisitor<E> {
+        fn visit<T: 'static + Clone + Serialize>(&self, field: &'static Field<E, T>, arg : &mut V) -> Option<Result<Box<Modifier<E>>, V::Error>> {
+            Some(field.deserialize_to_transform(arg).map(|tr| FieldModifier::new_modifier( field, tr )))
         }
     }
 
-    serialize_trait_object!(ApplyField);
+    #[derive(Default)]
+    struct FieldModifierVisitor<E> { _phantom : std::marker::PhantomData<E> }
+    impl <'de, E : EntityData> Visitor<'de> for FieldModifierVisitor<E> {
+        type Value = Box<Modifier<E>>;
+
+        fn expecting(&self, formatter: &mut Formatter) -> Result<(), Error> {
+            write!(formatter, "Something we can turn into a modifier")
+        }
+
+        fn visit_seq<V>(self, mut seq: V) -> Result<Box<Modifier<E>>, V::Error> where V: SeqAccess<'de> {
+            let field_name : String = seq.next_element()?.ok_or_else(||panic!("paniced too early"))?;
+
+            E::visit_field_named(field_name.as_str(), EFieldVisitor::<E>::default() , &mut seq).unwrap_or_else(|| Err(V::Error::custom("could not identify field")))
+        }
+    }
+
+    impl <'de, E : EntityData> Deserialize<'de> for Box<Modifier<E>> {
+        fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error> where
+            D: Deserializer<'de> {
+
+
+            deserializer.deserialize_tuple(3, FieldModifierVisitor::<E>::default() )
+        }
+    }
+
+    use ron;
+    use world::world::World;
+    use entity::FieldVisitor;
+    use entity::VisitableFields;
 
     #[derive(Serialize, Deserialize)]
+//    pub struct Container<E : EntityData> where Box<Modifier<E>> : Serialize {
     pub struct Container {
-//        pub test_values: Vec<Box<TestTrait>>
-        pub field_applications : Vec<Box<ApplyField>>
+//        pub modifiers: Vec<Box<Modifier<E>>>
+        pub modifiers: Vec<Box<Modifier<Bar>>>
     }
-
-    use serde::de;
-    impl <'de> Deserialize<'de> for Box<ApplyField> {
-        fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error> where D: Deserializer<'de> {
-            struct FieldContainerVisitor;
-            impl <'de> Visitor<'de> for FieldContainerVisitor {
-                type Value = Box<ApplyField>;
-
-                fn expecting(&self, formatter: &mut Formatter) -> Result<(), Error> {
-                    write!(formatter, "Something we can turn into a field container")
-                }
-
-                fn visit_seq<V>(self, mut seq: V) -> Result<Box<ApplyField>, V::Error> where V: SeqAccess<'de> {
-                    let field_name : String = seq.next_element()?.ok_or_else(||panic!("paniced too early"))?;
-                    let boxed_res : Box<ApplyField> = match field_name.as_str() {
-                        "f" => box FieldContainer { field : &Bar::f, set_to : seq.next_element()?.ok_or_else(||panic!("set_to could not be deserialized"))? },
-                        "b" => box FieldContainer { field : &Bar::b, set_to : seq.next_element()?.ok_or_else(||panic!("set_to could not be deserialized"))? },
-                        _ => panic!("invalid field")
-                    };
-                    Ok(boxed_res)
-                }
-            }
-            deserializer.deserialize_tuple(2, FieldContainerVisitor)
-        }
-    }
-
-
-    struct Tmp {
-        field_transformation_deserializers : Vec<fn(Box<erased_serde::Deserializer>) -> Option<Box<FieldTransformation<T>>>>
-    }
-
-
 
     #[test]
-    pub fn test_serialization() {
-//        use reflect::FieldModifier;
+    pub fn test_serialization_of_field_modifier_vec() {
+        use reflect::*;
 //
-        let pretty_config = ser::PrettyConfig {
+        let pretty_config = ron::ser::PrettyConfig {
             ..Default::default()
         };
 
-
-        let mut test_values: Vec<Box<ApplyField>> = Vec::new();
-        test_values.push(box FieldContainer { field : &Bar::f, set_to : 1.0 });
-        test_values.push(box FieldContainer { field : &Bar::b, set_to : 7 });
+        let mut test_values: Vec<Box<Modifier<Bar>>> = Vec::new();
+        test_values.push(Bar::f.set_to(3.0));
+        test_values.push(Bar::b.add(5));
 
         let value = Container {
-            field_applications : test_values
+            modifiers: test_values
         };
 
-        let serialized_str = ser::to_string_pretty(&value, pretty_config).expect("serialization failed");
+        let serialized_str = ron::ser::to_string_pretty(&value, pretty_config).expect("serialization failed");
         println!("Serialized======================\n{}", serialized_str);
-        let deserialized : Container = ron::de::from_str(&serialized_str).unwrap();
+//        let deserialized: Container<Bar> = ron::de::from_str(&serialized_str).unwrap();
+        let deserialized: Container = ron::de::from_str(&serialized_str).unwrap();
 
-        let bar = Bar { f : 0.0, b : -1 };
-        for wrapped in deserialized.field_applications {
-            wrapped.print(&bar);
+        let mut bar = Bar { f: 0.0, b: -1 };
+        let world = World::new();
+        for wrapped in deserialized.modifiers {
+            wrapped.modify(&mut bar, world.view());
         }
+        println!("Bar: {:?}", bar)
     }
+
+//    use ron::ser;
+//    use ron;
+//    use erased_serde;
+//
+////    pub trait TestTrait: erased_serde::Serialize {
+////        fn moo(&self);
+////    }
+////
+////    #[derive(Serialize, Deserialize)]
+////    pub struct Foo {
+////        pub i: i32
+////    }
+////
+////    impl TestTrait for Foo {
+////        fn moo(&self) { println!("Foo with {}", self.i) }
+////    }
+////
+////    #[derive(Serialize, Deserialize, PrintFields)]
+//    #[derive(Clone,Debug,Default,PrintFields)]
+//    pub struct Bar {
+//        pub f: f32,
+//        pub b: i32,
+//    }
+////
+////    impl TestTrait for Bar {
+////        fn moo(&self) { println!("Bar with {}", self.f) }
+////    }
+//
+//
+//
+//    use EntityData;
+//    use common::reflect::Field;
+//    use serde::Serializer;
+//    use std::fmt;
+//    use serde::Serialize;
+//    use serde::Deserialize;
+//    use serde::Deserializer;
+//    use serde::ser::SerializeStruct;
+//    use serde::ser::SerializeTuple;
+//    use serde::de::Visitor;
+//    use std::fmt::Formatter;
+//    use std::fmt::Error;
+//    use serde::de::SeqAccess;
+//
+//    impl Bar {
+//        pub const f: Field<Bar, f32> = Field::new(stringify!( f ), |t| &t.f, |t| &mut t.f, |t, v| { t.f = v; });
+//        pub const b: Field<Bar, i32> = Field::new(stringify!( b ), |t| &t.b, |t| &mut t.b, |t, v| { t.b = v; });
+//
+////        pub fn visit_all_fields<T>
+//    }
+//    impl EntityData for Bar {}
+//
+//
+//    pub trait ApplyField : erased_serde::Serialize {
+//        fn print(&self, bar : &Bar);
+//    }
+//
+//    use FieldTransformation;
+//
+//    pub struct FieldContainer<T : 'static + fmt::Debug + Serialize> {
+//        pub field : &'static Field<Bar, T>,
+//        pub transform : Box<FieldTransformation<T>>,
+//    }
+//
+//    impl <T : 'static + fmt::Debug + Serialize> ApplyField for FieldContainer<T> {
+//        fn print(&self, bar : &Bar) {
+//            println!("Printing: {:?} -> {:?}", (self.field.getter)(bar), self.set_to)
+//        }
+//    }
+//
+//    impl <T : 'static + Serialize + fmt::Debug> Serialize for FieldContainer<T> {
+//        fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> where
+//            S: Serializer {
+//            let mut state = serializer.serialize_tuple(3)?;
+//            state.serialize_element(&self.field.name)?;
+//            state.serialize_element(&self.transform.name())?;
+//            state.serialize_element(&self.set_to)?;
+//            state.end()
+//        }
+//    }
+//
+//    serialize_trait_object!(ApplyField);
+//
+//    #[derive(Serialize, Deserialize)]
+//    pub struct Container {
+////        pub test_values: Vec<Box<TestTrait>>
+//        pub field_applications : Vec<Box<ApplyField>>
+//    }
+//
+//    use serde::de;
+//    impl <'de> Deserialize<'de> for Box<ApplyField> {
+//        fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error> where D: Deserializer<'de> {
+//            struct FieldContainerVisitor;
+//            impl <'de> Visitor<'de> for FieldContainerVisitor {
+//                type Value = Box<ApplyField>;
+//
+//                fn expecting(&self, formatter: &mut Formatter) -> Result<(), Error> {
+//                    write!(formatter, "Something we can turn into a field container")
+//                }
+//
+//                fn visit_seq<V>(self, mut seq: V) -> Result<Box<ApplyField>, V::Error> where V: SeqAccess<'de> {
+//                    let field_name : String = seq.next_element()?.ok_or_else(||panic!("paniced too early"))?;
+//                    let boxed_res : Box<ApplyField> = match field_name.as_str() {
+//                        "f" => box FieldContainer { field : &Bar::f, set_to : seq.next_element()?.ok_or_else(||panic!("set_to could not be deserialized"))? },
+//                        "b" => box FieldContainer { field : &Bar::b, set_to : seq.next_element()?.ok_or_else(||panic!("set_to could not be deserialized"))? },
+//                        _ => panic!("invalid field")
+//                    };
+//                    Ok(boxed_res)
+//                }
+//            }
+//            deserializer.deserialize_tuple(2, FieldContainerVisitor)
+//        }
+//    }
+//
+//
+//    struct Tmp {
+//        field_transformation_deserializers : Vec<fn(Box<erased_serde::Deserializer>) -> Option<Box<FieldTransformation<T>>>>
+//    }
+//
+//
+//
+//    #[test]
+//    pub fn test_serialization() {
+////        use reflect::FieldModifier;
+////
+//        let pretty_config = ser::PrettyConfig {
+//            ..Default::default()
+//        };
+//
+//
+//        let mut test_values: Vec<Box<ApplyField>> = Vec::new();
+//        test_values.push(box FieldContainer { field : &Bar::f, set_to : 1.0 });
+//        test_values.push(box FieldContainer { field : &Bar::b, set_to : 7 });
+//
+//        let value = Container {
+//            field_applications : test_values
+//        };
+//
+//        let serialized_str = ser::to_string_pretty(&value, pretty_config).expect("serialization failed");
+//        println!("Serialized======================\n{}", serialized_str);
+//        let deserialized : Container = ron::de::from_str(&serialized_str).unwrap();
+//
+//        let bar = Bar { f : 0.0, b : -1 };
+//        for wrapped in deserialized.field_applications {
+//            wrapped.print(&bar);
+//        }
+//    }
 }

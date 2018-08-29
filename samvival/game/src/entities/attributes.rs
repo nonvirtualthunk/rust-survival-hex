@@ -83,30 +83,30 @@ impl EntityData for AttributeData {}
 impl AttributeData {
     pub const attributes: Field<AttributeData, Vec<AttributeValue>> = Field::new(stringify!( attributes ), |t| &t.attributes, |t| &mut t.attributes, |t, v| { t.attributes = v; });
 
-    pub fn set_value(attr : &AttributeType, value : i32) -> Box<FieldModifier<AttributeData, Vec<AttributeValue>>> {
-        FieldModifier::permanent(&AttributeData::attributes, SetAttributeValue { attr : attr.clone(), value })
-    }
+//    pub fn set_value(attr : &AttributeType, value : i32) -> Box<FieldModifier<AttributeData, Vec<AttributeValue>>> {
+////        FieldModifier::permanent(&AttributeData::attributes, SetAttributeValue { attr : attr.clone(), value })
+//    }
 }
 
-struct SetAttributeValue {attr : AttributeType, value : i32}
-impl FieldTransformation<Vec<AttributeValue>> for SetAttributeValue {
-    fn apply(&self, current: &mut Vec<AttributeValue>) {
-        AttributeData::set_value_for_intern(current, &self.attr, self.value)
-    }
-
-    fn description(&self) -> Transformation {
-        Transformation::Custom(format!("Set {} to {}", self.attr.name, self.value))
-    }
-}
-
-
-struct AddAttributeValue {attr : AttributeType, value : i32}
-impl FieldTransformation<Vec<AttributeValue>> for AddAttributeValue {
-    fn apply(&self, current: &mut Vec<AttributeValue>) {
-        AttributeData::add_value_to_intern(current, &self.attr, self.value)
-    }
-
-    fn description(&self) -> Transformation {
-        Transformation::Custom(format!("Added {} to {}", self.value, self.attr.name))
-    }
-}
+//struct SetAttributeValue {attr : AttributeType, value : i32}
+//impl FieldTransformation<Vec<AttributeValue>> for SetAttributeValue {
+//    fn apply(&self, current: &mut Vec<AttributeValue>) {
+//        AttributeData::set_value_for_intern(current, &self.attr, self.value)
+//    }
+//
+//    fn description(&self) -> Transformation {
+//        Transformation::Custom(format!("Set {} to {}", self.attr.name, self.value))
+//    }
+//}
+//
+//
+//struct AddAttributeValue {attr : AttributeType, value : i32}
+//impl FieldTransformation<Vec<AttributeValue>> for AddAttributeValue {
+//    fn apply(&self, current: &mut Vec<AttributeValue>) {
+//        AttributeData::add_value_to_intern(current, &self.attr, self.value)
+//    }
+//
+//    fn description(&self) -> Transformation {
+//        Transformation::Custom(format!("Added {} to {}", self.value, self.attr.name))
+//    }
+//}

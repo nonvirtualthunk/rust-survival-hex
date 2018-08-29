@@ -27,6 +27,9 @@ itertools = "0.7.3"
 quote = "0.6"
 noise = "*"
 state = { version = "0.4", features = ["const_fn"] }
+erased-serde = "*"
+serde_derive = "*"
+serde = { version = "*", features = ["rc"] }
 
 [dependencies.arx_common]
 path = "../../arx_common"
