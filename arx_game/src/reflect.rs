@@ -123,9 +123,14 @@ pub trait ModifierCondition {
     fn is_active(&self, world: &WorldView) -> bool;
 }
 
+
+
 pub trait FieldTransformation<T> {
     fn apply(&self, current: &mut T);
     fn description(&self) -> Transformation;
+    fn name(&self) -> Str {
+        "default"
+    }
 }
 
 pub mod transformations {
@@ -135,38 +140,35 @@ pub mod transformations {
     use std::hash::BuildHasher;
 
     pub struct SetTo<T: Clone>(pub T);
-
     impl<T: Clone + 'static> FieldTransformation<T> for SetTo<T> {
         fn apply(&self, current: &mut T) { *current = self.0.clone() }
         fn description(&self) -> Transformation {
             let cloned = self.0.clone();
             Transformation::Set(box self.0.clone())
         }
+        fn name(&self) -> Str { "set" }
     }
 
     pub struct Add<T: Clone + ops::Add<Output=T>>(pub T);
-
     impl<T: Clone + ops::Add<Output=T> + 'static> FieldTransformation<T> for Add<T>  {
         fn apply(&self, current: &mut T) { *current = current.clone() + self.0.clone() }
         fn description(&self) -> Transformation { Transformation::Add(box self.0.clone()) }
+        fn name(&self) -> Str { "add" }
     }
 
     pub struct Sub<T: Clone + ops::Sub<Output=T>>(pub T);
-
     impl<T: Clone + ops::Sub<Output=T> + ops::Neg<Output=T> + 'static> FieldTransformation<T> for Sub<T>  {
         fn apply(&self, current: &mut T) { *current = current.clone() - self.0.clone() }
         fn description(&self) -> Transformation { Transformation::Add(box (-self.0.clone())) }
     }
 
     pub struct Mul<T: Clone + ops::Mul<Output=T>>(pub T);
-
     impl<T: Clone + ops::Mul<Output=T> + 'static> FieldTransformation<T> for Mul<T>  {
         fn apply(&self, current: &mut T) { *current = current.clone() * self.0.clone() }
         fn description(&self) -> Transformation { Transformation::Mul(box self.0.clone()) }
     }
 
     pub struct Div<T: Clone + ops::Div<Output=T> + 'static>(pub T);
-
     impl<T: Clone + ops::Div<Output=T>> FieldTransformation<T> for Div<T>  {
         fn apply(&self, current: &mut T) { *current = current.clone() / self.0.clone() }
         fn description(&self) -> Transformation { Transformation::Div(box self.0.clone()) }

@@ -6,6 +6,7 @@ use entities::reactions::ReactionType;
 use entities::combat::AttackType;
 use entities::combat::Attack;
 use entities::combat::StrikeResult;
+use std::collections::HashMap;
 
 
 #[derive(Clone, Debug)]
@@ -14,7 +15,7 @@ pub enum GameEvent {
     EntityAppears { entity: Entity, at : AxialCoord },
     DamageTaken { entity : Entity, damage_taken : u32, damage_types : Vec<DamageType> },
     EntityDied { entity : Entity },
-    Strike { attacker : Entity, defender : Entity, attack : Box<Attack>, strike_result : Box<StrikeResult> },
+    Strike { attacker : Entity, defenders: Vec<Entity>, attack : Box<Attack>, strike_results: HashMap<Entity, StrikeResult> },
     Attack { attacker : Entity, defender : Entity },
     Equip { character : Entity, item : Entity },
     Unequip { character : Entity, item : Entity },

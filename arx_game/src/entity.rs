@@ -27,6 +27,8 @@ impl Entity {
     pub fn sentinel() -> Entity {
         Entity(0)
     }
+    pub fn is_sentinel(&self) -> bool { self.0 == 0 }
+    pub fn as_opt(&self) -> Option<Entity> { if self.is_sentinel() { None } else { Some(*self) }}
 }
 
 pub trait EntityData: Clone + Any + Default + Debug {

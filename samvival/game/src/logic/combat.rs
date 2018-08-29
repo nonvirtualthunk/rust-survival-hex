@@ -56,12 +56,6 @@ impl AttackBreakdown {
     }
 }
 
-//
-//pub struct BreakdownComponent<T> {
-//    contribution : T,
-//    description : Str,
-//    details : Vec<String>
-//}
 #[derive(Default)]
 pub struct Breakdown<T: Default> {
     pub total: T,
@@ -88,9 +82,8 @@ impl<T: Default> Breakdown<T> where T: ops::Add<Output=T> + Copy + ToStringWithS
 }
 
 #[derive(Default)]
-pub struct StrikeBreakdown {
-    pub attack: Attack,
-    pub weapon: Entity,
+pub struct StrikeTargetBreakdown {
+    pub target : Entity,
     pub to_hit_components: Breakdown<i32>,
     pub to_miss_components: Breakdown<i32>,
     pub damage_bonus_components: Breakdown<i32>,
@@ -99,11 +92,9 @@ pub struct StrikeBreakdown {
     //    pub dice_count_components: Vec<(i32, Str)>,
 //    pub die_components: Vec<(i32, Str)>,
     pub damage_dice_components: Vec<(DicePool, Str)>,
-    pub ap_cost_components: Breakdown<i32>,
-    pub damage_types: Vec<DamageType>,
 }
 
-impl StrikeBreakdown {
+impl StrikeTargetBreakdown {
     pub fn to_hit_total(&self) -> i32 { self.to_hit_components.total }
     pub fn to_miss_total(&self) -> i32 { self.to_miss_components.total }
     pub fn damage_bonus_total(&self) -> i32 { self.damage_bonus_components.total }
@@ -115,11 +106,24 @@ impl StrikeBreakdown {
 //        DicePool::of(dice_count.as_u32_or_0(), die.as_u32_or_0())
         self.damage_dice_components.iter().map(|dd| dd.0)
     }
+}
+
+#[derive(Default)]
+pub struct StrikeBreakdown {
+    pub attack: Attack,
+    pub weapon: Entity,
+    pub ap_cost_components: Breakdown<i32>,
+    pub damage_types: Vec<DamageType>,
+    pub per_target_breakdowns : Vec<StrikeTargetBreakdown>,
+}
+
+impl StrikeBreakdown {
     pub fn ap_cost_total(&self) -> u32 {
         let cost: i32 = self.ap_cost_components.total;
         cost.as_u32_or_0()
     }
 }
+
 
 pub fn within_range(world_view: &WorldView, attacker: Entity, defender: Entity, attack: &Attack, from_position: Option<AxialCoord>, to_position: Option<AxialCoord>) -> bool {
     let from_position = from_position.unwrap_or_else(|| world_view.data::<PositionData>(attacker).hex);
@@ -157,17 +161,17 @@ pub fn possible_attack_locations_with_cost(world_view: &WorldView, hexes: HashMa
     hexes.into_iter().filter(|(k, v)| can_attack(world_view, attacker, defender, attack, Some(*k), Some(target_pos))).collect()
 }
 
-pub fn does_event_trigger_counterattack(world_view: &WorldView, counterer: Entity, event: &GameEventWrapper<GameEvent>) -> bool {
-    if let GameEvent::Strike { attacker, defender, ref strike_result, .. } = event.event {
-        if event.is_ended() && counterer == defender {
-            let combat_data = world_view.data::<CombatData>(defender);
-            if combat_data.counters_per_event as u8 > strike_result.strike_number && combat_data.counters_remaining.cur_value() > 0 {
-                return true;
-            }
-        }
-    }
-    false
-}
+//pub fn does_event_trigger_counterattack(world_view: &WorldView, counterer: Entity, event: &GameEventWrapper<GameEvent>) -> bool {
+//    if let GameEvent::Strike { attacker, defender, ref strike_result, .. } = event.event {
+//        if event.is_ended() && counterer == defender {
+//            let combat_data = world_view.data::<CombatData>(defender);
+//            if combat_data.counters_per_event as u8 > strike_result.strike_number && combat_data.counters_remaining.cur_value() > 0 {
+//                return true;
+//            }
+//        }
+//    }
+//    false
+//}
 
 
 pub fn closest_attack_location_with_cost(world_view: &WorldView, hexes : HashMap<AxialCoord,f64>, attacker: Entity, defender: Entity, attack: &Attack, nudge_towards: CartVec) -> Option<(AxialCoord, f64)> {
@@ -192,7 +196,11 @@ pub fn compute_attack_breakdown(world: &World, world_view: &WorldView, attacker:
 
     if let Some((attack, weapon)) = attack_ref.resolve_attack_and_weapon(world_view, attacker) {
         let attacker_data = world_view.character(attacker);
+        let targets = targets_for_attack(world_view, attacker, attack_ref, defender, attack_from);
 
+        let attack_from = attack_from.unwrap_or(attacker_data.position.hex);
+
+        let counter_targets = AttackTargets { hexes : vec![attack_from], characters : vec![attacker] };
         let mut attacker_strikes = max_strikes_remaining(world_view, attacker, &attack, ap_remaining);
 
         let (defender_counter_attack, defender_weapon, mut defender_counters) =
@@ -201,10 +209,10 @@ pub fn compute_attack_breakdown(world: &World, world_view: &WorldView, attacker:
         let mut attacker_turn = true;
         while attacker_strikes > 0 || defender_counters > 0 {
             if attacker_turn && attacker_strikes > 0 {
-                attack_breakdown.add_strike(compute_strike_breakdown(world, world_view, attacker, defender, &attack, weapon));
+                attack_breakdown.add_strike(compute_strike_breakdown(world, world_view, attacker, defender, &attack, weapon, &targets));
                 attacker_strikes -= 1;
             } else if !attacker_turn && defender_counters > 0 {
-                attack_breakdown.add_counter(compute_strike_breakdown(world, world_view, defender, attacker, &defender_counter_attack, defender_weapon));
+                attack_breakdown.add_counter(compute_strike_breakdown(world, world_view, defender, attacker, &defender_counter_attack, defender_weapon, &counter_targets));
                 defender_counters -= 1;
             }
             attacker_turn = !attacker_turn;
@@ -227,7 +235,7 @@ pub fn max_strikes_remaining(world_view: &WorldView, attacker: Entity, attack: &
     }
 }
 
-pub fn compute_strike_breakdown(world: &World, view: &WorldView, attacker_ref: Entity, defender_ref: Entity, attack: &Attack, weapon: Entity) -> StrikeBreakdown {
+pub fn compute_strike_breakdown(world: &World, view: &WorldView, attacker_ref: Entity, primary_defender_ref: Entity, attack: &Attack, weapon: Entity, targets : &AttackTargets) -> StrikeBreakdown {
     let mut ret = StrikeBreakdown::default();
 
     ret.attack = attack.clone();
@@ -243,39 +251,47 @@ pub fn compute_strike_breakdown(world: &World, view: &WorldView, attacker_ref: E
     let attacker_combat = view.combat(attacker_ref);
     let attacker_combat_field_log = world.field_logs_for::<CombatData>(attacker_ref);
     let attacker_skills = view.skills(attacker_ref);
-    let defender = view.character(defender_ref);
-    let defender_combat = view.combat(defender_ref);
-    let defender_skills = view.skills(defender_ref);
 
-    let _attacker_tile: &TileData = view.tile(attacker.position.hex);
-    let defender_tile: &TileData = view.tile(defender.position.hex);
+    for defender_ref in &targets.characters {
+        let defender_ref = *defender_ref;
+        let mut target_breakdown = StrikeTargetBreakdown::default();
+        target_breakdown.target = defender_ref;
 
-    match attack.attack_type {
-        AttackType::Melee | AttackType::Reach => {
-            ret.to_hit_components.add_field(attacker_combat.melee_accuracy_bonus, &attacker_combat_field_log, &CombatData::melee_accuracy_bonus, "melee accuracy");
+        let defender = view.character(defender_ref);
+        let defender_combat = view.combat(defender_ref);
+        let defender_skills = view.skills(defender_ref);
+
+        let _attacker_tile: &TileData = view.tile(attacker.position.hex);
+        let defender_tile: &TileData = view.tile(defender.position.hex);
+
+        match attack.attack_type {
+            AttackType::Melee | AttackType::Reach => {
+                target_breakdown.to_hit_components.add_field(attacker_combat.melee_accuracy_bonus, &attacker_combat_field_log, &CombatData::melee_accuracy_bonus, "melee accuracy");
+            }
+            AttackType::Projectile | AttackType::Thrown => {
+                target_breakdown.to_hit_components.add_field(attacker_combat.ranged_accuracy_bonus, &attacker_combat_field_log, &CombatData::ranged_accuracy_bonus, "ranged accuracy")
+            }
         }
-        AttackType::Projectile | AttackType::Thrown => {
-            ret.to_hit_components.add_field(attacker_combat.ranged_accuracy_bonus, &attacker_combat_field_log, &CombatData::ranged_accuracy_bonus, "ranged accuracy")
+        target_breakdown.to_miss_components.add(defender_combat.defense_bonus, "defense");
+        target_breakdown.to_miss_components.add(defender_combat.dodge_bonus, "dodge");
+        target_breakdown.to_miss_components.add(defender_combat.block_bonus, "block");
+
+        target_breakdown.to_hit_components.add(attack.to_hit_bonus, "weapon accuracy");
+
+        target_breakdown.to_miss_components.add(defender_tile.cover as i32, "terrain defense");
+
+    //    ret.dice_count_components.push((attack.damage_dice.count as i32, "weapon dice"));
+    //    ret.die_components.push((attack.damage_dice.die as i32, "weapon die size"));
+        target_breakdown.damage_dice_components.push((attack.damage_dice, "base weapon damage"));
+
+
+        match attack.range {
+            i if i <= 1 => target_breakdown.damage_bonus_components.add(attacker_combat.melee_damage_bonus, "base melee damage bonus"),
+            _ => target_breakdown.damage_bonus_components.add(attacker_combat.ranged_damage_bonus, "base ranged damage bonus")
         }
+        target_breakdown.damage_bonus_components.add(attack.damage_bonus, "weapon damage bonus");
+        ret.per_target_breakdowns.push(target_breakdown);
     }
-    ret.to_miss_components.add(defender_combat.defense_bonus, "defense");
-    ret.to_miss_components.add(defender_combat.dodge_bonus, "dodge");
-    ret.to_miss_components.add(defender_combat.block_bonus, "block");
-
-    ret.to_hit_components.add(attack.to_hit_bonus, "weapon accuracy");
-
-    ret.to_miss_components.add(defender_tile.cover as i32, "terrain defense");
-
-//    ret.dice_count_components.push((attack.damage_dice.count as i32, "weapon dice"));
-//    ret.die_components.push((attack.damage_dice.die as i32, "weapon die size"));
-    ret.damage_dice_components.push((attack.damage_dice, "base weapon damage"));
-
-
-    match attack.range {
-        i if i <= 1 => ret.damage_bonus_components.add(attacker_combat.melee_damage_bonus, "base melee damage bonus"),
-        _ => ret.damage_bonus_components.add(attacker_combat.ranged_damage_bonus, "base ranged damage bonus")
-    }
-    ret.damage_bonus_components.add(attack.damage_bonus, "weapon damage bonus");
 
     ret
 }
@@ -333,9 +349,8 @@ Okay, if we start from basis of 3d6 that gives us a normal-ish distribution betw
 Skills don't automatically give a curve, but specific levels give discrete bumps.
 */
 
-pub fn handle_strike(world: &mut World, attacker_ref: Entity, defender_ref: Entity, strike: &StrikeBreakdown, strike_number: u8) {
-    let seed = world.random_seed(13);
-    let mut rng: StdRng = SeedableRng::from_seed(seed);
+pub fn handle_strike(world: &mut World, attacker_ref: Entity, primary_defender: Entity, strike: &StrikeBreakdown, strike_number: u8) {
+    let mut rng = world.random(13);
 
     let view = world.view();
 
@@ -345,84 +360,78 @@ pub fn handle_strike(world: &mut World, attacker_ref: Entity, defender_ref: Enti
     let attacker = view.character(attacker_ref);
     let attacker_combat = view.combat(attacker_ref);
     let attacker_skills = view.skills(attacker_ref);
-    let defender = view.character(defender_ref);
-    let defender_combat = view.combat(defender_ref);
-    let defender_skills = view.skills(defender_ref);
-
-    if !attacker.is_alive() || !defender.is_alive() {
-        return;
-    }
 
     // reduce the actions available to the attacker by the cost of the attack, regardless of how the attack goes
     world.add_modifier(attacker_ref, CharacterData::action_points.reduce_by(strike.ap_cost_total() as i32), "attack");
 
-    let to_miss_total = strike.to_miss_total();
-    let to_hit_total = strike.to_hit_total();
 
-    // base number needed to be hit with no modifiers one way or another. With a base value of 8, 85% of attacks will hit
-    // given no modifiers one way or another. We probably want to shift that a bit, and give a noticeable bump in the early
-    // levels of dodging/attacking such that unskilled commoners are pretty useless at attacking until they get a bit of experience
-    // 62.5% will have at least a 10, so it's still a decent chance to hit
-    let base_to_hit = 10;
+    let mut strike_results = HashMap::new();
 
-    let to_hit_modifiers = to_hit_total - to_miss_total;
+    for target_breakdown in &strike.per_target_breakdowns {
+        let defender_ref = target_breakdown.target;
+        let defender = view.character(defender_ref);
 
-    let dice = DicePool::of(3, 6);
-    let is_hit = dice.roll(&mut rng).total_result as i32 + to_hit_modifiers >= base_to_hit;
-    if is_hit {
-        let damage_dice = strike.damage_dice_total();
-        let damage_total: i32 = damage_dice.map(|dd| dd.roll(&mut rng).total_result as i32).sum::<i32>()
-            + strike.damage_bonus_total()
-            - strike.damage_absorption_total();
-        let damage_total: u32 = damage_total.as_u32_or_0();
+        if !attacker.is_alive() || !defender.is_alive() {
+            continue;
+        }
 
-        world.start_event(GameEvent::Strike {
-            attacker: attacker_ref,
-            defender: defender_ref,
-            attack: box attack.clone(),
-            strike_result: box StrikeResult {
+        let to_miss_total = target_breakdown.to_miss_total();
+        let to_hit_total = target_breakdown.to_hit_total();
+
+        // base number needed to be hit with no modifiers one way or another. With a base value of 8, 85% of attacks will hit
+        // given no modifiers one way or another. We probably want to shift that a bit, and give a noticeable bump in the early
+        // levels of dodging/attacking such that unskilled commoners are pretty useless at attacking until they get a bit of experience
+        // 62.5% will have at least a 10, so it's still a decent chance to hit
+        let base_to_hit = 10;
+
+        let to_hit_modifiers = to_hit_total - to_miss_total;
+
+        let dice = DicePool::of(3, 6);
+        let is_hit = dice.roll(&mut rng).total_result as i32 + to_hit_modifiers >= base_to_hit;
+        if is_hit {
+            let damage_dice = target_breakdown.damage_dice_total();
+            let damage_total: i32 = damage_dice.map(|dd| dd.roll(&mut rng).total_result as i32).sum::<i32>()
+                + target_breakdown.damage_bonus_total()
+                - target_breakdown.damage_absorption_total();
+            let damage_total: u32 = damage_total.as_u32_or_0();
+
+            strike_results.insert(defender_ref, StrikeResult {
                 damage_types: strike.damage_types.clone(),
                 damage_done: damage_total as i32,
                 hit: true,
-                killing_blow: false,
+                killing_blow: damage_total as i32 > defender.health.cur_value(),
                 strike_number,
                 weapon: if weapon == attacker_ref { None } else { Some(weapon) },
-            },
-        });
-
-        logic::character::apply_damage_to_character(world, defender_ref, damage_total, &strike.damage_types);
-        world.modify(attacker_ref, MovementData::moves.set_to(Sext::of(0)), None);
-
-        let killing_blow = !view.data::<CharacterData>(defender_ref).is_alive();
-
-        world.end_event(GameEvent::Strike {
-            attacker: attacker_ref,
-            defender: defender_ref,
-            attack: box attack.clone(),
-            strike_result: box StrikeResult {
-                damage_types: strike.damage_types.clone(),
-                damage_done: damage_total as i32,
-                hit: true,
-                killing_blow,
-                strike_number,
-                weapon: if weapon == attacker_ref { None } else { Some(weapon) },
-            },
-        });
-    } else {
-        world.add_event(GameEvent::Strike {
-            attacker: attacker_ref,
-            defender: defender_ref,
-            attack: box attack.clone(),
-            strike_result: box StrikeResult {
+            });
+        } else {
+            strike_results.insert(defender_ref, StrikeResult {
                 damage_types: Vec::new(),
                 damage_done: 0,
                 hit: false,
                 killing_blow: false,
                 strike_number,
                 weapon: if weapon == attacker_ref { None } else { Some(weapon) },
-            },
-        });
+            });
+        }
     }
+
+    let defenders = strike.per_target_breakdowns.map(|t| t.target);
+    let strike_event = GameEvent::Strike {
+        attacker : attacker_ref,
+        attack : box attack.clone(),
+        defenders,
+        strike_results : strike_results.clone(),
+    };
+    world.start_event(strike_event.clone());
+
+    for (target, strike_result) in &strike_results {
+        if strike_result.hit {
+            logic::character::apply_damage_to_character(world, *target, strike_result.damage_done as u32, &strike_result.damage_types);
+        }
+    }
+    world.modify(attacker_ref, MovementData::moves.set_to(Sext::of(0)), None);
+
+    world.end_event(strike_event);
 }
 
 pub fn accuracy_for_skill_level(level: u32) -> f64 {
@@ -619,7 +628,7 @@ impl AttackTargets {
     }
 }
 
-pub fn targets_for_attack(world: &WorldView, attacker: Entity, attack: AttackRef, originating_on: Entity, attack_from : Option<AxialCoord>) -> AttackTargets {
+pub fn targets_for_attack(world: &WorldView, attacker: Entity, attack: &AttackRef, originating_on: Entity, attack_from : Option<AxialCoord>) -> AttackTargets {
     let attack_from = attack_from.unwrap_or_else(|| world.data::<PositionData>(attacker).hex);
 
     let hex = if let Some(tile) = world.data_opt::<TileData>(originating_on) {

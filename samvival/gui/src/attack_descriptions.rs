@@ -210,22 +210,24 @@ impl AttackDetailsWidget {
         let attack_breakdown = combat::compute_attack_breakdown(world, view, attacker, defender, attack_ref, attacking_from, Some(ap_remaining));
 
         if let Some(strike) = attack_breakdown.strikes.first() {
-            self.for_all_widgets(|w| { w.set_showing(true); });
-            let components_to_str = |v: &Breakdown<i32>| {
-                v.components.iter().filter(|t| t.0 != "+0").map(|(bonus, description)| format!("{}  {}", bonus, description)).join("\n")
-            };
+            if let Some(strike_target) = strike.per_target_breakdowns.first() {
+                self.for_all_widgets(|w| { w.set_showing(true); });
+                let components_to_str = |v: &Breakdown<i32>| {
+                    v.components.iter().filter(|t| t.0 != "+0").map(|(bonus, description)| format!("{}  {}", bonus, description)).join("\n")
+                };
 
-            self.name.set_text(format!("{} x {}", strike.attack.name.capitalized(), attack_breakdown.strikes.len()));
-            self.to_hit.set_text(format!("{} to hit", (strike.to_hit_total() - strike.to_miss_total()).to_string_with_sign()));
-            let combined_dice_str = strike.damage_dice_total().map(|dd| dd.to_string()).join(" + ");
-            let net_damage_mod = strike.damage_bonus_total() - strike.damage_absorption_total();
-            let damage_type_str = strike.damage_types.iter().map(|dt| dt.to_string().to_lowercase()).join("/");
-            self.damage.set_text(format!("{} {} {} {}", combined_dice_str, net_damage_mod.sign_str(), net_damage_mod.abs(), damage_type_str));
-            self.to_hit_details.set_text(components_to_str(&strike.to_hit_components));
-            self.to_miss_details.set_text(components_to_str(&strike.to_miss_components));
-            self.damage_dice_details.set_text(strike.damage_dice_components.iter().map(|(dice, reason)| format!("{}  {}", dice, reason)).join("\n"));
-            self.damage_bonus_details.set_text(components_to_str(&strike.damage_bonus_components));
-            self.damage_absorption_details.set_text(components_to_str(&strike.damage_absorption_components));
+                self.name.set_text(format!("{} x {}", strike.attack.name.capitalized(), attack_breakdown.strikes.len()));
+                self.to_hit.set_text(format!("{} to hit", (strike_target.to_hit_total() - strike_target.to_miss_total()).to_string_with_sign()));
+                let combined_dice_str = strike_target.damage_dice_total().map(|dd| dd.to_string()).join(" + ");
+                let net_damage_mod = strike_target.damage_bonus_total() - strike_target.damage_absorption_total();
+                let damage_type_str = strike.damage_types.iter().map(|dt| dt.to_string().to_lowercase()).join("/");
+                self.damage.set_text(format!("{} {} {} {}", combined_dice_str, net_damage_mod.sign_str(), net_damage_mod.abs(), damage_type_str));
+                self.to_hit_details.set_text(components_to_str(&strike_target.to_hit_components));
+                self.to_miss_details.set_text(components_to_str(&strike_target.to_miss_components));
+                self.damage_dice_details.set_text(strike_target.damage_dice_components.iter().map(|(dice, reason)| format!("{}  {}", dice, reason)).join("\n"));
+                self.damage_bonus_details.set_text(components_to_str(&strike_target.damage_bonus_components));
+                self.damage_absorption_details.set_text(components_to_str(&strike_target.damage_absorption_components));
+            }
         } else {
             self.for_all_widgets(|w| { w.set_showing(false); });
             self.body.set_showing(true);

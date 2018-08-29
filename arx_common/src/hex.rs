@@ -59,6 +59,15 @@ impl CartVec {
             CartVec(v2(0.0,0.0))
         }
     }
+
+    pub fn magnitude_s(&self) -> f32 {
+        let magnitude_squared = self.0.x * self.0.x + self.0.y * self.0.y;
+        if magnitude_squared > 0.0 {
+            magnitude_squared.sqrt()
+        } else {
+            0.0
+        }
+    }
 }
 
 impl AxialCoord {

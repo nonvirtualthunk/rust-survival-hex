@@ -81,6 +81,10 @@ impl WorldView {
         self.has_overlay = false;
     }
 
+    pub fn world_data_opt<T: EntityData>(&self) -> Option<&T> {
+        self.data_opt::<T>(self.self_entity)
+    }
+
     pub fn world_data<T: EntityData>(&self) -> &T {
         self.data::<T>(self.self_entity)
     }
@@ -101,6 +105,9 @@ impl WorldView {
             .unwrap_or_else(|| panic!(format!("Index on {:?} not created", unsafe {std::intrinsics::type_name::<I>()})))
     }
 
+    pub fn has_world_data<T : EntityData>(&self) -> bool {
+        self.has_data::<T>(self.self_entity)
+    }
     pub fn has_data<T : EntityData>(&self, entity : Entity) -> bool {
         self.has_data_r::<T>(&entity)
     }

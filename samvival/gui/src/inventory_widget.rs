@@ -68,7 +68,7 @@ impl InventoryDisplay {
     }
 
     pub fn update(&mut self, gui: &mut GUI, world : &WorldView, main_inventories: Vec<InventoryDisplayData>, other_inventories: Vec<InventoryDisplayData>, control : &mut ControlContext) {
-
+        self.body.reapply(gui);
         if let Some(selected) = self.selected_item {
             if ! self.all_items().any(|item| item == &selected) {
                 self.selected_item = None;

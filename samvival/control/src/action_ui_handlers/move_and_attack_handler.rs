@@ -79,7 +79,7 @@ fn draw_attack_enemy_overlay(view: &WorldView, game_state: &GameState, attack_re
     };
 
     if let Some(attack_from) = attack_from {
-        let logic::combat::AttackTargets { hexes, characters } = logic::combat::targets_for_attack(view, selected, attack_ref, hovered_char, Some(attack_from));
+        let logic::combat::AttackTargets { hexes, characters } = logic::combat::targets_for_attack(view, selected, &attack_ref, hovered_char, Some(attack_from));
         let character_hexes = characters.map(|c| view.data::<PositionData>(*c).hex);
         for hex in hexes {
             let (img_base, color, char_hex) = if character_hexes.contains(&hex) {

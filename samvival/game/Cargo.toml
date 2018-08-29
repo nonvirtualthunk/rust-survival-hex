@@ -13,7 +13,7 @@ lazy_static = "*"
 image = "0.19.0"
 either = "*"
 enum-map = "*"
-rand = "*"
+rand = "0.4"
 noisy_float = "*"
 pathfinding = "*"
 anymap = "*"
@@ -26,6 +26,7 @@ num = "0.2.0"
 itertools = "0.7.3"
 quote = "0.6"
 noise = "*"
+state = { version = "0.4", features = ["const_fn"] }
 
 [dependencies.arx_common]
 path = "../../arx_common"

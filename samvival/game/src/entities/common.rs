@@ -177,6 +177,9 @@ fn intern_string(string : Str) -> Arc<str> {
     new_arc
 }
 
+pub fn taxon_vec<T : Into<Taxon>>(vec : Vec<T>) -> Vec<Taxon> {
+    vec.into_iter().map(|v| v.into()).collect_vec()
+}
 pub fn taxon(name : Str, parent : &'static Taxon) -> Taxon {
     Taxon::RuntimeTaxon { name : intern_string(name), parents : [Some(parent),None,None,None] }
 }
@@ -231,7 +234,9 @@ pub mod taxonomy {
     pub static TowerShield : Taxon = taxon("tower shield", &Shield);
 
 
-    pub static Creature : Taxon = root_taxon("creature");
+    pub static LivingThing : Taxon = root_taxon("living thing");
+
+    pub static Creature : Taxon = taxon("creature", &LivingThing);
 
     pub static Person : Taxon = taxon("person", &Creature);
     pub static Monster : Taxon = taxon("monster", &Creature);
@@ -269,6 +274,31 @@ pub mod taxonomy {
 
     pub static Movement : Taxon = taxon("movement", &Action);
 
+
+    pub static Plant : Taxon = taxon("plant", &LivingThing);
+    pub mod plants {
+        use super::*;
+        pub static Tree : Taxon = taxon("tree", &Plant);
+    }
+
+    pub static Resource : Taxon = taxon("resource", &Item);
+    pub static Material : Taxon = taxon("material", &Resource);
+
+    pub static Mineral : Taxon = taxon("mineral", &Resource);
+    pub static Metal : Taxon = taxon("metal", &Mineral);
+
+    pub mod resources {
+        use super::*;
+
+        pub static PlantResource: Taxon = taxon("plant resource", &Resource);
+
+        pub static Straw : Taxon = taxon2("straw", &PlantResource, &Material);
+        pub static Fruit : Taxon = taxon("fruit", &PlantResource);
+        pub static Wood : Taxon = taxon2("wood", &PlantResource, &Material);
+
+        pub static Stone : Taxon = taxon2("stone", &Mineral, &Material);
+        pub static Iron : Taxon = taxon2("iron", &Metal, &Material);
+    }
 
     lazy_static! {
         static ref CONST_TAXONS: Mutex<HashMap<Str, &'static Taxon>> = Mutex::new(HashMap::new());

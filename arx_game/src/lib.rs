@@ -28,6 +28,10 @@ extern crate pretty_env_logger;
 extern crate itertools;
 #[macro_use] extern crate arx_macros;
 extern crate backtrace;
+#[macro_use] extern crate erased_serde;
+#[macro_use] extern crate serde_derive;
+extern crate ron;
+#[macro_use] extern crate serde;
 
 extern crate num;
 

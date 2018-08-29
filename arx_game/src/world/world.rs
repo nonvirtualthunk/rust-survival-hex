@@ -55,8 +55,14 @@ pub struct IndexApplication {
     index_func: Rc<Fn(&World, &mut WorldView)>
 }
 
+#[derive(Debug,Clone,Copy,PartialEq,Eq,Hash)]
+pub enum ModifierReferenceType {
+    Permanent,
+    Dynamic,
+    Archetype
+}
 #[derive(Debug, Clone)]
-pub struct ModifierReference(TypeId, bool, usize);
+pub struct ModifierReference(pub(crate) TypeId, pub(crate) ModifierReferenceType, pub(crate) usize);
 
 pub struct World {
     pub(crate) entities: Vec<EntityContainer>,
@@ -158,13 +164,17 @@ impl World {
 
         let disable_func = |world: &mut World, modifier_ref: ModifierReference| {
             let all_modifiers: &mut ModifiersContainer<T> = world.modifiers.get_mut::<ModifiersContainer<T>>().unwrap();
-            let ModifierReference(_, dynamic, index) = modifier_ref;
-            if dynamic {
-                all_modifiers.dynamic_modifiers.get_mut(index).expect("cannot disable a non-existent modifier").disabled_at = Some(world.next_time);
-            } else {
-                trace!("Disabling modifier with reference {:?} and marking disabled at to {:?}", modifier_ref, world.next_time);
-                let modifier = all_modifiers.modifiers.get_mut(index).expect("cannot disable a non-existent modifier").disabled_at = Some(world.next_time);
-                all_modifiers.modifiers_by_disabled_at.entry(world.next_time).or_insert_with(|| Vec::new()).push(index);
+            let ModifierReference(_, modifier_type, index) = modifier_ref;
+            match modifier_type {
+                ModifierReferenceType::Dynamic => {
+                    all_modifiers.dynamic_modifiers.get_mut(index).expect("cannot disable a non-existent modifier").disabled_at = Some(world.next_time);
+                },
+                ModifierReferenceType::Permanent => {
+                    trace!("Disabling modifier with reference {:?} and marking disabled at to {:?}", modifier_ref, world.next_time);
+                    let modifier = all_modifiers.modifiers.get_mut(index).expect("cannot disable a non-existent modifier").disabled_at = Some(world.next_time);
+                    all_modifiers.modifiers_by_disabled_at.entry(world.next_time).or_insert_with(|| Vec::new()).push(index);
+                },
+                ModifierReferenceType::Archetype => { warn!("it makes no sense to attempt to disable a modifier archetype") }
             }
         };
 
@@ -566,7 +576,7 @@ impl World {
         if modifier.modifier_type() == ModifierType::Dynamic {
             let index = all_modifiers.dynamic_modifiers.len();
             all_modifiers.dynamic_modifiers.push(ModifierContainer {
-                modifier,
+                modifier : modifier.into(),
                 applied_at: self.next_time,
                 disabled_at: None,
                 modifier_index: self.total_dynamic_modifier_count,
@@ -575,11 +585,11 @@ impl World {
             });
             all_modifiers.dynamic_entity_set.insert(entity);
             self.total_dynamic_modifier_count += 1;
-            ModifierReference(TypeId::of::<T>(), true, index)
+            ModifierReference(TypeId::of::<T>(), ModifierReferenceType::Dynamic, index)
         } else {
             let index = all_modifiers.modifiers.len();
             all_modifiers.modifiers.push(ModifierContainer {
-                modifier,
+                modifier : modifier.into(),
                 applied_at: self.next_time,
                 disabled_at: None,
                 modifier_index: self.total_modifier_count,
@@ -588,7 +598,7 @@ impl World {
             });
             trace!("Creating modifier with count {}, incrementing", self.total_modifier_count);
             self.total_modifier_count += 1;
-            ModifierReference(TypeId::of::<T>(), false, index)
+            ModifierReference(TypeId::of::<T>(), ModifierReferenceType::Permanent, index)
         }
     }
 
@@ -688,19 +698,13 @@ impl World {
     }
 
 
-    pub fn random_seed(&self, extra: u8) -> [u8; 32] {
-        use std::mem;
-
-        let time_bytes: [u8; 8] = unsafe {
-            mem::transmute(self.next_time)
-        };
-
-        [time_bytes[0], time_bytes[1], time_bytes[2], time_bytes[3], time_bytes[4], time_bytes[5], time_bytes[6], time_bytes[7], 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, extra]
+    pub fn random_seed(&self, extra: usize) -> Vec<usize> {
+        vec![extra, self.next_time as usize]
     }
 
-    pub fn random(&self, extra: u8) -> StdRng {
+    pub fn random(&self, extra: usize) -> StdRng {
         let seed = self.random_seed(extra);
-        let rng: StdRng = SeedableRng::from_seed(seed);
+        let rng: StdRng = SeedableRng::from_seed(seed.as_slice());
         rng
     }
 

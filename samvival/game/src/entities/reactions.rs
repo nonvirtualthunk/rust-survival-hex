@@ -59,6 +59,26 @@ pub mod reaction_types {
     use entities::combat::AttackType;
     use entities::character::AllegianceData;
 
+    /// takes care of the boilerplate of turn based reaction
+    fn reaction_modifier_boilerplate(world : &mut World, ent : Entity, event : &GameEventWrapper<GameEvent>, modifier_key : Str) -> bool {
+        if let GameEvent::FactionTurn { faction, .. } = event.event {
+            let view = world.view();
+            let allegiance = view.data::<AllegianceData>(ent);
+
+            if faction == allegiance.faction {
+                let char_data = view.data::<CharacterData>(ent);
+                if event.is_starting() {
+                    if let Some(prev_modifier) = view.data::<ModifierTrackingData>(ent).modifiers_by_key.get(modifier_key) {
+                        world.disable_modifier(prev_modifier.clone());
+                        world.add_event(GameEvent::EffectEnded { entity : None });
+                    }
+                } else if event.is_ended() {
+                    return true;
+                }
+            }
+        }
+        false
+    }
 
     pub const Counterattack: ReactionType = ReactionType {
         icon: "ui/counterattack_icon",
@@ -71,28 +91,18 @@ pub mod reaction_types {
         costs: "1 stamina for every counter strike made",
         condition_description: "Must have a melee attack to use",
         condition_func: |view, ent| logic::combat::possible_attacks(view, ent).any_match(|a| a.attack_type == AttackType::Melee) && view.data::<CharacterData>(ent).stamina.cur_value() > Sext::of(0),
-        on_event: |world, ent, event| if let GameEvent::FactionTurn { faction, .. } = event.event {
+        on_event: |world, ent, event| if reaction_modifier_boilerplate(world, ent, event, "counter-reaction") {
             let view = world.view();
-            let allegiance = view.data::<AllegianceData>(ent);
-            let modifier_key = "counter-reaction";
-            if faction == allegiance.faction {
-                let char_data = view.data::<CharacterData>(ent);
-                if event.is_ended() {
-                    if char_data.stamina.cur_value() > Sext::of(0) {
-                        if let Some(counter_attack) = logic::combat::counter_attack_ref_to_use(view, ent) {
-                            if let Some(counter_attack) = counter_attack.resolve(view, ent) {
-                                let increase_counters_by = view.data::<CharacterData>(ent).action_points.max_value() / counter_attack.ap_cost as i32;
-                                let modifier = world.modify(ent, CombatData::counters_remaining.increase_by(increase_counters_by), "counterattack reaction");
+            let char_data = view.data::<CharacterData>(ent);
 
-                                world.modify(ent, ModifierTrackingData::modifiers_by_key.set_key_to(strf(modifier_key), modifier), None);
-                                world.add_event(GameEvent::ReactionEffectApplied { entity : ent });
-                            }
-                        }
-                    }
-                } else if event.is_starting() {
-                    if let Some(prev_modifier) = view.data::<ModifierTrackingData>(ent).modifiers_by_key.get(modifier_key) {
-                        world.disable_modifier(prev_modifier.clone());
-                        world.add_event(GameEvent::EffectEnded { entity : None });
+            if char_data.stamina.cur_value() > Sext::of(0) {
+                if let Some(counter_attack) = logic::combat::counter_attack_ref_to_use(view, ent) {
+                    if let Some(counter_attack) = counter_attack.resolve(view, ent) {
+                        let increase_counters_by = view.data::<CharacterData>(ent).action_points.max_value() / counter_attack.ap_cost as i32;
+                        let modifier = world.modify(ent, CombatData::counters_remaining.increase_by(increase_counters_by), "counterattack reaction");
+
+                        world.modify(ent, ModifierTrackingData::modifiers_by_key.set_key_to(strf("counter-reaction"), modifier), None);
+                        world.add_event(GameEvent::ReactionEffectApplied { entity : ent });
                     }
                 }
             }
@@ -108,26 +118,14 @@ pub mod reaction_types {
         costs: "1 stamina for every 2 strikes against you",
         condition_description: "none",
         condition_func: |view, ent| view.data::<CharacterData>(ent).stamina.cur_value() > Sext::of(0),
-        on_event: |world, ent, event| if let GameEvent::FactionTurn { faction, .. } = event.event {
-            let view = world.view();
-            let allegiance = view.data::<AllegianceData>(ent);
-            let modifier_key = "dodge-reaction";
-            if faction == allegiance.faction {
-                let char_data = view.data::<CharacterData>(ent);
-                if event.is_ended() {
-                    if char_data.stamina.cur_value() > Sext::of(0) {
-                        let increase_dodge_by = (world.view().data::<CombatData>(ent).dodge_bonus * 2).max(2);
-                        let modifier = world.modify(ent, CombatData::dodge_bonus.add(increase_dodge_by), "dodge reaction");
+        on_event: |world, ent, event| if reaction_modifier_boilerplate(world, ent, event, "dodge-reaction") {
+            let char_data = world.view().data::<CharacterData>(ent);
+            if char_data.stamina.cur_value() > Sext::of(0) {
+                let increase_dodge_by = (world.view().data::<CombatData>(ent).dodge_bonus * 2).max(2);
+                let modifier = world.modify(ent, CombatData::dodge_bonus.add(increase_dodge_by), "dodge reaction");
 
-                        world.modify(ent, ModifierTrackingData::modifiers_by_key.set_key_to(strf(modifier_key), modifier), None);
-                        world.add_event(GameEvent::ReactionEffectApplied { entity : ent });
-                    }
-                } else if event.is_starting() {
-                    if let Some(prev_modifier) = view.data::<ModifierTrackingData>(ent).modifiers_by_key.get(modifier_key) {
-                        world.disable_modifier(prev_modifier.clone());
-                        world.add_event(GameEvent::EffectEnded { entity : None });
-                    }
-                }
+                world.modify(ent, ModifierTrackingData::modifiers_by_key.set_key_to(strf("dodge-reaction"), modifier), None);
+                world.add_event(GameEvent::ReactionEffectApplied { entity : ent });
             }
         },
     };
@@ -155,27 +153,11 @@ pub mod reaction_types {
         costs: "none",
         condition_description: "none",
         condition_func: |view, ent| true,
-        on_event: |world, ent, event| if let Some(GameEvent::FactionTurn { faction, .. }) = event.if_ended() {
-            let view = world.view();
-            let allegiance = view.data::<AllegianceData>(ent);
-            if faction == &allegiance.faction {
-                let char_data = view.data::<CharacterData>(ent);
-                let modifier = world.modify(ent, CombatData::defense_bonus.add(1), "defense reaction");
-                world.modify(ent, ModifierTrackingData::modifiers_by_key.set_key_to(strf("defend-reaction"), modifier), None);
-                world.add_event(GameEvent::ReactionEffectApplied { entity : ent });
-                println!("end turn defense increase modifications applied");
-            }
-        } else if let Some(GameEvent::FactionTurn { faction, .. }) = event.if_ended() {
-            let view = world.view();
-            let allegiance = view.data::<AllegianceData>(ent);
-            if faction == &allegiance.faction {
-                let char_data = view.data::<CharacterData>(ent);
-                if let Some(prev_modifier) = view.data::<ModifierTrackingData>(ent).modifiers_by_key.get("defend-reaction") {
-                    world.disable_modifier(prev_modifier.clone());
-                    world.add_event(GameEvent::EffectEnded { entity : None });
-                    println!("end turn defense increase modifications removed");
-                }
-            }
-        },
+        on_event: |world, ent, event| if reaction_modifier_boilerplate(world, ent, event, "defend-reaction") {
+            let modifier = world.modify(ent, CombatData::defense_bonus.add(1), "defense reaction");
+            world.modify(ent, ModifierTrackingData::modifiers_by_key.set_key_to(strf("defend-reaction"), modifier), None);
+            world.add_event(GameEvent::ReactionEffectApplied { entity : ent });
+            println!("end turn defense increase modifications applied");
+        }
     };
 }
