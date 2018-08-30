@@ -5,8 +5,8 @@ use game::core::*;
 use std::ops::Deref;
 use common::prelude::*;
 use common::hex::*;
-use entities::common::Taxon;
-use prelude::*;
+use Taxon;
+use game::prelude::*;
 use common::string::IStr;
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize, PrintFields)]
@@ -119,13 +119,13 @@ pub struct Material {
 impl EntityData for Material {}
 
 
-use entities::taxonomy;
-use entities::taxon;
-use entities::taxon_vec;
+use taxonomy;
+use taxon;
+use taxon_vec;
 use std::collections::HashMap;
 use game::World;
 use game::EntityBuilder;
-use entities::common::IdentityData;
+use IdentityData;
 
 
 struct InitResourcesModifier {

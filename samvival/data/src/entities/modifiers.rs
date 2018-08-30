@@ -7,10 +7,10 @@ use game::core::*;
 //use game::modifiers::LimitedModifier;
 //use game::modifiers::DynamicModifier;
 //
-//use entities::*;
+//use *;
 //use game::world::World;
-//use entities::combat::CombatData;
-//use entities::combat::AttackRef;
+//use combat::CombatData;
+//use combat::AttackRef;
 //
 //
 //pub fn modify<T : EntityData, CM : ConstantModifier<T>>(world : &mut World, ent : Entity, modifier : CM) {

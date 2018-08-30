@@ -1,10 +1,10 @@
 [package]
-name = "samvival_entities"
+name = "samvival_data"
 version = "0.1.0"
 authors = ["Sam Bock <nonvirtualthunk@gmail.com>"]
 
 [lib]
-name = "samvival_entities"
+name = "samvival_data"
 
 [dependencies]
 find_folder = "*"

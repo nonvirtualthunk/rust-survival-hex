@@ -1,13 +1,13 @@
 use game::prelude::*;
 use common::prelude::*;
-use entities::item::*;
-use entities::combat::*;
+use data::entities::item::*;
+use data::entities::combat::*;
 use std::collections::HashMap;
-use entities::common::IdentityData;
-use entities::common::Taxon;
-use entities::common::taxon;
-use entities::common::taxonomy;
-use entities::common::taxonomy::attacks::*;
+use data::entities::IdentityData;
+use data::entities::Taxon;
+use data::entities::taxon;
+use data::entities::taxonomy;
+use data::entities::taxonomy::attacks::*;
 
 use archetypes::ArchetypeLibrary;
 

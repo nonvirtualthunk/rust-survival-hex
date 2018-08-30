@@ -5,7 +5,7 @@ use game::world::WorldView;
 //use game::modifiers::ConstantModifier;
 use common::reflect::*;
 use std::collections::HashMap;
-use prelude::*;
+use game::prelude::*;
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize, PrintFields)]
 pub struct TurnData {

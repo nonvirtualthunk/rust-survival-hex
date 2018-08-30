@@ -1,5 +1,5 @@
 use common::prelude::*;
-use prelude::*;
+use game::prelude::*;
 use anymap::AnyMap;
 use game::Modifier;
 use game::EntityData;

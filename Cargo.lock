@@ -1517,7 +1517,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "samvival_entities"
+name = "samvival_data"
 version = "0.1.0"
 dependencies = [
  "anymap 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1577,7 +1577,7 @@ dependencies = [
  "quote 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "ron 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "samvival_entities 0.1.0",
+ "samvival_data 0.1.0",
  "serde 1.0.69 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.69 (registry+https://github.com/rust-lang/crates.io-index)",
  "spectral 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",

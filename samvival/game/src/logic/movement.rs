@@ -1,11 +1,11 @@
 use common::flood_search;
 use common::hex::*;
 use game::core::Sext;
-use entities::*;
-use entities::Attack;
-use entities::Skill;
-use entities::modifiers::*;
-use game::events::*;
+use data::entities::*;
+use data::entities::Attack;
+use data::entities::Skill;
+use data::entities::modifiers::*;
+use data::events::*;
 use noisy_float;
 use noisy_float::prelude::*;
 use pathfinding::prelude::astar;
@@ -17,12 +17,12 @@ use game::Entity;
 use game::world::World;
 use game::world::WorldView;
 use logic::movement;
-use events::GameEvent;
+use data::events::GameEvent;
 use game::SettableField;
 use game::reflect::*;
 use std::collections::HashSet;
-use entities::movement::MovementData;
-use entities::movement::MovementTypeRef;
+use data::entities::movement::MovementData;
+use data::entities::movement::MovementTypeRef;
 use common::ExtendedCollection;
 
 
@@ -298,5 +298,22 @@ pub fn movement_types_available(world: &WorldView, mover : Entity) -> Vec<Moveme
     } else {
         warn!("attempted to get the movement types available for an entity with no movement data. This may be fine, but worth mentioning");
         Vec::new()
+    }
+}
+
+
+pub trait ResolveMovementType {
+    fn resolve<'a, 'b>(&'a self, world : &'b WorldView) -> Option<&'b MovementType>;
+}
+
+impl ResolveMovementType for MovementTypeRef {
+    fn resolve<'a, 'b>(&'a self, world : &'b WorldView) -> Option<&'b MovementType> {
+        // check that the mover still has access to this kind of movement
+        if movement::movement_types_available(world, self.mover).contains(self) {
+            // if they do, attempt to get the actual movement type data
+            world.data_opt::<MovementType>(self.movement)
+        } else {
+            None
+        }
     }
 }

@@ -11,7 +11,7 @@ use game::entities::StrikeResult;
 use game::entities::PositionData;
 use game::Entity;
 use game::entity::EntityData;
-use game::events::GameEvent;
+use game::GameEvent;
 use game::prelude::*;
 use game::world::WorldView;
 use graphics::animation::*;

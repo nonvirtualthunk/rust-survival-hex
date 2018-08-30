@@ -1,10 +1,11 @@
 use common::prelude::*;
-use prelude::*;
+use game::prelude::*;
 use game::EntityData;
 use std::hash::Hash;
 use std::hash::Hasher;
-use logic;
 use game::EntityBuilder;
+use entities::common_entities::IdentityData;
+use entities::taxonomy;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PrintFields)]
 pub struct MovementType {
@@ -56,18 +57,9 @@ pub fn create_walk_movement_type(world : &mut World) -> Entity {
 }
 
 #[derive(Clone,Copy,PartialEq,Eq,Hash,Debug,Serialize,Deserialize)]
-pub struct MovementTypeRef { movement : Entity, mover : Entity }
+pub struct MovementTypeRef { pub movement : Entity, pub mover : Entity }
 impl MovementTypeRef {
     pub fn of_movement_and_mover(movement : Entity, mover : Entity) -> MovementTypeRef { MovementTypeRef { movement, mover } }
-    pub fn resolve<'a, 'b>(&'a self, world : &'b WorldView) -> Option<&'b MovementType> {
-        // check that the mover still has access to this kind of movement
-        if logic::movement::movement_types_available(world, self.mover).contains(self) {
-            // if they do, attempt to get the actual movement type data
-            world.data_opt::<MovementType>(self.movement)
-        } else {
-            None
-        }
-    }
 }
 
 // --------------------------------------------------

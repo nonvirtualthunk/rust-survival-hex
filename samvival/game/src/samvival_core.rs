@@ -1,7 +1,7 @@
 use common::prelude::*;
 use game::prelude::*;
-use entities::*;
-use events::GameEvent;
+use data::entities::*;
+use data::events::GameEvent;
 
 
 pub fn create_world() -> World {

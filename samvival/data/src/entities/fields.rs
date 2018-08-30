@@ -1,16 +1,15 @@
-use entities::*;
+use *;
 use game::prelude::*;
 use enum_map::EnumMap;
 use common::reflect::*;
 use common::hex::*;
 use common::Color;
 use common::prelude::*;
-use entities::actions::*;
-use entities::reactions::*;
+use actions::*;
+use reactions::*;
 use game::ModifierReference;
 use std::collections::HashSet;
 use std::collections::HashMap;
-use logic::visibility::VisibilityComputor;
 
 impl GraphicsData { pub const graphical_position : Field < GraphicsData , Option < CartVec > > = Field :: new ( stringify ! ( graphical_position ) , | t | & t . graphical_position , | t | & mut t . graphical_position , | t , v | { t . graphical_position = v ; } ) ; pub const color : Field < GraphicsData , Color > = Field :: new ( stringify ! ( color ) , | t | & t . color , | t | & mut t . color , | t , v | { t . color = v ; } ) ; }
 impl CharacterData { pub const health : Field < CharacterData , Reduceable < i32 > > = Field :: new ( stringify ! ( health ) , | t | & t . health , | t | & mut t . health , | t , v | { t . health = v ; } ) ; pub const action_points : Field < CharacterData , Reduceable < i32 > > = Field :: new ( stringify ! ( action_points ) , | t | & t . action_points , | t | & mut t . action_points , | t , v | { t . action_points = v ; } ) ; pub const stamina : Field < CharacterData , Reduceable < Sext > > = Field :: new ( stringify ! ( stamina ) , | t | & t . stamina , | t | & mut t . stamina , | t , v | { t . stamina = v ; } ) ; pub const stamina_recovery : Field < CharacterData , Sext > = Field :: new ( stringify ! ( stamina_recovery ) , | t | & t . stamina_recovery , | t | & mut t . stamina_recovery , | t , v | { t . stamina_recovery = v ; } ) ; pub const sprite : Field < CharacterData , String > = Field :: new ( stringify ! ( sprite ) , | t | & t . sprite , | t | & mut t . sprite , | t , v | { t . sprite = v ; } ) ; pub const name : Field < CharacterData , String > = Field :: new ( stringify ! ( name ) , | t | & t . name , | t | & mut t . name , | t , v | { t . name = v ; } ) ; }
@@ -40,4 +39,3 @@ impl MonsterSpawnerData { pub const spawns : Field < MonsterSpawnerData , Vec < 
 impl VisibilityData { pub const visibility_by_faction : Field < VisibilityData , HashMap < Entity , Visibility > > = Field :: new ( stringify ! ( visibility_by_faction ) , | t | & t . visibility_by_faction , | t | & mut t . visibility_by_faction , | t , v | { t . visibility_by_faction = v ; } ) ; }
 impl MovementType { pub const name : Field < MovementType , String > = Field :: new ( stringify ! ( name ) , | t | & t . name , | t | & mut t . name , | t , v | { t . name = v ; } ) ; pub const move_multiplier : Field < MovementType , Sext > = Field :: new ( stringify ! ( move_multiplier ) , | t | & t . move_multiplier , | t | & mut t . move_multiplier , | t , v | { t . move_multiplier = v ; } ) ; pub const move_bonus : Field < MovementType , Sext > = Field :: new ( stringify ! ( move_bonus ) , | t | & t . move_bonus , | t | & mut t . move_bonus , | t , v | { t . move_bonus = v ; } ) ; pub const ap_activation_cost : Field < MovementType , i32 > = Field :: new ( stringify ! ( ap_activation_cost ) , | t | & t . ap_activation_cost , | t | & mut t . ap_activation_cost , | t , v | { t . ap_activation_cost = v ; } ) ; pub const stamina_cost : Field < MovementType , Sext > = Field :: new ( stringify ! ( stamina_cost ) , | t | & t . stamina_cost , | t | & mut t . stamina_cost , | t , v | { t . stamina_cost = v ; } ) ; }
 impl MovementData { pub const active_movement_type : Field < MovementData , Option < MovementTypeRef > > = Field :: new ( stringify ! ( active_movement_type ) , | t | & t . active_movement_type , | t | & mut t . active_movement_type , | t , v | { t . active_movement_type = v ; } ) ; pub const move_speed : Field < MovementData , Sext > = Field :: new ( stringify ! ( move_speed ) , | t | & t . move_speed , | t | & mut t . move_speed , | t , v | { t . move_speed = v ; } ) ; pub const moves : Field < MovementData , Sext > = Field :: new ( stringify ! ( moves ) , | t | & t . moves , | t | & mut t . moves , | t , v | { t . moves = v ; } ) ; pub const movement_types : Field < MovementData , Vec < Entity > > = Field :: new ( stringify ! ( movement_types ) , | t | & t . movement_types , | t | & mut t . movement_types , | t , v | { t . movement_types = v ; } ) ; }
-impl VisibilityComputor { }

@@ -4,16 +4,16 @@ use prelude::*;
 use common::hex::CubeCoord;
 use game::events::CoreEvent;
 
-use entities::Visibility;
-use entities::VisibilityData;
-use entities::character::CharacterData;
-use entities::common::*;
+use data::entities::Visibility;
+use data::entities::VisibilityData;
+use data::entities::character::CharacterData;
+use data::entities::common_entities::*;
 use game::EntityData;
-use entities::character::ObserverData;
-use entities::character::AllegianceData;
-use entities::time::TimeOfDay;
-use entities::faction::FactionData;
-use entities::tile::TileStore;
+use data::entities::character::ObserverData;
+use data::entities::character::AllegianceData;
+use data::entities::time::TimeOfDay;
+use data::entities::faction::FactionData;
+use data::entities::tile::TileStore;
 
 
 //pub struct

@@ -1,6 +1,6 @@
 use game::WorldView;
 use game::Entity;
-use entities::CharacterStore;
+use data::entities::CharacterStore;
 
 
 pub fn is_enemy(view : &WorldView, a : Entity, b : Entity) -> bool {

@@ -44,8 +44,8 @@ version = "0.1.0"
 path = "../../arx_macros"
 version = "0.1.0"
 
-[dependencies.samvival_entities]
-path = "../entities"
+[dependencies.samvival_data]
+path = "../data"
 version = "0.1.0"
 
 [dependencies.vecmath]

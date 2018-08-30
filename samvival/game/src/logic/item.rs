@@ -1,18 +1,18 @@
-//use entities::modifiers::EquipItemMod;
-//use entities::modifiers::ItemHeldByMod;
-use events::GameEvent;
+//use data::entities::modifiers::EquipItemMod;
+//use data::entities::modifiers::ItemHeldByMod;
+use data::events::GameEvent;
 use game::prelude::*;
-//use entities::modify;
-use entities::combat::CombatData;
-use entities::combat::AttackRef;
-use entities::PositionData;
-use entities::tile::*;
+//use data::entities::modify;
+use data::entities::combat::CombatData;
+use data::entities::combat::AttackRef;
+use data::entities::PositionData;
+use data::entities::tile::*;
 use game::reflect::*;
-use entities::inventory::EquipmentData;
-//use entities::modifiers::UnequipItemMod;
-use entities::item::ItemData;
+use data::entities::inventory::EquipmentData;
+//use data::entities::modifiers::UnequipItemMod;
+use data::entities::item::ItemData;
 use common::hex::*;
-use entities::inventory::InventoryData;
+use data::entities::inventory::InventoryData;
 
 pub fn put_item_in_inventory(world: &mut World, item : Entity, inventory : Entity) {
     world.modify(item, ItemData::in_inventory_of.set_to(Some(inventory)), None);

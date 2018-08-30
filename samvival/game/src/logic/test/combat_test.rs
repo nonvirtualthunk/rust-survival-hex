@@ -5,14 +5,14 @@ use archetypes::*;
 use logic::test::testbed::in_testbed;
 use spectral::prelude::*;
 use logic;
-use entities::combat::CombatData;
-use entities::item::ItemData;
-use entities::combat::AttackRef;
+use data::entities::combat::CombatData;
+use data::entities::item::ItemData;
+use data::entities::combat::AttackRef;
 use game::events::CoreEvent;
-use entities::combat::DerivedAttackData;
-use entities::selectors::EntitySelectors;
-use entities::taxonomy;
-use entities::combat::*;
+use data::entities::combat::DerivedAttackData;
+use data::entities::selectors::EntitySelectors;
+use data::entities::taxonomy;
+use data::entities::combat::*;
 
 
 #[test]

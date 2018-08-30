@@ -6,3 +6,4 @@ pub mod experience;
 pub mod character;
 pub mod visibility;
 pub mod test;
+pub mod selection;

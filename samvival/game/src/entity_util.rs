@@ -1,10 +1,10 @@
 use game::Entity;
 use game::world::WorldView;
-use entities::CharacterData;
-use entities::TileData;
+use data::entities::CharacterData;
+use data::entities::TileData;
 use common::AxialCoord;
 use common::prelude::*;
-use entities::*;
+use data::entities::*;
 use game::core::Sext;
 
 

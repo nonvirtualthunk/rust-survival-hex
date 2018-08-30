@@ -1,11 +1,11 @@
 pub use reflect::*;
-pub use events::GameEvent;
-pub use entities::character::CharacterData;
-pub use entities::character::CharacterStore;
-pub use entities::Taxon;
-pub use entities::taxonomy;
-pub use entities::taxon;
-pub use entities::IdentityData;
+pub use data::events::GameEvent;
+pub use data::entities::character::CharacterData;
+pub use data::entities::character::CharacterStore;
+pub use data::entities::Taxon;
+pub use data::entities::taxonomy;
+pub use data::entities::taxon;
+pub use data::entities::IdentityData;
 
 pub use game::prelude::*;
 pub use samvival_core::*;
@@ -27,3 +27,8 @@ impl LookupSignifier for WorldView {
         }
     }
 }
+
+
+pub use logic::selection::SelectorMatches;
+pub use logic::combat::ResolveableAttackRef;
+pub use logic::movement::ResolveMovementType;

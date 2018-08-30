@@ -1,11 +1,11 @@
 use game::prelude::*;
 use common::hex::*;
-use entities::combat::AttackRef;
-use entities::combat::DamageType;
-use entities::reactions::ReactionType;
-use entities::combat::AttackType;
-use entities::combat::Attack;
-use entities::combat::StrikeResult;
+use combat::AttackRef;
+use combat::DamageType;
+use reactions::ReactionType;
+use combat::AttackType;
+use combat::Attack;
+use combat::StrikeResult;
 use std::collections::HashMap;
 
 

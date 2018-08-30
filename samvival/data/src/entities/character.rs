@@ -8,10 +8,10 @@ use common::Color;
 use common::prelude::*;
 use std::ops::Deref;
 use noisy_float::types::R32;
-use entities::common::PositionData;
-use entities::common::ActionData;
-use entities::time::TimeOfDay;
-use entities::movement::MovementData;
+use PositionData;
+use ActionData;
+use TimeOfDay;
+use MovementData;
 use game::entity;
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize, PrintFields)]

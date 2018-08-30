@@ -1,7 +1,7 @@
 use common::prelude::*;
 use std::collections::HashSet;
 use std::collections::HashMap;
-use prelude::*;
+use game::prelude::*;
 use game::EntityData;
 
 #[derive(Debug,Clone,Default,Serialize, Deserialize, PrintFields)]

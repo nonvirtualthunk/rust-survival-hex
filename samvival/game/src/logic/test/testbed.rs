@@ -2,9 +2,9 @@ use common::prelude::*;
 use prelude::*;
 use terrain;
 use common::Color;
-use entities::faction::FactionData;
-use entities::time::TurnData;
-use entities::tile::TileData;
+use data::entities::faction::FactionData;
+use data::entities::time::TurnData;
+use data::entities::tile::TileData;
 use game::DebugData;
 
 

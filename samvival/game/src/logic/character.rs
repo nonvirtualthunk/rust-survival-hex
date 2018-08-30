@@ -1,6 +1,6 @@
 use prelude::*;
-use entities::character::CharacterData;
-use entities::combat::DamageType;
+use data::entities::character::CharacterData;
+use data::entities::combat::DamageType;
 
 use logic;
 

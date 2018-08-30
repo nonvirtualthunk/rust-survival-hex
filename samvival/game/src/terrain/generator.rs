@@ -1,8 +1,8 @@
 use common::prelude::*;
 use common::hex::*;
 use prelude::*;
-use entities::InventoryData;
-use entities::TileData;
+use data::entities::InventoryData;
+use data::entities::TileData;
 
 
 use noise::RidgedMulti;

@@ -1,9 +1,7 @@
 use common::prelude::*;
 use game::core::Progress;
-use entities::*;
-use entities::CharacterData;
-use entities::TileData;
-use entity_util::*;
+use CharacterData;
+use TileData;
 use game::Entity;
 use game::world::WorldView;
 use std::fmt::Debug;
@@ -11,7 +9,7 @@ use std::fmt::Formatter;
 use std::fmt::Error;
 use std::hash::Hash;
 use std::hash::Hasher;
-use logic;
+use selectors::EntitySelectors;
 
 
 #[derive(Clone, Debug)]

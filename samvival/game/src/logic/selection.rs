@@ -1,51 +1,20 @@
-use common::prelude::*;
-use prelude::*;
-
-
-use entities::EntitySelectors::*;
-use entities::tile::TileData;
+use prelude::CharacterData;
 use entity_util::position_of;
-
 use logic;
-use entities::inventory::InventoryData;
-use entities::item::ItemData;
+use prelude::IdentityData;
+use data::selectors::EntitySelectors;
+use data::selectors::EntitySelectors::*;
+use data::entities::*;
+use game::prelude::*;
 
-#[derive(PartialEq,Eq,Clone,Debug,Serialize,Deserialize)]
-pub enum EntitySelectors {
-    Friend { of: Entity },
-    Enemy { of: Entity },
-    //    Neutral { of: Entity },
-    InMoveRange { hex_range: u32, of: Entity },
-    IsCharacter,
-    IsTile,
-    HasInventory,
-    IsA(Taxon),
-    And(Box<EntitySelectors>, Box<EntitySelectors>),
-    Or(Box<EntitySelectors>, Box<EntitySelectors>),
-    Any
+pub trait SelectorMatches {
+    fn matches(&self, world: &WorldView, entity: Entity) -> bool;
 }
 
-impl EntitySelectors {
-    pub fn friendly_character(of: Entity) -> EntitySelectors { Friend { of }.and(IsCharacter) }
-    pub fn enemy_of(of: Entity) -> EntitySelectors { Enemy { of }.and(IsCharacter) }
-    pub fn tile() -> EntitySelectors { IsTile }
-    pub fn inventory() -> EntitySelectors { HasInventory }
 
-    pub fn is_a(taxon : &'static Taxon) -> EntitySelectors{ IsA(taxon.into()) }
-
-    pub fn within_range(self, hex_range : u32, of : Entity) -> Self {
-        self.and(InMoveRange { hex_range, of })
-    }
-
-    pub fn and (self, other : EntitySelectors) -> EntitySelectors {
-        EntitySelectors::And(box self, box other)
-    }
-    pub fn or(self, other : EntitySelectors) -> EntitySelectors {
-        EntitySelectors::Or(box self, box other)
-    }
-
-
-    pub fn matches(&self, world: &WorldView, entity: Entity) -> bool {
+use common::ExtendedCollection;
+impl SelectorMatches for EntitySelectors {
+    fn matches(&self, world: &WorldView, entity: Entity) -> bool {
         match *self {
             IsCharacter => world.has_data::<CharacterData>(entity),
             IsTile => world.has_data::<TileData>(entity),

@@ -1,16 +1,15 @@
 use game::world::World;
 use game::world::WorldView;
 use game::Entity;
-use entities::*;
-use entities::Skill;
-use entities::modifiers::*;
-use game::events::*;
+use data::entities::*;
+use data::entities::modifiers::*;
+use data::events::*;
 use common::flood_search;
 use common::hex::CubeCoord;
 use rand::Rng;
 use rand::SeedableRng;
 use rand::StdRng;
-use entities::Attack;
+use data::entities::Attack;
 use noisy_float::prelude::*;
 use noisy_float;
 use game::core::Sext;
@@ -27,12 +26,13 @@ use game::entity::EntityData;
 use game::modifiers::FieldLogs;
 use std::fmt::Display;
 use common::reflect::Field;
-use events::GameEvent;
+use data::events::GameEvent;
 use std::collections::HashMap;
-use entities::combat::CombatData;
+use data::entities::combat::CombatData;
 use cgmath::InnerSpace;
 use common::hex::CartVec;
 use game::reflect::*;
+use prelude::*;
 
 pub enum StrikeIndex {
     Strike(usize),
@@ -680,5 +680,68 @@ pub fn targets_for_attack(world: &WorldView, attacker: Entity, attack: &AttackRe
         AttackTargets { hexes : all_hexes, characters }
     } else {
         return AttackTargets::none();
+    }
+}
+
+pub trait ResolveableAttackRef {
+    fn resolve_attack_and_weapon(&self, world: &WorldView, character : Entity) -> Option<(Attack, Entity)>;
+    fn resolve(&self, world: &WorldView, character : Entity) -> Option<Attack>;
+
+    fn resolve_weapon(&self, world: &WorldView, character : Entity) -> Option<Entity>;
+    fn is_melee(&self, world: &WorldView, character : Entity) -> bool;
+}
+
+impl ResolveableAttackRef for AttackRef {
+    fn resolve_attack_and_weapon(&self, world: &WorldView, character : Entity) -> Option<(Attack, Entity)> {
+        if self.is_none() {
+            None
+        } else {
+            if logic::combat::character_has_access_to_attack(world, character, self.attack_entity) {
+                if let Some(weapon) = self.resolve_weapon(world, character) {
+                    if let Some(attack) = world.data_opt::<Attack>(self.attack_entity) {
+                        Some((attack.clone(), weapon))
+                    } else if let Some(derived_attack) = world.data_opt::<DerivedAttackData>(self.attack_entity) {
+                        let underlying_attack = self.derived_from;
+                        if let Some(weapon) = logic::combat::intern::weapon_attack_derives_from(world, character, underlying_attack) {
+                            if let Some(new_attack) = derived_attack.kind.derive_special_attack(world, character, weapon, underlying_attack) {
+                                Some((new_attack, weapon))
+                            } else {
+                                warn!("derived attack could not create actual new attack from the base attack it was given");
+                                None
+                            }
+                        } else {
+                            warn!("derived attack is derived from weapon that could not be identified on character");
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    warn!("Attack reference could not be resolved for lack of identifying the weapon it was derived from");
+                    None
+                }
+            } else {
+                info!("Character ({}) no longer has access to referenced attack ({})", world.signifier(character), world.signifier(self.attack_entity));
+                None
+            }
+        }
+    }
+
+    fn resolve(&self, world: &WorldView, character : Entity) -> Option<Attack> {
+        self.resolve_attack_and_weapon(world, character).map(|t| t.0)
+    }
+
+    fn resolve_weapon(&self, world: &WorldView, character : Entity) -> Option<Entity> {
+        if world.has_data::<Attack>(self.attack_entity) {
+            logic::combat::intern::weapon_attack_derives_from(world, character, self.attack_entity)
+        } else if world.has_data::<DerivedAttackData>(self.attack_entity) {
+            logic::combat::intern::weapon_attack_derives_from(world, character, self.derived_from)
+        } else {
+            None
+        }
+    }
+
+    fn is_melee(&self, world: &WorldView, character : Entity) -> bool {
+        self.resolve(world, character).map(|a| a.attack_type == AttackType::Melee).unwrap_or(false)
     }
 }

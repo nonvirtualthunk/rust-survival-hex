@@ -22,7 +22,6 @@ use piston_window::math;
 use vecmath;
 use cgmath::InnerSpace;
 use game::core::*;
-use game::events::*;
 use game::logic;
 use game::logic::movement;
 use game::Entity;

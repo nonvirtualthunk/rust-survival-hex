@@ -1,6 +1,6 @@
 use common::prelude::*;
 use prelude::*;
-use entities::*;
+use data::entities::*;
 use logic;
 use rand::Rng;
 use game::DebugData;

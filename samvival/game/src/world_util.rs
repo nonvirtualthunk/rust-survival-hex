@@ -1,14 +1,14 @@
 use game::world::WorldView;
 use common::hex::AxialCoord;
 use game::Entity;
-use entities::CharacterData;
+use data::entities::CharacterData;
 use std::collections::HashSet;
 use noisy_float::prelude::R32;
 use pathfinding::prelude::astar;
 use noisy_float::prelude::r32;
-use entities::TileStore;
-use entities::CharacterStore;
-use entities::character::Character;
+use data::entities::TileStore;
+use data::entities::CharacterStore;
+use data::entities::character::Character;
 
 pub fn character_at(view : &WorldView, coord : AxialCoord) -> Option<(Entity, Character)> {
     for (cref, cdata) in view.entities_with_data::<CharacterData>() {

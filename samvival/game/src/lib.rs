@@ -12,6 +12,7 @@
 #![feature(type_ascription)]
 
 extern crate arx_common as common;
+extern crate samvival_data as data;
 extern crate either;
 #[macro_use] extern crate enum_map;
 #[macro_use] extern crate lazy_static;
@@ -36,9 +37,6 @@ extern crate num;
 extern crate cgmath;
 
 pub mod world_util;
-//
-pub mod events;
-pub use events::*;
 
 pub mod archetypes;
 
@@ -76,6 +74,7 @@ pub use entity_util::*;
 
 
 pub use game::*;
+pub use data::*;
 
 pub mod samvival_core;
 pub use samvival_core::*;
