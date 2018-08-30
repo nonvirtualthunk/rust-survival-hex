@@ -3,8 +3,9 @@ use game::entity::EntityData;
 use game::world::WorldView;
 use enum_map::EnumMap;
 use std::collections::HashMap;
+use game::entity;
 
-#[derive(Clone, Debug, Default, PrintFields)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PrintFields)]
 pub struct SkillData {
     pub skill_bonuses: HashMap<Skill, i32>,
     pub skill_xp : HashMap<Skill, i32>

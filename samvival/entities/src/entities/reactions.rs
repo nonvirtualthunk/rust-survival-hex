@@ -14,12 +14,34 @@ use entities::ModifierTrackingData;
 
 pub enum EventTrigger {}
 
-//pub enum ReactionTypeRef {
-//    Counterattack,
-//    Dodge,
-//    Block,
-//    Defend
-//}
+#[derive(Clone,Copy,Hash,Debug,Serialize,Deserialize)]
+pub enum ReactionTypeRef {
+    Counterattack,
+    Dodge,
+    Block,
+    Defend
+}
+impl ReactionTypeRef {
+    pub fn resolve(&self) -> &'static ReactionType {
+        match self {
+            ReactionTypeRef::Counterattack => &reaction_types::Counterattack,
+            ReactionTypeRef::Dodge => &reaction_types::Dodge,
+            ReactionTypeRef::Block => &reaction_types::Block,
+            ReactionTypeRef::Defend => &reaction_types::Defend,
+        }
+    }
+}
+impl Default for ReactionTypeRef {
+    fn default() -> Self {
+        ReactionTypeRef::Defend
+    }
+}
+
+impl Into<&'static ReactionType> for ReactionTypeRef {
+    fn into(self) -> &'static ReactionType {
+       self.resolve()
+    }
+}
 
 #[derive(Clone)]
 pub struct ReactionType {
@@ -90,7 +112,7 @@ pub mod reaction_types {
         false
     }
 
-    pub const Counterattack: ReactionType = ReactionType {
+    pub static Counterattack: ReactionType = ReactionType {
         icon: "ui/counterattack_icon",
         name: "counter attack",
         infinitive: "countering",
@@ -119,7 +141,7 @@ pub mod reaction_types {
         },
     };
 
-    pub const Dodge: ReactionType = ReactionType {
+    pub static Dodge: ReactionType = ReactionType {
         icon: "ui/dodge_icon",
         name: "dodge",
         infinitive: "dodging",
@@ -141,7 +163,7 @@ pub mod reaction_types {
     };
 
 
-    pub const Block: ReactionType = ReactionType {
+    pub static Block: ReactionType = ReactionType {
         icon: "ui/block_icon",
         name: "block",
         infinitive: "blocking",
@@ -154,7 +176,7 @@ pub mod reaction_types {
     };
 
 
-    pub const Defend: ReactionType = ReactionType {
+    pub static Defend: ReactionType = ReactionType {
         icon: "ui/defend_icon",
         name: "defend",
         infinitive: "defending",

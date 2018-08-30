@@ -5,8 +5,9 @@ use game::world::WorldView;
 //use game::modifiers::ConstantModifier;
 use common::reflect::*;
 use std::collections::HashMap;
+use prelude::*;
 
-#[derive(Clone, Default, Debug, PrintFields)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PrintFields)]
 pub struct TurnData {
     pub turn_number : u32,
     pub active_faction : Entity
@@ -28,7 +29,7 @@ impl EntityData for TurnData {}
 //}
 
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum TimeOfDay {
     Dawn,
     Daylight,
@@ -41,7 +42,7 @@ impl Default for TimeOfDay {
     }
 }
 
-#[derive(Clone, Debug, PrintFields)]
+#[derive(Clone, Debug, PrintFields, Serialize, Deserialize)]
 pub struct TimeData {
     pub moments_since_world_start : u32,
     pub moments_by_time_of_day : HashMap<TimeOfDay, u32>,

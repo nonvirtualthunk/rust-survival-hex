@@ -10,7 +10,7 @@ use logic;
 use entities::inventory::InventoryData;
 use entities::item::ItemData;
 
-#[derive(PartialEq,Eq,Clone,Debug)]
+#[derive(PartialEq,Eq,Clone,Debug,Serialize,Deserialize)]
 pub enum EntitySelectors {
     Friend { of: Entity },
     Enemy { of: Entity },
@@ -19,7 +19,7 @@ pub enum EntitySelectors {
     IsCharacter,
     IsTile,
     HasInventory,
-    IsA(&'static Taxon),
+    IsA(Taxon),
     And(Box<EntitySelectors>, Box<EntitySelectors>),
     Or(Box<EntitySelectors>, Box<EntitySelectors>),
     Any
@@ -30,6 +30,8 @@ impl EntitySelectors {
     pub fn enemy_of(of: Entity) -> EntitySelectors { Enemy { of }.and(IsCharacter) }
     pub fn tile() -> EntitySelectors { IsTile }
     pub fn inventory() -> EntitySelectors { HasInventory }
+
+    pub fn is_a(taxon : &'static Taxon) -> EntitySelectors{ IsA(taxon.into()) }
 
     pub fn within_range(self, hex_range : u32, of : Entity) -> Self {
         self.and(InMoveRange { hex_range, of })
@@ -64,7 +66,7 @@ impl EntitySelectors {
                 false
             },
             HasInventory => world.has_data::<InventoryData>(entity),
-            IsA(taxon) => world.data_opt::<IdentityData>(entity).filter(|i| i.kinds.any_match(|k| k.is_a(&taxon))).is_some(),
+            IsA(ref taxon) => world.data_opt::<IdentityData>(entity).filter(|i| i.kinds.any_match(|k| k.is_a(&taxon))).is_some(),
             And(ref a,ref b) => a.matches(world, entity) && b.matches(world, entity),
             Or(ref a,ref b) => a.matches(world, entity) || b.matches(world, entity),
             Any => true

@@ -72,7 +72,7 @@ impl<T: ReduceableType> Reduceable<T> {
 }
 
 
-#[derive(Clone, Debug, Copy, PartialEq)]
+#[derive(Clone, Debug, Copy, PartialEq, Serialize, Deserialize)]
 pub struct DicePool {
     pub die: u32,
     pub count: u32,

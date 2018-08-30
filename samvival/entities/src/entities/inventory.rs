@@ -3,8 +3,9 @@ use game::entity::EntityData;
 use game::world::WorldView;
 use common::hex::AxialCoord;
 use game::core::*;
+use game::entity;
 
-#[derive(Clone, Debug, Default, PrintFields)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PrintFields)]
 pub struct EquipmentData {
     pub equipped : Vec<Entity>,
 }
@@ -20,7 +21,7 @@ impl EquipmentDataStore for WorldView {
 }
 
 
-#[derive(Clone, Debug, Default, PrintFields)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PrintFields)]
 pub struct InventoryData {
     pub items : Vec<Entity>,
     pub inventory_size : Option<u32>,

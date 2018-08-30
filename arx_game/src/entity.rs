@@ -39,12 +39,12 @@ pub trait FieldVisitor<E, U, A> {
 }
 
 pub trait VisitableFields {
-    fn visit_field_named<U, A, V : FieldVisitor<Self, U, A>>(name : &str, visitor : V, arg: &mut A) -> Option<U> {
+    fn visit_field_named<U, A, V : FieldVisitor<Self, U, A>>(name : &str, visitor : V, arg: &mut A) -> Option<U> where Self : Sized{
         warn!("Default implementation of visit_field_named called");
         None
     }
 
-    fn visit_all_fields<U, A, V : FieldVisitor<Self, U, A>>(visitor : V, arg : &mut A) -> Option<U> {
+    fn visit_all_fields<U, A, V : FieldVisitor<Self, U, A>>(visitor : V, arg : &mut A) -> Option<U> where Self : Sized {
         warn!("default implementation of visit_all_fields called");
         None
     }
@@ -61,7 +61,7 @@ pub trait EntityData: Clone + Any + Default + Debug + VisitableFields {
 }
 
 
-#[derive(Clone)]
+#[derive(Clone,Default)]
 pub struct EntityBuilder {
     initializations_by_type_id: HashMap<TypeId, Rc<Fn(&mut World, Entity)>>
 }
@@ -104,9 +104,10 @@ impl EntityBuilder {
 }
 
 
-#[derive(Clone,Debug,Default,PrintFields)]
+use super::entity;
+#[derive(Clone,Debug,Default,Serialize, Deserialize, PrintFields)]
 pub struct DebugData {
     pub name : String
 }
-impl DebugData { pub const name : Field < DebugData , String > = Field :: new ( stringify ! ( name ) , | t | & t . name , | t | & mut t . name , | t , v | { t . name = v ; } ) ; } impl VisitableFields for DebugData { fn visit_field_named < U , A , V : FieldVisitor < Self , U , A >> ( name : & str , visitor : V , arg : & mut A ) -> Option < U > { match name { stringify ! ( name ) => visitor . visit ( & DebugData . name , arg ) , _ => None } } fn visit_all_fields < U , A , V : FieldVisitor < Self , U , A >> ( visitor : V , arg : & mut A ) -> Option < U > { if let Some ( res ) = visitor . visit ( & DebugData . name , arg ) { return Some ( res ) } None } }
+impl DebugData { pub const name : Field < DebugData , String > = Field :: new ( stringify ! ( name ) , | t | & t . name , | t | & mut t . name , | t , v | { t . name = v ; } ) ; }
 impl EntityData for DebugData {}

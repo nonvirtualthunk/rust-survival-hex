@@ -6,14 +6,16 @@ use game::ModifierReference;
 use common::prelude::*;
 use std::collections::HashSet;
 
-#[derive(Clone,Debug)]
+#[derive(Clone,Debug,Serialize,Deserialize)]
 pub struct Spawn {
+    // SERIALIZATION PASS, figure out how else to represent this
+    #[serde(skip_serializing, skip_deserializing)]
     pub entity : EntityBuilder,
     pub turns_between_spawns : i32,
     pub start_spawn_turn : i32
 }
 
-#[derive(Default,Clone,Debug)]
+#[derive(Default,Clone,Debug,Serialize, Deserialize, PrintFields)]
 pub struct MonsterSpawnerData {
     pub spawns : Vec<Spawn>
 }

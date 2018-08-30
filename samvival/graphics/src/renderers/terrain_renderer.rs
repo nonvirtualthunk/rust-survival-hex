@@ -61,7 +61,7 @@ impl TerrainRenderer {
                                     .color(color);
                                 quads.push(quad);
 
-                                if let Some(secondary_name) = t.secondary_terrain_name {
+                                if let Some(secondary_name) = &t.secondary_terrain_name {
                                     let quad = Quad::new(format!("terrain/{}", secondary_name), cartesian_pos.0)
                                         .centered()
                                         .color(color);

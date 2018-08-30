@@ -19,6 +19,7 @@ extern crate pretty_env_logger;
 #[macro_use] extern crate erased_serde;
 #[macro_use] extern crate serde_derive;
 #[macro_use] extern crate serde;
+extern crate string_interner;
 
 
 pub mod hex;
@@ -47,3 +48,6 @@ pub use reflect::*;
 
 pub mod functions;
 pub use functions::*;
+
+pub mod string;
+pub use string::*;

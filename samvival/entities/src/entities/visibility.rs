@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use prelude::*;
 use game::EntityData;
 
-#[derive(Debug,Clone,Default,PrintFields)]
+#[derive(Debug,Clone,Default,Serialize, Deserialize, PrintFields)]
 pub struct VisibilityData {
     pub visibility_by_faction : HashMap<Entity, Visibility>,
     empty_visibility : Visibility

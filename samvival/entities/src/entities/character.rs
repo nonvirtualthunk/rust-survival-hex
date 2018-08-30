@@ -12,16 +12,16 @@ use entities::common::PositionData;
 use entities::common::ActionData;
 use entities::time::TimeOfDay;
 use entities::movement::MovementData;
+use game::entity;
 
-
-#[derive(Default, Clone, Debug, PrintFields)]
+#[derive(Default, Clone, Debug, Serialize, Deserialize, PrintFields)]
 pub struct GraphicsData {
     pub graphical_position: Option<CartVec>,
     pub color: Color,
 }
 impl EntityData for GraphicsData {}
 
-#[derive(Clone, Debug, PrintFields)]
+#[derive(Clone, Debug, Serialize, Deserialize, PrintFields)]
 pub struct CharacterData {
     pub health: Reduceable<i32>,
     pub action_points: Reduceable<i32>,
@@ -99,7 +99,7 @@ impl CharacterData {
 }
 
 
-#[derive(Clone, Default, Debug, PrintFields)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PrintFields)]
 pub struct ObserverData {
     pub vision_range : i32,
     pub low_light_vision_range : i32,
@@ -118,7 +118,7 @@ impl ObserverData {
 impl EntityData for ObserverData {}
 
 
-#[derive(Clone, Debug, PrintFields)]
+#[derive(Clone, Debug, Serialize, Deserialize, PrintFields)]
 pub struct AllegianceData {
     pub faction: Entity
 }

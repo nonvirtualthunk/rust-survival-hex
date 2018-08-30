@@ -24,6 +24,7 @@ pretty_env_logger = "0.2"
 erased-serde = "*"
 serde_derive = "*"
 serde = { version = "*", features = ["rc"] }
+string-interner = { version = "0.7.0", features = ["serde"] }
 
 [dependencies.vecmath]
 git = "https://github.com/PistonDevelopers/vecmath"

@@ -31,7 +31,7 @@ pub fn generate(radius: i32) -> Vec<EntityBuilder> {
             if coord.as_cart_vec().magnitude2() < 60.0 * 60.0 {
                 let mut tile_data = TileData {
                     position: coord,
-                    main_terrain_name: "grass",
+                    main_terrain_name: strf("grass"),
                     secondary_terrain_name: None,
                     move_cost: Sext::of(1),
                     cover: 0,
@@ -48,22 +48,22 @@ pub fn generate(radius: i32) -> Vec<EntityBuilder> {
 
                 let noise = height_noise.get([x as f64 * 0.05, y as f64 * 0.05]);
                 if noise > 0.35 {
-                    tile_data.main_terrain_name = "mountains";
+                    tile_data.main_terrain_name = strf("mountains");
                     tile_data.move_cost = Sext::of(3);
                     tile_data.elevation = 2;
                 } else if noise > 0.0 {
-                    tile_data.main_terrain_name = "hills";
+                    tile_data.main_terrain_name = strf("hills");
                     tile_data.move_cost = Sext::of(2);
                     tile_data.elevation = 1;
                     if forest_value > 0.25 {
-                        tile_data.secondary_terrain_name = Some("pine-forest-sparse");
+                        tile_data.secondary_terrain_name = Some(strf("pine-forest-sparse"));
                         tile_data.move_cost = Sext::of_parts(1, 2);
                         tile_data.cover = 1;
                     }
                 } else {
-                    tile_data.main_terrain_name = "grass";
+                    tile_data.main_terrain_name = strf("grass");
                     if forest_value > 0.1 {
-                        tile_data.secondary_terrain_name = Some("forest");
+                        tile_data.secondary_terrain_name = Some(strf("forest"));
                         tile_data.move_cost = Sext::of_parts(1, 3);
                         tile_data.cover = 2;
                     }

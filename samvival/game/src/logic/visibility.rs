@@ -18,7 +18,7 @@ use entities::tile::TileStore;
 
 //pub struct
 
-#[derive(Clone,Debug,Default)]
+#[derive(Clone,Debug,Default,Serialize, Deserialize, PrintFields)]
 pub struct VisibilityComputor {
 
 }

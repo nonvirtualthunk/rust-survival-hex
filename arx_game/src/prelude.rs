@@ -6,5 +6,7 @@ pub use events::GameEventType;
 pub use events::GameEventState;
 pub use events::GameEventWrapper;
 
+pub use entity;
+
 pub use core::*;
 pub use reflect::*;

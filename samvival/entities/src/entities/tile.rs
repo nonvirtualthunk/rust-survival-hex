@@ -7,11 +7,12 @@ use common::prelude::*;
 use common::hex::*;
 use entities::common::Taxon;
 use prelude::*;
+use common::string::IStr;
 
-#[derive(Clone, Default, Debug, PrintFields)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PrintFields)]
 pub struct TileData {
-    pub main_terrain_name: Str,
-    pub secondary_terrain_name: Option<Str>,
+    pub main_terrain_name: String,
+    pub secondary_terrain_name: Option<String>,
     pub position: AxialCoord,
     pub move_cost: Sext,
     pub cover: i8,
@@ -86,7 +87,7 @@ pub struct ConstantResources {
     pub fruit: Entity,
 }
 
-#[derive(Clone, Default, Debug, PrintFields)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PrintFields)]
 pub struct Resources {
     pub main: ConstantResources,
     pub custom_resources: HashMap<String, Entity>,
@@ -94,14 +95,14 @@ pub struct Resources {
 
 impl EntityData for Resources {}
 
-#[derive(Clone, Default, Debug, PrintFields)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PrintFields)]
 pub struct FoodInfo {
     pub satiation: i32
 }
 
 impl EntityData for FoodInfo {}
 
-#[derive(Clone, Default, Debug, PrintFields)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PrintFields)]
 pub struct Material {
     pub edge: i32,
     // how well it can hold an edge

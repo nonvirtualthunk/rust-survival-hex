@@ -10,22 +10,20 @@ mod test {
     use super::*;
     use modifiers::*;
 
-    #[derive(Clone, Default, PartialEq, Debug, PrintFields)]
+    use super::super::super::entity;
+    #[derive(Clone, Default, PartialEq, Debug, Serialize, Deserialize, PrintFields)]
     struct FooData {
         a: i32,
         b: Vec<f32>
     }
 
-    #[derive(Clone, Default, PartialEq, Debug, PrintFields)]
+    #[derive(Clone, Default, PartialEq, Debug, Serialize, Deserialize, PrintFields)]
     struct BarData {
         x: f32
     }
 
     impl FooData { pub const a : Field < FooData , i32 > = Field :: new ( stringify ! ( a ) , | t | & t . a , | t | &mut t . a, | t , v | { t . a = v ; } ) ; pub const b : Field < FooData , Vec < f32 > > = Field :: new ( stringify ! ( b ) , | t | & t . b , | t | &mut t . b, | t , v | { t . b = v ; } ) ; }
     impl BarData { pub const x : Field < BarData , f32 > = Field :: new ( stringify ! ( x ) , | t | & t . x , | t | &mut t . x, | t , v | { t . x = v ; } ) ; }
-
-    impl FooData { } impl VisitableFields for FooData { fn visit_field_named < U , A , V : FieldVisitor < Self , U , A >> ( name : & str , visitor : V , arg : & mut A ) -> Option < U > { match name { _ => None } } fn visit_all_fields < U , A , V : FieldVisitor < Self , U , A >> ( visitor : V , arg : & mut A ) -> Option < U > { None } }
-    impl BarData { } impl VisitableFields for BarData { fn visit_field_named < U , A , V : FieldVisitor < Self , U , A >> ( name : & str , visitor : V , arg : & mut A ) -> Option < U > { match name { _ => None } } fn visit_all_fields < U , A , V : FieldVisitor < Self , U , A >> ( visitor : V , arg : & mut A ) -> Option < U > { None } }
 
     impl EntityData for FooData {}
 

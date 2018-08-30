@@ -323,7 +323,7 @@ mod test {
         }
     }
 
-
+    use super::super::super::entity;
     #[derive(Clone, Default, PrintFields, Debug)]
     pub struct Bar {
         pub f: f32,
@@ -334,21 +334,22 @@ mod test {
         pub const f: Field<Bar, f32> = Field::new(stringify!( f ), |t| &t.f, |t| &mut t.f, |t, v| { t.f = v; });
         pub const b: Field<Bar, i32> = Field::new(stringify!( b ), |t| &t.b, |t| &mut t.b, |t, v| { t.b = v; });
     }
-    impl VisitableFields for Bar {
-        fn visit_field_named<U, A, V : FieldVisitor<Self, U, A>>(name : &str, visitor : V, arg: &mut A) -> Option<U> {
-            match name {
-                "f" => visitor.visit(&Bar::f, arg),
-                "b" => visitor.visit(&Bar::b, arg),
-                _ => None
-            }
-        }
-        fn visit_all_fields<U, A, V: FieldVisitor<Self, U, A>>(visitor: V, arg : &mut A) -> Option<U> {
-            if let Some(res) = visitor.visit(& Bar::f, arg) { return Some(res) }
-            if let Some(res) = visitor.visit(& Bar::b, arg) { return Some(res) }
-
-            None
-        }
-    }
+    impl EntityData for Bar {}
+//    impl VisitableFields for Bar {
+//        fn visit_field_named<U, A, V : FieldVisitor<Self, U, A>>(name : &str, visitor : V, arg: &mut A) -> Option<U> {
+//            match name {
+//                "f" => visitor.visit(&Bar::f, arg),
+//                "b" => visitor.visit(&Bar::b, arg),
+//                _ => None
+//            }
+//        }
+//        fn visit_all_fields<U, A, V: FieldVisitor<Self, U, A>>(visitor: V, arg : &mut A) -> Option<U> {
+//            if let Some(res) = visitor.visit(& Bar::f, arg) { return Some(res) }
+//            if let Some(res) = visitor.visit(& Bar::b, arg) { return Some(res) }
+//
+//            None
+//        }
+//    }
 
 
 
@@ -388,7 +389,6 @@ mod test {
     use ron;
     use world::world::World;
     use entity::FieldVisitor;
-    use entity::VisitableFields;
 
     #[derive(Serialize, Deserialize)]
 //    pub struct Container<E : EntityData> where Box<Modifier<E>> : Serialize {
@@ -443,8 +443,8 @@ mod test {
 ////        fn moo(&self) { println!("Foo with {}", self.i) }
 ////    }
 ////
-////    #[derive(Serialize, Deserialize, PrintFields)]
-//    #[derive(Clone,Debug,Default,PrintFields)]
+////    #[derive(Serialize, Deserialize, Serialize, Deserialize, PrintFields)]
+//    #[derive(Clone,Debug,Default,Serialize, Deserialize, PrintFields)]
 //    pub struct Bar {
 //        pub f: f32,
 //        pub b: i32,

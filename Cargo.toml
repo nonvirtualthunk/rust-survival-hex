@@ -32,6 +32,10 @@ git = "https://github.com/PistonDevelopers/vecmath"
 path = "arx_game"
 version = "0.1.0"
 
+[dependencies.samvival_entities]
+path = "samvival/entities"
+version = "0.1.0"
+
 [dependencies.samvival_game]
 path = "samvival/game"
 version = "0.1.0"

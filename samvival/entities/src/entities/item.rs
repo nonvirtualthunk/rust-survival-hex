@@ -4,9 +4,9 @@ use game::entity::EntityData;
 use game::world::WorldView;
 use common::AxialCoord;
 use entities::common::Taxon;
+use game::entity;
 
-
-#[derive(Clone, Default, Debug, PrintFields)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PrintFields)]
 pub struct ItemData {
     pub attacks : Vec<Entity>,
     pub in_inventory_of: Option<Entity>

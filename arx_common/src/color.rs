@@ -2,7 +2,7 @@ use std::ops::Add;
 use std::ops::Sub;
 use std::ops::Mul;
 
-#[derive(Clone,Copy,Debug)]
+#[derive(Clone,Copy,Debug,Serialize,Deserialize)]
 pub struct Color(pub [f32; 4]);
 
 impl Color {

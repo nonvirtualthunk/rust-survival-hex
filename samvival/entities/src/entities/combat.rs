@@ -10,12 +10,13 @@ use game::entity::EntityData;
 use game::world::WorldView;
 use game::GameDisplayable;
 use entities::common::Taxon;
-use prelude::*;
+use game::prelude::*;
+use game::entity;
 
 use logic;
 use entities::selectors::EntitySelectors;
 
-#[derive(Clone,Debug)]
+#[derive(Clone,Debug,Serialize,Deserialize)]
 pub enum DerivedAttackKind {
     PiercingStrike,
     None
@@ -41,7 +42,7 @@ impl DerivedAttackKind {
 }
 
 /// Entity data to represent a special, derived attack. The weapon entity points to the
-#[derive(Clone,Debug,PrintFields)]
+#[derive(Clone,Debug,Serialize, Deserialize, PrintFields)]
 pub struct DerivedAttackData {
     pub weapon_condition : EntitySelectors,
     pub character_condition : EntitySelectors,
@@ -75,7 +76,7 @@ impl Default for DerivedAttackData {
 //    character_condition : EntitySelectors,
 //}
 
-#[derive(Clone, Debug, PrintFields)]
+#[derive(Clone, Debug, Serialize, Deserialize, PrintFields)]
 pub struct CombatData {
     pub active_attack : AttackRef,
     pub active_counterattack : AttackRef,
@@ -134,7 +135,7 @@ impl CombatDataStore for WorldView {
 
 
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
 pub enum DamageType {
     Untyped,
     Bludgeoning,
@@ -150,7 +151,7 @@ impl Display for DamageType {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
 pub enum AttackType {
     Projectile,
     Thrown,
@@ -168,7 +169,7 @@ impl Default for AttackType {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum HexPattern {
     Single,
     Line(i32,i32), // start, length
@@ -177,7 +178,7 @@ pub enum HexPattern {
 impl Default for HexPattern { fn default() -> Self { HexPattern::Single } }
 
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, PrintFields)]
 pub struct Attack {
     pub name : String,
     pub verb : Option<String>,
@@ -291,58 +292,7 @@ impl AttackRef {
         self.as_option().and_then(|a| world.data_opt::<Attack>(a.attack_entity)).map(|a| &a.name)
     }
 
-    pub fn resolve_attack_and_weapon(&self, world: &WorldView, character : Entity) -> Option<(Attack, Entity)> {
-        if self.is_none() {
-            None
-        } else {
-            if logic::combat::character_has_access_to_attack(world, character, self.attack_entity) {
-                if let Some(weapon) = self.resolve_weapon(world, character) {
-                    if let Some(attack) = world.data_opt::<Attack>(self.attack_entity) {
-                        Some((attack.clone(), weapon))
-                    } else if let Some(derived_attack) = world.data_opt::<DerivedAttackData>(self.attack_entity) {
-                        let underlying_attack = self.derived_from;
-                        if let Some(weapon) = logic::combat::intern::weapon_attack_derives_from(world, character, underlying_attack) {
-                            if let Some(new_attack) = derived_attack.kind.derive_special_attack(world, character, weapon, underlying_attack) {
-                                Some((new_attack, weapon))
-                            } else {
-                                warn!("derived attack could not create actual new attack from the base attack it was given");
-                                None
-                            }
-                        } else {
-                            warn!("derived attack is derived from weapon that could not be identified on character");
-                            None
-                        }
-                    } else {
-                        None
-                    }
-                } else {
-                    warn!("Attack reference could not be resolved for lack of identifying the weapon it was derived from");
-                    None
-                }
-            } else {
-                info!("Character ({}) no longer has access to referenced attack ({})", world.signifier(character), world.signifier(self.attack_entity));
-                None
-            }
-        }
-    }
 
-    pub fn resolve(&self, world: &WorldView, character : Entity) -> Option<Attack> {
-        self.resolve_attack_and_weapon(world, character).map(|t| t.0)
-    }
-
-    pub fn resolve_weapon(&self, world: &WorldView, character : Entity) -> Option<Entity> {
-        if world.has_data::<Attack>(self.attack_entity) {
-            logic::combat::intern::weapon_attack_derives_from(world, character, self.attack_entity)
-        } else if world.has_data::<DerivedAttackData>(self.attack_entity) {
-            logic::combat::intern::weapon_attack_derives_from(world, character, self.derived_from)
-        } else {
-            None
-        }
-    }
-
-    pub fn is_melee(&self, world: &WorldView, character : Entity) -> bool {
-        self.resolve(world, character).map(|a| a.attack_type == AttackType::Melee).unwrap_or(false)
-    }
 
     pub fn is_derived_attack(&self, world: &WorldView) -> bool {
         ! world.has_data::<Attack>(self.attack_entity) && world.has_data::<DerivedAttackData>(self.attack_entity)

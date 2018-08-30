@@ -66,13 +66,14 @@ mod test {
     use spectral::assert_that;
     use events::CoreEvent;
 
-    #[derive(Clone,Default,Debug, PrintFields)]
+    use super::super::entity;
+    #[derive(Clone,Default,Debug, Serialize, Deserialize, PrintFields)]
     struct Nested {
         a : f32,
         b : f32
     }
 
-    #[derive(Clone,Default,Debug,PrintFields)]
+    #[derive(Clone,Default,Debug,Serialize, Deserialize, PrintFields)]
     struct TestData {
         foo : i32,
         bar : Reduceable<i32>,

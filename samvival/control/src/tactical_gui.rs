@@ -252,8 +252,8 @@ impl TacticalGui {
                 self.action_bar.update(gui, world_view, actions, &game_state, &mut control);
 //                self.reaction_bar.set_x(Positioning::left_of(self.character_info_widget.as_widget(), 1.ux())).as_widget().reapply(gui);
 //                self.reaction_bar.set_y(Positioning::constant(2.ux())).as_widget().reapply(gui);
-                let reactions = vec![reaction_types::Defend, reaction_types::Dodge, reaction_types::Block, reaction_types::Counterattack];
-                self.reaction_bar.update(gui, reactions, char.action.active_reaction.clone(), &game_state, &mut control);
+                let reactions = vec![reaction_types::Defend.clone(), reaction_types::Dodge.clone(), reaction_types::Block.clone(), reaction_types::Counterattack.clone()];
+                self.reaction_bar.update(gui, reactions, char.action.active_reaction.resolve().clone(), &game_state, &mut control);
             } else {
                 self.action_bar.set_showing(false).reapply(gui);
                 self.reaction_bar.set_showing(false).reapply(gui);

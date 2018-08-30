@@ -5,8 +5,9 @@ use common::hex::AxialCoord;
 use game::core::*;
 use common::Color;
 use common::reflect::*;
+use game::entity;
 
-#[derive(Clone, Default, Debug, PrintFields)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PrintFields)]
 pub struct FactionData {
     pub name : String,
     pub color : Color

@@ -90,8 +90,8 @@ pub fn test_derived_attack() {
         let special_attack = EntityBuilder::new()
             .with(DerivedAttackData {
                 character_condition: EntitySelectors::Any,
-                weapon_condition: EntitySelectors::IsA(&taxonomy::weapons::ReachWeapon),
-                attack_condition: EntitySelectors::IsA(&taxonomy::attacks::StabbingAttack).and(EntitySelectors::IsA(&taxonomy::attacks::ReachAttack)),
+                weapon_condition: EntitySelectors::is_a(&taxonomy::weapons::ReachWeapon),
+                attack_condition: EntitySelectors::is_a(&taxonomy::attacks::StabbingAttack).and(EntitySelectors::is_a(&taxonomy::attacks::ReachAttack)),
                 kind: DerivedAttackKind::PiercingStrike,
             }).create(world);
 

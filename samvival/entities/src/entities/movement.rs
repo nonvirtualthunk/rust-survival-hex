@@ -6,7 +6,7 @@ use std::hash::Hasher;
 use logic;
 use game::EntityBuilder;
 
-#[derive(Clone, Debug, PrintFields)]
+#[derive(Clone, Debug, Serialize, Deserialize, PrintFields)]
 pub struct MovementType {
     pub name: String,
     pub move_multiplier: Sext,
@@ -55,7 +55,7 @@ pub fn create_walk_movement_type(world : &mut World) -> Entity {
     })
 }
 
-#[derive(Clone,Copy,PartialEq,Eq,Hash,Debug)]
+#[derive(Clone,Copy,PartialEq,Eq,Hash,Debug,Serialize,Deserialize)]
 pub struct MovementTypeRef { movement : Entity, mover : Entity }
 impl MovementTypeRef {
     pub fn of_movement_and_mover(movement : Entity, mover : Entity) -> MovementTypeRef { MovementTypeRef { movement, mover } }
@@ -72,7 +72,7 @@ impl MovementTypeRef {
 
 // --------------------------------------------------
 
-#[derive(Clone, Debug, PrintFields)]
+#[derive(Clone, Debug, Serialize, Deserialize, PrintFields)]
 pub struct MovementData {
     pub active_movement_type: Option<MovementTypeRef>,
     pub move_speed: Sext,
