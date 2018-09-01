@@ -31,6 +31,7 @@ use game::entities::IdentityData;
 use cgmath::InnerSpace;
 use std::f64::consts;
 use std::collections::HashMap;
+use serde::de::DeserializeOwned;
 
 pub fn animation_elements_for_new_event(world_view: &WorldView, wrapper: &GameEventWrapper<GameEvent>, resources: &mut GraphicsResources) -> Vec<Box<AnimationElement>> {
     if wrapper.is_starting() {
@@ -277,7 +278,7 @@ impl<T: EntityData, F: Interpolateable<F>, S: Fn(&mut T, F)> EntityFieldAnimatio
     }
 }
 
-impl<T: EntityData, F: Interpolateable<F>, S: Fn(&mut T, F)> AnimationElement for EntityFieldAnimation<T, F, S> {
+impl<T: EntityData, F: Interpolateable<F>, S: Fn(&mut T, F)> AnimationElement for EntityFieldAnimation<T, F, S> where T : DeserializeOwned {
     fn draw(&self, view: &mut WorldView, pcnt_elapsed: f64) -> DrawList {
         if pcnt_elapsed > 1.0 || pcnt_elapsed < 0.0 {
             warn!("Unexpected, pcnt was more than 1: {}", pcnt_elapsed);

@@ -587,7 +587,7 @@ pub mod taxonomy {
 }
 
 
-#[derive(Clone, Debug, PrintFields, Default)]
+#[derive(Clone, Debug, PrintFields, Default, Serialize, Deserialize)]
 pub struct ModifierTrackingData {
     pub modifiers_by_key : HashMap<String, ModifierReference>
 }

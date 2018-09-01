@@ -50,7 +50,7 @@ pub trait VisitableFields {
     }
 }
 
-pub trait EntityData: Clone + Any + Default + Debug + VisitableFields {
+pub trait EntityData: Clone + Any + Default + Debug + VisitableFields + Serialize {
     fn nested_entities(&self) -> Vec<Entity> {
         Vec::new()
     }
@@ -105,6 +105,9 @@ impl EntityBuilder {
 
 
 use super::entity;
+use serde::de::DeserializeOwned;
+use serde::Serialize;
+
 #[derive(Clone,Debug,Default,Serialize, Deserialize, PrintFields)]
 pub struct DebugData {
     pub name : String

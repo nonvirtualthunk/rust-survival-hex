@@ -26,7 +26,7 @@ use serde::de::DeserializeOwned;
 pub type ModifierClock = usize;
 pub type EventCallback<E> = fn(&mut World, &GameEventWrapper<E>);
 
-#[derive(Serialize,Deserialize)]
+#[derive(Serialize,Deserialize,Default)]
 pub(crate) struct MultiTypeEventContainer {
     pub(crate) event_containers: MultiTypeContainer,
     #[serde(skip_serializing, skip_deserializing)]
@@ -131,7 +131,7 @@ impl MultiTypeEventContainer {
     }
 }
 
-#[derive(Serialize,Deserialize)]
+#[derive(Serialize,Deserialize,Clone)]
 pub struct ModifierContainer<T: EntityData> {
     pub(crate) modifier: Rc<Modifier<T>>,
     pub(crate) applied_at: GameEventClock,
@@ -141,7 +141,7 @@ pub struct ModifierContainer<T: EntityData> {
     pub(crate) description: Option<String>,
 }
 
-#[derive(Serialize,Deserialize)]
+#[derive(Serialize,Deserialize,Clone)]
 pub struct ModifierArchetypeContainer<T: EntityData> {
     pub(crate) modifier: Rc<Modifier<T>>,
 }
@@ -152,7 +152,7 @@ impl<T: EntityData> ModifierContainer<T> {
     }
 }
 
-#[derive(Serialize,Deserialize)]
+#[derive(Serialize,Deserialize,Clone,Default)]
 pub struct ModifiersContainer<T: EntityData> {
     /// All modifiers that alter data of type T and are permanent, stored in chronological order
     pub(crate) modifiers: Vec<ModifierContainer<T>>,
@@ -209,12 +209,17 @@ impl<T: EntityData> DataContainer<T> {
         }
     }
 }
+impl <T: EntityData> Default for DataContainer<T> {
+    fn default() -> Self {
+        DataContainer::new()
+    }
+}
 
 
 #[derive(Clone, Debug, PartialEq, PartialOrd, Serialize, Deserialize, Default)]
 pub(crate) struct EntityContainer(pub(crate) Entity, pub(crate) GameEventClock);
 
-#[derive(Clone)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct EntityIndex<T: Hash + Eq + Clone> {
     pub(crate) index: HashMap<T, Entity>
 }
@@ -304,7 +309,7 @@ mod test {
         t: T
     }
 
-    #[derive(Clone, Default, PrintFields, Debug)]
+    #[derive(Clone, Default, PrintFields, Debug, Serialize, Deserialize)]
     pub struct Bar {
         pub f: f32,
         pub b: i32,

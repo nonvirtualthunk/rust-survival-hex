@@ -31,11 +31,11 @@ impl PartialEq<AttributeType> for AttributeType {
 }
 
 
-#[derive(Clone, Debug)]
-pub struct AttributeValue(Str, i32);
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AttributeValue(String, i32);
 
 
-#[derive(Clone, Debug, PrintFields, Default)]
+#[derive(Clone, Debug, PrintFields, Default, Serialize, Deserialize)]
 pub struct AttributeData {
     pub(crate) attributes: Vec<AttributeValue>
 }
@@ -55,7 +55,7 @@ impl AttributeData {
     fn set_value_for_intern(attributes : &mut Vec<AttributeValue>, set_attr : &AttributeType, value : i32) {
         attributes.retain(|attr| attr.0 != set_attr.name);
         let new_value = value.min(set_attr.maximum_value).min(set_attr.minimum_value);
-        attributes.push(AttributeValue(set_attr.name, new_value));
+        attributes.push(AttributeValue(String::from(set_attr.name), new_value));
     }
 
 

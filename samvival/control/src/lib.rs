@@ -29,6 +29,10 @@ extern crate pretty_env_logger;
 #[macro_use] extern crate log;
 extern crate samvival_gui as gui;
 #[macro_use] extern crate arx_gui_macros;
+#[macro_use] extern crate serde_derive;
+#[macro_use] extern crate serde;
+extern crate ron;
+extern crate bincode;
 
 pub mod tactical;
 

@@ -15,12 +15,19 @@ use std::fmt;
 use serde::de::MapAccess;
 use serialize::SerializableError;
 
+#[derive(Clone)]
 pub struct MultiTypeContainer {
     storage : Map<CloneAny>,
     serialized_string_data : HashMap<String,String>,
     serialized_byte_data : HashMap<String,Vec<u8>>,
     serialize_to_string_functions: HashMap<String, fn(&MultiTypeContainer) -> Result<String,SerializableError>>,
     serialize_to_bytes_functions: HashMap<String, fn(&MultiTypeContainer) -> Result<Vec<u8>,SerializableError>>
+}
+
+impl Default for MultiTypeContainer {
+    fn default() -> Self {
+        MultiTypeContainer::new()
+    }
 }
 
 impl MultiTypeContainer {
@@ -34,26 +41,33 @@ impl MultiTypeContainer {
         }
     }
 
-    pub fn register<U>(&mut self) where U : Serialize + DeserializeOwned + Clone + Default + 'static {
-        let type_name = unsafe {::std::intrinsics::type_name::<U>()};
-        if let Some(serialized) = self.serialized_string_data.remove(type_name) {
-            let deserialized : U = ron::de::from_str(&serialized).expect(format!("could not deserialize string on register of type {}", type_name).as_str());
-            self.storage.insert(deserialized);
-        } else if let Some(serialized) = self.serialized_byte_data.remove(type_name) {
-            let deserialized : U = bincode::deserialize(serialized.as_slice()).expect(format!("could not deserialize binary on register of type {}", type_name).as_str());
-            self.storage.insert(deserialized);
-        } else {
-            self.storage.insert(U::default());
-        }
+    pub fn register<U>(&mut self) -> &mut U where U : Serialize + DeserializeOwned + Clone + Default + 'static {
+        if ! self.contains::<U>() {
+            let type_name = unsafe {::std::intrinsics::type_name::<U>()};
+            if let Some(serialized) = self.serialized_string_data.remove(type_name) {
+                let deserialized : U = ron::de::from_str(&serialized).expect(format!("could not deserialize string on register of type {}", type_name).as_str());
+                self.storage.insert(deserialized);
+            } else if let Some(serialized) = self.serialized_byte_data.remove(type_name) {
+                let deserialized : U = bincode::deserialize(serialized.as_slice()).expect(format!("could not deserialize binary on register of type {}", type_name).as_str());
+                self.storage.insert(deserialized);
+            } else {
+                self.storage.insert(U::default());
+            }
 
-        self.serialize_to_string_functions.insert(String::from(type_name), |mte: &MultiTypeContainer| {
-            let value = mte.storage.get::<U>().expect("registered type must always be present");
-            ron::ser::to_string(value).map_err(|_e| SerializableError::Error)
-        });
-        self.serialize_to_bytes_functions.insert(String::from(type_name), |mte: &MultiTypeContainer| {
-            let value = mte.storage.get::<U>().expect("registered type must always be present");
-            bincode::serialize(value).map_err(|_e| SerializableError::Error)
-        });
+            self.serialize_to_string_functions.insert(String::from(type_name), |mte: &MultiTypeContainer| {
+                let value = mte.storage.get::<U>().expect("registered type must always be present");
+                ron::ser::to_string(value).map_err(|_e| SerializableError::Error)
+            });
+            self.serialize_to_bytes_functions.insert(String::from(type_name), |mte: &MultiTypeContainer| {
+                let value = mte.storage.get::<U>().expect("registered type must always be present");
+                bincode::serialize(value).map_err(|_e| SerializableError::Error)
+            });
+        }
+        self.get_mut::<U>()
+    }
+
+    pub fn get_opt<U>(&self) -> Option<&U> where U : Clone + 'static {
+        self.storage.get::<U>()
     }
 
     pub fn get<U>(&self) -> &U where U : Clone + 'static {
@@ -62,6 +76,18 @@ impl MultiTypeContainer {
 
     pub fn get_mut<U>(&mut self) -> &mut U where U : Clone + 'static {
         self.storage.get_mut::<U>().unwrap_or_else(|| panic!(format!("MultiTypeContainer received request for type {}, but that type was not registered", unsafe {::std::intrinsics::type_name::<U>()})))
+    }
+
+    pub fn contains<U>(&self) -> bool where U : Clone + 'static {
+        self.storage.contains::<U>()
+    }
+
+    pub fn clear(&mut self) {
+        self.storage.clear();
+        self.serialized_string_data.clear();
+        self.serialized_byte_data.clear();
+        self.serialize_to_string_functions.clear();
+        self.serialize_to_bytes_functions.clear();
     }
 }
 

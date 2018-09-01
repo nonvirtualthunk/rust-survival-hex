@@ -47,6 +47,8 @@ use tactical_gui;
 
 use tactical_event_handler;
 use common::Rect;
+use ron;
+use bincode;
 
 use std::time::*;
 
@@ -65,6 +67,8 @@ use game::logic::faction::is_enemy;
 use std::collections::HashSet;
 use gui::state::GameState;
 use game::entities::time::TurnData;
+use std::fs::File;
+use std::path::Path;
 
 #[derive(PartialOrd, PartialEq, Copy, Clone)]
 pub struct Cost(pub R32);
@@ -708,6 +712,16 @@ impl GameMode for TacticalMode {
                         if self.selected_character.is_none() {
                             self.end_turn(world);
                         }
+                    },
+                    Key::Y => {
+                        use std::io::Write;
+                        let string = ron::ser::to_string_pretty(&world, ron::ser::PrettyConfig::default()).expect("couldn't deserialize");
+                        File::create(Path::new("/tmp/world.ron")).expect("couldn't create").write_all(string.as_bytes()).expect("couldn't write");
+                    },
+                    Key::U => {
+                        use std::io::Write;
+                        let bytes = bincode::serialize(&world).expect("couldn't deserialize");
+                        File::create(Path::new("/tmp/world.bin")).expect("couldn't create").write_all(&bytes).expect("couldn't write");
                     },
                     _ => ()
                 }

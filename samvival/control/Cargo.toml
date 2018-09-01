@@ -23,6 +23,10 @@ dimensioned = "*"
 itertools = "0.7.3"
 log = "*"
 pretty_env_logger = "*"
+serde = "*"
+serde_derive = "*"
+ron = "*"
+bincode = "*"
 
 [dependencies.arx_common]
 path = "../../arx_common"

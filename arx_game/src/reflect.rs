@@ -425,7 +425,6 @@ macro_rules! implement_map_transform_ser {
         }
     }
 }
-//<K: Clone + Hash + Eq + 'static + serde::Serialize, V: Clone + serde::Serialize + ops::Add<Output=V> + ops::Sub<Output=V> + Default, S: BuildHasher> FieldTransformation<HashMap<K, V, S>>
 
 implement_transform_ser!(DeserializeAddTransformation, deserialize_add, T, transformations::Add<T>, + ops::Add<Output=T>);
 implement_transform_ser!(DeserializeSubTransformation, deserialize_sub, T, transformations::Sub<T>, + ops::Sub<Output=T> + ops::Neg<Output=T>);
@@ -545,7 +544,6 @@ pub fn deserialize_to_transform<'de, T, V>(seq: &mut V) -> Result<Box<FieldTrans
         "add_to_key" => T::deserialize_add_to_key(seq),
         "set_key_to" => T::deserialize_set_key_to(seq),
         "remove_key" => T::deserialize_remove_key(seq),
-        "transform_key" => T::deserialize_remove_key(seq),
         "append" => T::deserialize_append(seq),
         "remove" => T::deserialize_remove(seq),
         name => panic!(format!("unsupported transform name {}", name))
@@ -627,7 +625,7 @@ mod test {
     use super::super::entity;
     use common::reflect::Field;
 
-    #[derive(Clone, Default, PrintFields, Debug)]
+    #[derive(Clone, Default, PrintFields, Debug, Serialize, Deserialize)]
     pub struct Bar {
         pub f: f32,
         pub b: i32,
