@@ -483,9 +483,10 @@ impl TacticalMode {
 impl GameMode for TacticalMode {
     fn enter(&mut self, world: &mut World) {
         world.add_callback(|world, event| {
-            for (ent,act_data) in world.view().entities_with_data::<ActionData>() {
-                (act_data.active_reaction.resolve().on_event)(world, *ent, event);
-            }
+            logic::reaction::trigger_reactions_for_event(world, event);
+//            for (ent,act_data) in world.view().entities_with_data::<ActionData>() {
+//                (act_data.active_reaction.resolve().on_event)(world, *ent, event);
+//            }
         });
 
         game::components::SpawningComponent::register(world);

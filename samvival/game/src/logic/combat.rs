@@ -72,7 +72,7 @@ impl<T: Default> Breakdown<T> where T: ops::Add<Output=T> + Copy + ToStringWithS
         for field_mod in logs.modifications_for(field) {
             let mut modification_str = field_mod.modification.to_string();
             modification_str.retain(|c| !c.is_whitespace());
-            self.components.push((modification_str, strf(field_mod.description.unwrap_or(""))))
+            self.components.push((modification_str, field_mod.description.clone().unwrap_or_else(||String::from(""))))
         }
     }
 

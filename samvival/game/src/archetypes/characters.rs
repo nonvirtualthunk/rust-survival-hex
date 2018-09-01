@@ -41,7 +41,7 @@ pub fn character_archetypes() -> ArchetypeLibrary {
     archetypes_by_name.insert(strf("human"), baseline.clone()
         .with_creator(|world| CombatData {
             natural_attacks: vec![
-                create_attack(world, "punch", vec![&taxonomy::attacks::NaturalAttack, &taxonomy::attacks::BludgeoningAttack], Attack {
+                create_attack(world, "punch", vec![&taxonomy::attacks::NaturalAttack, &taxonomy::attacks::BludgeoningAttack, &taxonomy::attacks::MeleeAttack], Attack {
                     name: strf("punch"),
                     verb: None,
                     attack_type: AttackType::Melee,
@@ -61,7 +61,7 @@ pub fn character_archetypes() -> ArchetypeLibrary {
                     pattern: HexPattern::Single,
                 })],
             ..Default::default()
-        })
+        }),
     );
 
     archetypes_by_name.insert(strf("mud monster"), baseline.clone()
@@ -78,21 +78,25 @@ pub fn character_archetypes() -> ArchetypeLibrary {
             ..Default::default()
         })
         .with_creator(|world| CombatData {
-            natural_attacks: vec![create_attack(world, "punch", vec![&taxonomy::attacks::NaturalAttack, &taxonomy::attacks::BludgeoningAttack], Attack {
-                name: strf("slam"),
-                damage_dice: DicePool {
-                    count: 1,
-                    die: 4,
-                },
-                ..Default::default()
-            })],
+            natural_attacks: vec![
+                create_attack(
+                    world, "punch",
+                    vec![&taxonomy::attacks::NaturalAttack, &taxonomy::attacks::BludgeoningAttack, &taxonomy::attacks::MeleeAttack],
+                    Attack {
+                        name: strf("slam"),
+                        damage_dice: DicePool {
+                            count: 1,
+                            die: 4,
+                        },
+                        ..Default::default()
+                    })],
             ..Default::default()
         })
         .with(SkillData::default())
         .with(EquipmentData::default())
         .with(GraphicsData::default())
         .with(PositionData::default())
-        .with(IdentityData::of_kind(taxon("mud monster", &taxonomy::Monster)))
+        .with(IdentityData::of_kind(taxon("mud monster", &taxonomy::Monster))),
     );
 
     ArchetypeLibrary {

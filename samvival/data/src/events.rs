@@ -1,15 +1,16 @@
 use game::prelude::*;
 use common::hex::*;
-use combat::AttackRef;
-use combat::DamageType;
-use reactions::ReactionType;
-use combat::AttackType;
-use combat::Attack;
-use combat::StrikeResult;
+use entities::combat::AttackRef;
+use entities::combat::DamageType;
+use entities::reactions::ReactionType;
+use entities::combat::AttackType;
+use entities::combat::Attack;
+use entities::combat::StrikeResult;
 use std::collections::HashMap;
+use entities::reactions::ReactionTypeRef;
 
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug,Serialize,Deserialize)]
 pub enum GameEvent {
     Move { character : Entity, from : AxialCoord, to : AxialCoord, cost : Sext },
     EntityAppears { entity: Entity, at : AxialCoord },
@@ -27,8 +28,14 @@ pub enum GameEvent {
     WorldStart,
     SelectedAttackChanged { entity : Entity, attack_ref : AttackRef },
     SelectedCounterattackChanged { entity : Entity, attack_ref : AttackRef },
-    SelectedReactionChanged { entity : Entity, reaction_type : ReactionType },
-    ReactionEffectApplied { entity : Entity }
+    SelectedReactionChanged { entity : Entity, reaction_type : ReactionTypeRef },
+    ReactionEffectApplied { entity : Entity },
+    Default
+}
+impl Default for GameEvent {
+    fn default() -> Self {
+        GameEvent::Default
+    }
 }
 
 impl GameEventType for GameEvent {

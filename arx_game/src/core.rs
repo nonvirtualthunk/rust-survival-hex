@@ -236,6 +236,10 @@ impl Into<f64> for Oct {
 pub struct Sext(i64);
 
 impl Sext {
+    pub const fn of_int(i : i64) -> Sext {
+        Sext(i * 6)
+    }
+
     pub fn of_rounded<T: num::Float>(n: T) -> Sext {
         let f = n.to_f64().expect("somehow, used \"of\" to create an Sext with a type that didn't support it");
         Sext((f * 6.0).round() as i64)
@@ -255,8 +259,8 @@ impl Sext {
     }
 
 
-    pub fn zero() -> Sext {
-        Sext::of(0)
+    pub const fn zero() -> Sext {
+        Sext(0)
     }
 
     pub fn as_f32(&self) -> f32 {
@@ -329,7 +333,7 @@ pub struct IntFract(i64, i64);
 
 
 
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub struct Progress<T: PartialOrd + Default + Clone + Debug> {
     pub current: T,
     pub required: T,

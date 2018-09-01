@@ -44,7 +44,7 @@ pub fn weapon_archetypes() -> ArchetypeLibrary {
     archetypes_by_name.insert(strf("longsword"), EntityBuilder::new()
         .with_creator(|world| ItemData {
             attacks: vec![
-                create_attack(world, "stab", vec![&StabbingAttack], Attack {
+                create_attack(world, "stab", vec![&StabbingAttack, &MeleeAttack], Attack {
                     name: strf("stab"),
                     verb: None,
                     attack_type: AttackType::Melee,
@@ -60,7 +60,7 @@ pub fn weapon_archetypes() -> ArchetypeLibrary {
                     stamina_cost: 0,
                     pattern: HexPattern::Single,
                 }),
-                create_attack(world, "slash", vec![&SlashingAttack], Attack {
+                create_attack(world, "slash", vec![&SlashingAttack, &MeleeAttack], Attack {
                     name: strf("slash"),
                     verb: None,
                     attack_type: AttackType::Melee,
@@ -134,7 +134,7 @@ pub fn weapon_archetypes() -> ArchetypeLibrary {
                     stamina_cost: 0,
                     pattern: HexPattern::Single,
                 }),
-                create_attack(world, "smack", vec![&BludgeoningAttack], Attack {
+                create_attack(world, "smack", vec![&BludgeoningAttack, &MeleeAttack], Attack {
                     name: strf("smack"),
                     verb: None,
                     attack_type: AttackType::Melee,

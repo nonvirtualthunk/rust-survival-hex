@@ -39,6 +39,8 @@ use rand::StdRng;
 use rand::SeedableRng;
 use backtrace::Backtrace;
 use events::CoreEvent::DataRegistered;
+use serde::Deserialize;
+use serde::Serialize;
 
 pub struct ModifiersApplication {
     disable_func: fn(&mut World, ModifierReference),
@@ -59,11 +61,29 @@ pub struct IndexApplication {
 pub enum ModifierReferenceType {
     Permanent,
     Dynamic,
-    Archetype
+    Archetype,
+    Sentinel
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModifierReference(pub(crate) usize, pub(crate) ModifierReferenceType, pub(crate) usize);
+impl ModifierReference {
+    pub fn sentinel() -> ModifierReference { ModifierReference(0,ModifierReferenceType::Sentinel,0)}
+    pub fn as_opt(&self) -> Option<&ModifierReference> {
+        if self.is_sentinel() {
+            None
+        } else {
+            Some(self)
+        }
+    }
+    pub fn is_sentinel(&self) -> bool {
+        match self.1 {
+            ModifierReferenceType::Sentinel => true,
+            _ => false
+        }
+    }
+}
 
+//#[derive(Serialize,Deserialize)]
 pub struct World {
     pub(crate) entities: Vec<EntityContainer>,
     pub self_entity: Entity,
@@ -73,9 +93,12 @@ pub struct World {
     pub total_dynamic_modifier_count: ModifierClock,
     pub next_time: GameEventClock,
     pub(crate) events: MultiTypeEventContainer,
+//    #[serde(skip_serializing, skip_deserializing)]
     pub view: UnsafeCell<WorldView>,
+//    #[serde(skip_serializing, skip_deserializing)]
     pub modifier_application_by_type: hash_map::HashMap<TypeId, ModifiersApplication>,
     pub entity_indices: Map<CloneAny>,
+//    #[serde(skip_serializing, skip_deserializing)]
     pub index_applications: Vec<IndexApplication>,
 }
 
@@ -137,7 +160,7 @@ impl World {
         });
     }
 
-    pub fn register_event_type<E: GameEventType + 'static>(&mut self) {
+    pub fn register_event_type< E: GameEventType + 'static + Serialize + Default>(&mut self) where for<'de> E: serde::Deserialize<'de> {
         self.events.register_event_type::<E>();
         self.mut_view().events.register_event_type::<E>();
     }
@@ -164,19 +187,23 @@ impl World {
 
         let disable_func = |world: &mut World, modifier_ref: ModifierReference| {
             let all_modifiers: &mut ModifiersContainer<T> = world.modifiers.get_mut::<ModifiersContainer<T>>().unwrap();
-            let ModifierReference(_, modifier_type, index) = modifier_ref;
+            let ModifierReference(modifier_clock, modifier_type, index) = modifier_ref;
             match modifier_type {
                 ModifierReferenceType::Dynamic => {
                     panic!("Disabling dynamic modifiers not re-implemented yet");
 //                    all_modifiers.dynamic_modifiers.get_mut(index).expect("cannot disable a non-existent modifier").disabled_at = Some(world.next_time);
                 },
                 ModifierReferenceType::Permanent => {
-                    panic!("Disabling permanent modifiers not re-implemented yet");
+                    if let Some((index, modifier)) = all_modifiers.modifiers.iter_mut().enumerate().find(|(i,e)| e.modifier_index == modifier_clock) {
+                        modifier.disabled_at = Some(world.next_time);
+                        all_modifiers.modifiers_by_disabled_at.entry(world.next_time).or_insert_with(|| Vec::new()).push(index);
+                    }
 //                    trace!("Disabling modifier with reference {:?} and marking disabled at to {:?}", modifier_ref, world.next_time);
 //                    let modifier = all_modifiers.modifiers.get_mut(index).expect("cannot disable a non-existent modifier").disabled_at = Some(world.next_time);
 //                    all_modifiers.modifiers_by_disabled_at.entry(world.next_time).or_insert_with(|| Vec::new()).push(index);
                 },
-                ModifierReferenceType::Archetype => { warn!("it makes no sense to attempt to disable a modifier archetype") }
+                ModifierReferenceType::Archetype => { warn!("it makes no sense to attempt to disable a modifier archetype") },
+                ModifierReferenceType::Sentinel => { warn!("removing a sentinel reference is a no-op") }
             }
         };
 
@@ -583,11 +610,11 @@ impl World {
                 disabled_at: None,
                 modifier_index: self.total_dynamic_modifier_count,
                 entity,
-                description: description.into(),
+                description: description.into().map(|s| String::from(s)),
             });
             all_modifiers.dynamic_entity_set.insert(entity);
             self.total_dynamic_modifier_count += 1;
-            ModifierReference(self.total_dynamic_modifier_count, ModifierReferenceType::Dynamic, index - 1)
+            ModifierReference(self.total_dynamic_modifier_count - 1, ModifierReferenceType::Dynamic, index)
         } else {
             let index = all_modifiers.modifiers.len();
             all_modifiers.modifiers.push(ModifierContainer {
@@ -596,11 +623,11 @@ impl World {
                 disabled_at: None,
                 modifier_index: self.total_modifier_count,
                 entity,
-                description: description.into(),
+                description: description.into().map(|s| String::from(s)),
             });
             trace!("Creating modifier with count {}, incrementing", self.total_modifier_count);
             self.total_modifier_count += 1;
-            ModifierReference(self.total_dynamic_modifier_count, ModifierReferenceType::Permanent, index - 1)
+            ModifierReference(self.total_modifier_count - 1, ModifierReferenceType::Permanent, index)
         }
     }
 

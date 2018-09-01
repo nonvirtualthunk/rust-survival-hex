@@ -7,14 +7,16 @@ use common::prelude::*;
 use game::prelude::*;
 use GameEvent;
 
-use CharacterData;
-use CombatData;
-use ModifierTrackingData;
+use entities::EntitySelectors;
+use entities::character::CharacterData;
+use entities::combat::CombatData;
+use entities::common_entities::ModifierTrackingData;
+use entities::taxonomy;
 
 
 pub enum EventTrigger {}
 
-#[derive(Clone,Copy,Hash,Debug,Serialize,Deserialize)]
+#[derive(Clone,Copy,Hash,Debug,Serialize,Deserialize,PartialEq,Eq)]
 pub enum ReactionTypeRef {
     Counterattack,
     Dodge,
@@ -51,10 +53,11 @@ pub struct ReactionType {
     pub infinitive: Str,
     pub description: Str,
     pub rules_description: Str,
-    pub condition_func: fn(&WorldView, Entity) -> bool,
     pub condition_description: Str,
     pub costs: Str,
-    pub on_event: fn(&mut World, Entity, &GameEventWrapper<GameEvent>),
+    pub condition: fn() -> EntitySelectors
+//    pub condition_func: fn(&WorldView, Entity) -> bool,
+//    pub on_event: fn(&mut World, Entity, &GameEventWrapper<GameEvent>),
 }
 
 
@@ -88,8 +91,8 @@ impl Hash for ReactionType {
 #[allow(non_upper_case_globals)]
 pub mod reaction_types {
     use super::*;
-    use combat::AttackType;
-    use character::AllegianceData;
+    use entities::combat::AttackType;
+    use entities::character::AllegianceData;
 
     /// takes care of the boilerplate of turn based reaction
     fn reaction_modifier_boilerplate(world : &mut World, ent : Entity, event : &GameEventWrapper<GameEvent>, modifier_key : Str) -> bool {
@@ -112,8 +115,6 @@ pub mod reaction_types {
         false
     }
 
-    // SERIALIZATION PASS - this whole reaction type setup
-
     pub static Counterattack: ReactionType = ReactionType {
         icon: "ui/counterattack_icon",
         name: "counter attack",
@@ -124,25 +125,7 @@ pub mod reaction_types {
         and moving into or out of a hex you threaten.",
         costs: "1 stamina for every counter strike made",
         condition_description: "Must have a melee attack to use",
-//        condition_func: |view, ent| logic::combat::possible_attacks(view, ent).any_match(|a| a.attack_type == AttackType::Melee) && view.data::<CharacterData>(ent).stamina.cur_value() > Sext::of(0),
-        condition_func: |view,ent| true,
-        on_event: |world, ent, event| if reaction_modifier_boilerplate(world, ent, event, "counter-reaction") {
-            let view = world.view();
-            let char_data = view.data::<CharacterData>(ent);
-
-            if char_data.stamina.cur_value() > Sext::of(0) {
-                // SERIALIZATION PASS - counterattacks specifically
-//                if let Some(counter_attack) = logic::combat::counter_attack_ref_to_use(view, ent) {
-//                    if let Some(counter_attack) = counter_attack.resolve(view, ent) {
-//                        let increase_counters_by = view.data::<CharacterData>(ent).action_points.max_value() / counter_attack.ap_cost as i32;
-//                        let modifier = world.modify(ent, CombatData::counters_remaining.increase_by(increase_counters_by), "counterattack reaction");
-//
-//                        world.modify(ent, ModifierTrackingData::modifiers_by_key.set_key_to(strf("counter-reaction"), modifier), None);
-//                        world.add_event(GameEvent::ReactionEffectApplied { entity : ent });
-//                    }
-//                }
-            }
-        },
+        condition: || EntitySelectors::HasStamina(Sext::of_int(1)).and(EntitySelectors::has_attack_kind(&taxonomy::attacks::MeleeAttack))
     };
 
     pub static Dodge: ReactionType = ReactionType {
@@ -153,18 +136,7 @@ pub mod reaction_types {
         rules_description: "Gain a +2 dodge bonus to avoid getting hit, or double your dodge bonus, whichever is higher",
         costs: "1 stamina for every 2 strikes against you",
         condition_description: "none",
-//        condition_func: |view, ent| view.data::<CharacterData>(ent).stamina.cur_value() > Sext::of(0),
-        condition_func: |view,ent| true,
-        on_event: |world, ent, event| if reaction_modifier_boilerplate(world, ent, event, "dodge-reaction") {
-            let char_data = world.view().data::<CharacterData>(ent);
-            if char_data.stamina.cur_value() > Sext::of(0) {
-                let increase_dodge_by = (world.view().data::<CombatData>(ent).dodge_bonus * 2).max(2);
-                let modifier = world.modify(ent, CombatData::dodge_bonus.add(increase_dodge_by), "dodge reaction");
-
-                world.modify(ent, ModifierTrackingData::modifiers_by_key.set_key_to(strf("dodge-reaction"), modifier), None);
-                world.add_event(GameEvent::ReactionEffectApplied { entity : ent });
-            }
-        },
+        condition: || EntitySelectors::HasStamina(Sext::of_int(1)),
     };
 
 
@@ -176,9 +148,7 @@ pub mod reaction_types {
         rules_description: "Gain a +2 dodge bonus to avoid getting hit, or double your dodge bonus, whichever is better",
         costs: "1 stamina for every 2 strikes against you",
         condition_description: "none",
-//        condition_func: |view, ent| true,
-        condition_func: |view,ent| true,
-        on_event: |world, ent, event| {},
+        condition: || EntitySelectors::Any,
     };
 
 
@@ -190,13 +160,6 @@ pub mod reaction_types {
         rules_description: "Gain a +1 bonus to defense.",
         costs: "none",
         condition_description: "none",
-//        condition_func: |view, ent| true,
-        condition_func: |view,ent| true,
-        on_event: |world, ent, event| if reaction_modifier_boilerplate(world, ent, event, "defend-reaction") {
-            let modifier = world.modify(ent, CombatData::defense_bonus.add(1), "defense reaction");
-            world.modify(ent, ModifierTrackingData::modifiers_by_key.set_key_to(strf("defend-reaction"), modifier), None);
-            world.add_event(GameEvent::ReactionEffectApplied { entity : ent });
-            println!("end turn defense increase modifications applied");
-        }
+        condition: || EntitySelectors::Any,
     };
 }

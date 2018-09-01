@@ -1,20 +1,20 @@
 use common::hex::AxialCoord;
 use common::prelude::*;
 use game::core::*;
-use EquipmentData;
-use ItemData;
+use entities::inventory::EquipmentData;
+use entities::item::ItemData;
 use rand::StdRng;
 use std::fmt::{Display, Error, Formatter};
 use game::Entity;
 use game::entity::EntityData;
 use game::world::WorldView;
 use game::GameDisplayable;
-use Taxon;
+use entities::common_entities::Taxon;
 use game::prelude::*;
 use game::entity;
 
-use selectors::EntitySelectors;
-use common_entities::IdentityData;
+use entities::selectors::EntitySelectors;
+use entities::common_entities::IdentityData;
 
 #[derive(Clone,Debug,Serialize,Deserialize)]
 pub enum DerivedAttackKind {
@@ -207,7 +207,7 @@ pub fn create_attack<T : Into<Taxon>>(world: &mut World, name: Str, kinds: Vec<T
 }
 
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize,Deserialize)]
 pub struct StrikeResult {
     pub weapon : Option<Entity>,
     pub damage_done : i32,
@@ -238,7 +238,7 @@ impl Default for Attack {
     }
 }
 
-#[derive(Clone, PartialEq, Hash, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct AttackRef {
     pub attack_entity: Entity,
     pub derived_from: Entity

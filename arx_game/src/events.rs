@@ -4,7 +4,7 @@ use prelude::*;
 use common::hex::AxialCoord;
 use std::fmt::Debug;
 
-#[derive(Clone,Copy)]
+#[derive(Clone,Copy,Serialize,Deserialize,Debug)]
 pub struct GameEventWrapper<E : GameEventType> {
     pub occurred_at : GameEventClock,
     pub event: E,
@@ -53,7 +53,7 @@ pub trait GameEventType : Clone + Debug {
     fn beginning_of_time_event() -> Self;
 }
 
-#[derive(Clone,Copy,Debug,PartialEq,Eq,Hash)]
+#[derive(Clone,Copy,Debug,PartialEq,Eq,Hash,Serialize,Deserialize)]
 pub enum GameEventState {
     Started,
     Continuing,
@@ -74,7 +74,7 @@ impl GameEventState {
 }
 
 
-#[derive(Clone,Copy,Debug)]
+#[derive(Clone,Copy,Debug,Serialize,Deserialize)]
 pub enum CoreEvent {
     WorldInitialized,
     EffectEnded,
@@ -83,6 +83,12 @@ pub enum CoreEvent {
     EntityAdded(Entity),
     EntityRemoved(Entity),
     DataRegistered,
+    Default
+}
+impl Default for CoreEvent {
+    fn default() -> Self {
+        CoreEvent::Default
+    }
 }
 
 impl GameEventType for CoreEvent {

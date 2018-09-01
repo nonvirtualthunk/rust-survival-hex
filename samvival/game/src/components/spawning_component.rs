@@ -4,7 +4,7 @@ use data::entities::*;
 use logic;
 use rand::Rng;
 use game::DebugData;
-
+use archetypes::characters::character_archetypes;
 
 pub struct SpawningComponent {
 
@@ -32,12 +32,16 @@ impl SpawningComponent {
                                             let mut rand = world.random(144);
 
                                             let spawn_point = valid_spawn_points[rand.gen_range(0,valid_spawn_points.len())];
-                                            let monster = spawn.entity.clone()
-                                                .with(DebugData { name : strf("spawned monster") })
+                                            let entity_archetype = match &spawn.entity {
+                                                SpawnEntity::Character(archetype) => character_archetypes().with_name(archetype.as_str()).clone()
+                                                    .with(AllegianceData { faction : allegiance.faction })
+                                                    .with(DebugData { name : format!("spawned creature: {:?}", archetype) })
+                                            };
+
+                                            let spawned_entity = entity_archetype
                                                 .with(PositionData { hex : *spawn_point})
-                                                .with(AllegianceData { faction : allegiance.faction })
                                                 .create(world);
-                                            logic::movement::place_entity_in_world(world, monster, *spawn_point);
+                                            logic::movement::place_entity_in_world(world, spawned_entity, *spawn_point);
                                         } else {
                                             warn!("No valid spawn locations");
                                         }

@@ -148,6 +148,7 @@ pub enum Transformation {
     RemoveKey(Box<Any>),
     Append(Box<Any>),
     Remove(Box<Any>),
+    ModifyKey(Box<Any>, Box<Transformation>),
     Custom(String),
     Reset
 }
@@ -294,6 +295,7 @@ impl fmt::Display for Transformation {
             Transformation::RemoveKey(_) => write!(f, "removed"),
             Transformation::Append(a) => write!(f, "appended {}", Transformation::as_string(a, false, false)),
             Transformation::Remove(a) => write!(f, "removed {}", Transformation::as_string(a, false, false)),
+            Transformation::ModifyKey(k, tr) => write!(f, "[{}] {}", Transformation::as_string(k, false, false), tr),
             Transformation::Reset => write!(f, "reset"),
         }
     }
@@ -302,12 +304,12 @@ impl fmt::Display for Transformation {
 pub struct FieldModification {
     pub field: Str,
     pub modification: Transformation,
-    pub description: Option<Str>,
+    pub description: Option<String>,
 }
 
 impl FieldModification {
-    pub fn new(field: Str, modification: Transformation, description: Option<Str>) -> FieldModification {
-        FieldModification { field, modification, description }
+    pub fn new<S : Into<Option<Str>>>(field: Str, modification: Transformation, description: S) -> FieldModification {
+        FieldModification { field, modification, description : description.into().map(|s| String::from(s)) }
     }
     pub fn squash(mut transformations: VecDeque<FieldModification>) -> VecDeque<FieldModification> {
         let mut new_vec = VecDeque::new();

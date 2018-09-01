@@ -21,6 +21,7 @@ use common::Color;
 use game::entities::actions::*;
 use game::entities::reactions::reaction_types;
 
+use game::entities::reactions::ReactionTypeRef;
 use game::logic;
 use common::prelude::*;
 use graphics::core::GraphicsWrapper;
@@ -252,8 +253,8 @@ impl TacticalGui {
                 self.action_bar.update(gui, world_view, actions, &game_state, &mut control);
 //                self.reaction_bar.set_x(Positioning::left_of(self.character_info_widget.as_widget(), 1.ux())).as_widget().reapply(gui);
 //                self.reaction_bar.set_y(Positioning::constant(2.ux())).as_widget().reapply(gui);
-                let reactions = vec![reaction_types::Defend.clone(), reaction_types::Dodge.clone(), reaction_types::Block.clone(), reaction_types::Counterattack.clone()];
-                self.reaction_bar.update(gui, reactions, char.action.active_reaction.resolve().clone(), &game_state, &mut control);
+                let reactions = vec![ReactionTypeRef::Defend, ReactionTypeRef::Dodge, ReactionTypeRef::Block, ReactionTypeRef::Counterattack];
+                self.reaction_bar.update(gui, reactions, char.action.active_reaction, &game_state, &mut control);
             } else {
                 self.action_bar.set_showing(false).reapply(gui);
                 self.reaction_bar.set_showing(false).reapply(gui);
@@ -312,8 +313,7 @@ impl TacticalGui {
                     },
                     ControlEvents::ReactionSelected(reaction_type) => {
                         println!("Selected reaction type : {:?}", reaction_type);
-                        // SERIALIZATION PASS: creation a reaction type reference concept
-//                        world.modify(selected, ActionData::active_reaction.set_to(reaction_type.clone()), "reaction selected");
+                        world.modify(selected, ActionData::active_reaction.set_to(reaction_type.clone()), "reaction selected");
                         world.add_event(GameEvent::SelectedReactionChanged { entity : selected, reaction_type : reaction_type.clone() });
                     },
                     ControlEvents::ItemTransferRequested { item , from, to } => {

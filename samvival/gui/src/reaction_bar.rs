@@ -10,8 +10,8 @@ use control_events::ControlEvents;
 #[derive(Default)]
 pub struct ReactionBar {
     pub reaction_list: ListWidget<ReactionButton>,
-    pub reactions: Vec<ReactionType>,
-    pub last_selected_reaction: Option<ReactionType>,
+    pub reactions: Vec<ReactionTypeRef>,
+    pub last_selected_reaction: Option<ReactionTypeRef>,
 }
 
 impl DelegateToWidget for ReactionBar {
@@ -83,7 +83,7 @@ impl ReactionBar {
         }
     }
 
-    pub fn update(&mut self, gui: &mut GUI, reactions: Vec<ReactionType>, selected_reaction: ReactionType,
+    pub fn update(&mut self, gui: &mut GUI, reactions: Vec<ReactionTypeRef>, selected_reaction: ReactionTypeRef,
                   game_state: &GameState, control_context: &mut ControlContext) {
         if let Some(selected_char) = game_state.selected_character {
             self.reaction_list.set_showing(true).reapply(gui);
@@ -99,19 +99,20 @@ impl ReactionBar {
 
             if self.reactions != reactions || self.last_selected_reaction.as_ref() != Some(&selected_reaction) {
                 self.reactions = reactions;
-                self.last_selected_reaction = Some(selected_reaction.clone());
+                self.last_selected_reaction = Some(selected_reaction);
 
-                let selected_name = selected_reaction.name;
+                let selected_name = selected_reaction.resolve().name;
 
                 self.reaction_list.update(gui, self.reactions.as_ref(), |action_button, reaction| {
-                    action_button.icon.set_widget_type(WidgetType::image(reaction.icon));
-                    if reaction.name == selected_name {
+                    let resolved_reaction = reaction.resolve();
+                    action_button.icon.set_widget_type(WidgetType::image(resolved_reaction.icon));
+                    if resolved_reaction.name == selected_name {
                         action_button.icon.set_border(Border { color: Color::new(0.1, 0.7, 0.1, 1.0), sides: BorderSides::all(), width: 2 });
                     } else {
                         action_button.icon.set_border(Border { color: Color::black(), sides: BorderSides::all(), width: 2 });
                     }
-                    action_button.info_name.set_text(format!("{}", reaction.name));
-                    action_button.info_description.set_text(format!("{}", reaction.description));
+                    action_button.info_name.set_text(format!("{}", resolved_reaction.name));
+                    action_button.info_description.set_text(format!("{}", resolved_reaction.description));
                 });
             }
         } else {

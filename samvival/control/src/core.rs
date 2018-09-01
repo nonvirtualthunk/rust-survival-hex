@@ -13,7 +13,6 @@ use gui::WidgetType;
 use gui::Sizing;
 use gui::UIEvent;
 use common::Color;
-use game::entities::actions::action_types;
 use game::entities::reactions::reaction_types;
 use game::DebugData;
 
@@ -99,7 +98,7 @@ impl Game {
         let world = &mut raw_world;
 
         for tile in terrain::generator::generate(70) {
-            let tile = tile.with(DebugData { name : strf("world tile") }).create(world);
+            let tile = tile.with(DebugData { name: strf("world tile") }).create(world);
             let pos = world.data::<TileData>(tile).position;
             world.index_entity(tile, pos);
         }
@@ -109,7 +108,7 @@ impl Game {
                 name: String::from("Player"),
                 color: Color::new(1.1, 0.3, 0.3, 1.0),
             })
-            .with(DebugData { name : strf("player faction") })
+            .with(DebugData { name: strf("player faction") })
             .create(world);
 
         world.attach_world_data(TurnData {
@@ -124,7 +123,7 @@ impl Game {
                 color: Color::new(0.3, 0.3, 0.9, 1.0),
 
             })
-            .with(DebugData { name : strf("enemy faction") })
+            .with(DebugData { name: strf("enemy faction") })
             .create(world);
 
 
@@ -146,12 +145,12 @@ impl Game {
                 action_points: Reduceable::new(8),
                 ..Default::default()
             })
-            .with(AllegianceData { faction : player_faction })
+            .with(AllegianceData { faction: player_faction })
             .with(ActionData {
                 active_reaction: ReactionTypeRef::Dodge,
                 ..Default::default()
             })
-            .with(DebugData { name : strf("archer") })
+            .with(DebugData { name: strf("archer") })
             .create(world);
 
         logic::item::equip_item(world, bow, archer, true);
@@ -170,12 +169,12 @@ impl Game {
                 action_points: Reduceable::new(8),
                 ..Default::default()
             })
-            .with(AllegianceData { faction : player_faction })
+            .with(AllegianceData { faction: player_faction })
             .with(ActionData {
                 active_reaction: ReactionTypeRef::Counterattack,
                 ..Default::default()
             })
-            .with(DebugData { name : strf("spearman") })
+            .with(DebugData { name: strf("spearman") })
             .create(world);
 
         let spear = weapon_archetypes.with_name("longspear").create(world);
@@ -194,8 +193,8 @@ impl Game {
 
 
         let monster_base = character_archetypes.with_name("mud monster").clone()
-            .with(AllegianceData { faction : enemy_faction })
-            .with(DebugData { name : strf("monster") });
+            .with(AllegianceData { faction: enemy_faction })
+            .with(DebugData { name: strf("monster") });
 
         let create_monster_at = |world_in: &mut World, pos: AxialCoord| {
             let monster = monster_base.clone().create(world_in);
@@ -216,14 +215,21 @@ impl Game {
                 health: Reduceable::new(100),
                 ..Default::default()
             })
-            .with(MovementData { move_speed : Sext::of(0), ..Default::default() })
-            .with(AllegianceData { faction : enemy_faction })
+            .with(MovementData { move_speed: Sext::of(0), ..Default::default() })
+            .with(AllegianceData { faction: enemy_faction })
             .with(PositionData::default())
-            .with(CombatData { dodge_bonus : -10, .. Default::default() })
-            .with(MonsterSpawnerData { spawns : vec![Spawn { entity : monster_base.clone(), start_spawn_turn : 1, turns_between_spawns : 4 }] })
+            .with(CombatData { dodge_bonus: -10, ..Default::default() })
+            .with(MonsterSpawnerData {
+                spawns: vec![
+                    Spawn {
+                        entity: SpawnEntity::Character(strf("mud monster")),
+                        start_spawn_turn: 1,
+                        turns_between_spawns: 4,
+                    }]
+            })
             .with(IdentityData::of_kind(taxon("summoning stone", &taxonomy::Monster)))
             .create(world);
-        logic::movement::place_entity_in_world(world, spawner, AxialCoord::new(10,0));
+        logic::movement::place_entity_in_world(world, spawner, AxialCoord::new(10, 0));
 
         world.add_event(GameEvent::WorldStart);
 

@@ -1,9 +1,9 @@
-use combat::Attack;
+use entities::combat::Attack;
 use game::Entity;
 use game::entity::EntityData;
 use game::world::WorldView;
 use common::AxialCoord;
-use Taxon;
+use entities::common_entities::Taxon;
 use game::entity;
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize, PrintFields)]

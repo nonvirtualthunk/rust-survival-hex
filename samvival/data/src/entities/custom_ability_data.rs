@@ -7,10 +7,13 @@ use common::prelude::*;
 use std::collections::HashSet;
 
 #[derive(Clone,Debug,Serialize,Deserialize)]
+pub enum SpawnEntity {
+    Character(String)
+}
+
+#[derive(Clone,Debug,Serialize,Deserialize)]
 pub struct Spawn {
-    // SERIALIZATION PASS, figure out how else to represent this
-    #[serde(skip_serializing, skip_deserializing)]
-    pub entity : EntityBuilder,
+    pub entity : SpawnEntity,
     pub turns_between_spawns : i32,
     pub start_spawn_turn : i32
 }

@@ -3,6 +3,8 @@
 
 #![feature(const_fn)]
 #![feature(vec_resize_default)]
+#![feature(core_intrinsics)]
+#![feature(nll)]
 
 extern crate cgmath;
 extern crate interpolation;
@@ -20,7 +22,8 @@ extern crate pretty_env_logger;
 #[macro_use] extern crate serde_derive;
 #[macro_use] extern crate serde;
 extern crate string_interner;
-
+extern crate ron;
+extern crate bincode;
 
 pub mod hex;
 pub use hex::*;
@@ -51,3 +54,7 @@ pub use functions::*;
 
 pub mod string;
 pub use string::*;
+
+pub mod serialize;
+
+pub mod multitype;

@@ -5,9 +5,9 @@ use game::EntityData;
 use game::ModifierReference;
 use common::prelude::*;
 use std::collections::HashSet;
-use actions::ActionType;
-use actions::Action;
-use reactions::ReactionType;
+use entities::actions::ActionType;
+use entities::actions::Action;
+use entities::reactions::ReactionType;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -22,7 +22,7 @@ use serde::de::Visitor;
 use std::fmt::Formatter;
 use std::fmt;
 use std::error::Error;
-use reactions::ReactionTypeRef;
+use entities::reactions::ReactionTypeRef;
 use serde::de::EnumAccess;
 use serde::de::SeqAccess;
 use serde::ser::SerializeTuple;
@@ -94,10 +94,8 @@ impl Default for IdentityData {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PrintFields)]
 pub struct ActionData {
-    // SERIALIZATION PASS, re-enable actions
-//    pub active_action : Option<Action>,
+    pub active_action : Option<Action>,
     pub active_reaction: ReactionTypeRef,
-//    pub available_action_types : HashSet<ActionType>
 }
 impl EntityData for ActionData {}
 
@@ -393,11 +391,14 @@ pub mod taxonomy {
     pub static Weapon : Taxon = taxon("weapon", &Item);
     pub mod weapons {
         use super::*;
-        pub static StabbingWeapon: Taxon = taxon("stabbing weapon", &Weapon);
-        pub static BladedWeapon: Taxon = taxon("bladed weapon", &Weapon);
-        pub static ProjectileWeapon : Taxon = taxon("projectile weapon", &Weapon);
+        pub static MeleeWeapon : Taxon = taxon("melee weapon", &Weapon);
+        pub static RangedWeapon : Taxon = taxon("ranged weapon", &Weapon);
 
-        pub static ReachWeapon : Taxon = taxon("reach weapon", &Weapon);
+        pub static StabbingWeapon: Taxon = taxon("stabbing weapon", &MeleeWeapon);
+        pub static BladedWeapon: Taxon = taxon("bladed weapon", &MeleeWeapon);
+        pub static ProjectileWeapon : Taxon = taxon("projectile weapon", &RangedWeapon);
+
+        pub static ReachWeapon : Taxon = taxon("reach weapon", &MeleeWeapon);
 
         pub static Sword : Taxon = taxon("sword", &BladedWeapon);
         pub static Bow : Taxon = taxon("bow", &ProjectileWeapon);
@@ -439,6 +440,7 @@ pub mod taxonomy {
     pub static Attack : Taxon = taxon("attack", &Action);
     pub mod attacks {
         use super::*;
+        pub static MeleeAttack : Taxon = taxon("melee attack", &Attack);
         pub static RangedAttack : Taxon = taxon("ranged attack", &Attack);
 
         pub static ProjectileAttack : Taxon = taxon("projectile attack", &RangedAttack);
@@ -449,7 +451,7 @@ pub mod taxonomy {
         pub static PiercingAttack : Taxon = taxon("piercing attack", &Attack);
         pub static StabbingAttack : Taxon = taxon("stabbing attack", &PiercingAttack);
 
-        pub static ReachAttack : Taxon = taxon("reach attack", &Attack);
+        pub static ReachAttack : Taxon = taxon("reach attack", &MeleeAttack);
         pub static BludgeoningAttack : Taxon = taxon("bludgeoning attack", &Attack);
         pub static MagicAttack : Taxon = taxon("magic attack", &Attack);
         pub static NaturalAttack : Taxon = taxon("natural attack", &Attack);

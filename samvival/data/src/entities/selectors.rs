@@ -2,13 +2,13 @@ use common::prelude::*;
 use game::prelude::*;
 
 
-use EntitySelectors::*;
-use tile::TileData;
+use entities::selectors::EntitySelectors::*;
+use entities::tile::TileData;
 
-use Taxon;
+use entities::common_entities::Taxon;
 
-use inventory::InventoryData;
-use item::ItemData;
+use entities::inventory::InventoryData;
+use entities::item::ItemData;
 
 #[derive(PartialEq,Eq,Clone,Debug,Serialize,Deserialize)]
 pub enum EntitySelectors {
@@ -19,10 +19,14 @@ pub enum EntitySelectors {
     IsCharacter,
     IsTile,
     HasInventory,
+    HasEquipmentKind(Taxon),
+    HasAttackKind(Taxon),
     IsA(Taxon),
     And(Box<EntitySelectors>, Box<EntitySelectors>),
     Or(Box<EntitySelectors>, Box<EntitySelectors>),
-    Any
+    Any,
+    HasStamina(Sext),
+    HasAP(i32)
 }
 
 impl EntitySelectors {
@@ -32,6 +36,8 @@ impl EntitySelectors {
     pub fn inventory() -> EntitySelectors { HasInventory }
 
     pub fn is_a(taxon : &'static Taxon) -> EntitySelectors{ IsA(taxon.into()) }
+    pub fn has_equipment_kind(taxon : &'static Taxon) -> EntitySelectors { HasEquipmentKind(taxon.into()) }
+    pub fn has_attack_kind(taxon : &'static Taxon) -> EntitySelectors { HasAttackKind(taxon.into()) }
 
     pub fn within_range(self, hex_range : u32, of : Entity) -> Self {
         self.and(InMoveRange { hex_range, of })

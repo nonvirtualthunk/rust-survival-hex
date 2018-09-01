@@ -25,6 +25,8 @@ erased-serde = "*"
 serde_derive = "*"
 serde = { version = "*", features = ["rc"] }
 string-interner = { version = "0.7.0", features = ["serde"] }
+ron = "*"
+bincode = "*"
 
 [dependencies.vecmath]
 git = "https://github.com/PistonDevelopers/vecmath"

@@ -36,7 +36,6 @@ extern crate num;
 extern crate cgmath;
 
 pub mod entities;
-pub use entities::*;
 
 pub mod events;
 pub use events::*;

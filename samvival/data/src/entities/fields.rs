@@ -5,8 +5,9 @@ use common::reflect::*;
 use common::hex::*;
 use common::Color;
 use common::prelude::*;
-use actions::*;
-use reactions::*;
+use entities::actions::*;
+use entities::reactions::*;
+use entities::*;
 use game::ModifierReference;
 use std::collections::HashSet;
 use std::collections::HashMap;
@@ -32,7 +33,7 @@ impl TurnData { pub const turn_number : Field < TurnData , u32 > = Field :: new 
 impl TimeData { pub const moments_since_world_start : Field < TimeData , u32 > = Field :: new ( stringify ! ( moments_since_world_start ) , | t | & t . moments_since_world_start , | t | & mut t . moments_since_world_start , | t , v | { t . moments_since_world_start = v ; } ) ; pub const moments_by_time_of_day : Field < TimeData , HashMap < TimeOfDay , u32 > > = Field :: new ( stringify ! ( moments_by_time_of_day ) , | t | & t . moments_by_time_of_day , | t | & mut t . moments_by_time_of_day , | t , v | { t . moments_by_time_of_day = v ; } ) ; pub const moments_since_day_start : Field < TimeData , u32 > = Field :: new ( stringify ! ( moments_since_day_start ) , | t | & t . moments_since_day_start , | t | & mut t . moments_since_day_start , | t , v | { t . moments_since_day_start = v ; } ) ; }
 impl PositionData { pub const hex : Field < PositionData , AxialCoord > = Field :: new ( stringify ! ( hex ) , | t | & t . hex , | t | & mut t . hex , | t , v | { t . hex = v ; } ) ; }
 impl IdentityData { pub const name : Field < IdentityData , Option < String > > = Field :: new ( stringify ! ( name ) , | t | & t . name , | t | & mut t . name , | t , v | { t . name = v ; } ) ; pub const kinds : Field < IdentityData , Vec < Taxon > > = Field :: new ( stringify ! ( kinds ) , | t | & t . kinds , | t | & mut t . kinds , | t , v | { t . kinds = v ; } ) ; }
-impl ActionData { pub const active_reaction : Field < ActionData , ReactionTypeRef > = Field :: new ( stringify ! ( active_reaction ) , | t | & t . active_reaction , | t | & mut t . active_reaction , | t , v | { t . active_reaction = v ; } ) ; }
+impl ActionData { pub const active_action : Field < ActionData , Option < Action > > = Field :: new ( stringify ! ( active_action ) , | t | & t . active_action , | t | & mut t . active_action , | t , v | { t . active_action = v ; } ) ; pub const active_reaction : Field < ActionData , ReactionTypeRef > = Field :: new ( stringify ! ( active_reaction ) , | t | & t . active_reaction , | t | & mut t . active_reaction , | t , v | { t . active_reaction = v ; } ) ; }
 impl ModifierTrackingData { pub const modifiers_by_key : Field < ModifierTrackingData , HashMap < String , ModifierReference > > = Field :: new ( stringify ! ( modifiers_by_key ) , | t | & t . modifiers_by_key , | t | & mut t . modifiers_by_key , | t , v | { t . modifiers_by_key = v ; } ) ; }
 impl AttributeData { }
 impl MonsterSpawnerData { pub const spawns : Field < MonsterSpawnerData , Vec < Spawn > > = Field :: new ( stringify ! ( spawns ) , | t | & t . spawns , | t | & mut t . spawns , | t , v | { t . spawns = v ; } ) ; }
