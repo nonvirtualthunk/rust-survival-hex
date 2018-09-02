@@ -183,10 +183,15 @@ pub fn closest_attack_location_with_cost(world_view: &WorldView, hexes : HashMap
     // locations to use
     possible_attack_locations_with_cost(world_view, hexes, attacker, defender, attack).into_iter()
         .min_by_key(|(k, v)| {
-            let base_amount = /* *v*/ 0.0;
-            let nudge_amount = (k.as_cart_vec() - defender_pos).normalize_s().0.dot(nudge_delta.0).acos().abs() * 0.01;
-            let stabilizer_epsilon = (k.r as f32 * 0.000001) + (k.q as f32 * 0.0000013);
-            r64(base_amount + nudge_amount as f64)
+            let distance = *v;
+            let stabilizer_epsilon = ((k.r as f32 * 0.000001) + (k.q as f32 * 0.0000013)) as f64;
+            let angle_distance = (k.as_cart_vec() - defender_pos).normalize_s().0.dot(nudge_delta.0).acos().abs() as f64;
+
+            if attack.range > 2 {
+                r64(distance + angle_distance + stabilizer_epsilon)
+            } else {
+                r64(distance * 0.05 + angle_distance + stabilizer_epsilon)
+            }
         })
 }
 
