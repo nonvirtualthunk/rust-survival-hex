@@ -1,3 +1,4 @@
+use common::prelude::*;
 use gui::*;
 use game::entities::reactions::*;
 use common::color::Color;
@@ -6,6 +7,7 @@ use std::collections::HashMap;
 use state::GameState;
 use state::ControlContext;
 use control_events::TacticalEvents;
+use graphics::FontSize;
 
 #[derive(Default)]
 pub struct ReactionBar {
@@ -41,8 +43,8 @@ impl Default for ReactionButton {
             .margin(1.ux())
             .draw_layer(GUILayer::Overlay)
             .showing(false);
-        let info_name = Widget::text("Name: ", 14).parent(&info_body).named("info name").draw_layer(GUILayer::Overlay);
-        let info_description = Widget::wrapped_text("Description: ", 14, TextWrap::WithinParent).parent(&info_body).named("info description")
+        let info_name = Widget::text("Name: ", FontSize::HeadingMinor).parent(&info_body).named("info name").draw_layer(GUILayer::Overlay);
+        let info_description = Widget::wrapped_text("Description: ", FontSize::Standard, TextWrap::WithinParent).parent(&info_body).named("info description")
             .y(Positioning::below(&info_name, 1.ux()))
             .draw_layer(GUILayer::Overlay);
 
@@ -111,8 +113,8 @@ impl ReactionBar {
                     } else {
                         action_button.icon.set_border(Border { color: Color::black(), sides: BorderSides::all(), width: 2 });
                     }
-                    action_button.info_name.set_text(format!("{}", resolved_reaction.name));
-                    action_button.info_description.set_text(format!("{}", resolved_reaction.description));
+                    action_button.info_name.set_text(format!("{}", resolved_reaction.name.capitalized()));
+                    action_button.info_description.set_text(format!("{}", resolved_reaction.description.capitalized()));
                 });
             }
         } else {

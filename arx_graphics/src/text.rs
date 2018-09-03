@@ -8,9 +8,19 @@ use std::collections::HashMap;
 pub type RTFont = rt::Font<'static>;
 pub type RTPositionedGlyph = rt::PositionedGlyph<'static>;
 
+#[derive(Serialize,Deserialize,Clone,Default,Debug)]
+pub struct FontInfo {
+    pub sizing_overrides : HashMap<FontSize, u32>,
+}
 pub struct ArxFont {
     pub font : RTFont,
-    pub sizing_overrides : HashMap<FontSize, u32>
+    pub font_info : FontInfo,
+}
+impl ArxFont {
+    pub fn point_size_for(&self, font_size : FontSize) -> u32 {
+        *self.font_info.sizing_overrides.get(&font_size).unwrap_or(&font_size.default_point_size())
+    }
+
 }
 
 
@@ -33,12 +43,13 @@ impl TextLayout {
         v2(self.bounds.w / self.dpi_scale, self.bounds.h / self.dpi_scale)
     }
 
-    pub fn layout_text<'a,'b>(string : &'a str, font : &'b ArxFont, size : FontSize, dpi_scale : f32, wrap_at: f32) -> TextLayout {
+    pub fn layout_text<'a,'b>(string : &'a str, arx_font : &'b ArxFont, size : FontSize, dpi_scale : f32, wrap_at: f32) -> TextLayout {
 //        use rusttype::unicode_normalization::UnicodeNormalization;
-
-        let scale = rt::Scale::uniform(((size * 4) as f32 / 3.0) * dpi_scale);
+        let effective_size = arx_font.point_size_for(size);
+        let font = &arx_font.font;
+        let scale = rt::Scale::uniform(((effective_size * 4) as f32 / 3.0) * dpi_scale);
         let vmetrics = font.v_metrics(scale);
-        let line_height = TextLayout::line_height(font, size, dpi_scale);
+        let line_height = TextLayout::line_height(arx_font, size, dpi_scale);
 
         let mut all_glyphs : Vec<RTPositionedGlyph> = Vec::new();
         let mut max_x : f32 = 0.0;
@@ -112,9 +123,10 @@ impl TextLayout {
         }
     }
 
-    pub fn line_height(font : &ArxFont, size : FontSize, dpi_scale : f32) -> f32 {
-        let effective_size = font.
-        let scale = rt::Scale::uniform(((size * 4) as f32 / 3.0) * dpi_scale);
+    pub fn line_height(arx_font : &ArxFont, size : FontSize, dpi_scale : f32) -> f32 {
+        let font = &arx_font.font;
+        let effective_size = arx_font.point_size_for(size);
+        let scale = rt::Scale::uniform(((effective_size * 4) as f32 / 3.0) * dpi_scale);
         let vmetrics = font.v_metrics(scale);
         vmetrics.ascent - vmetrics.descent + vmetrics.line_gap
     }

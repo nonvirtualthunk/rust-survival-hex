@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use ui_event_types::*;
 use widgets::*;
 use widget_delegation::DelegateToWidget;
+use graphics::FontSize;
 
 impl DelegateToWidget for TabWidget {
     fn as_widget(&mut self) -> &mut Widget {
@@ -126,7 +127,7 @@ impl TabWidget {
             while self.tab_buttons.len() < tab_titles.len() {
                 let title_index = self.tab_buttons.len();
                 self.tab_buttons.push(Button::new(tab_titles[title_index].clone())
-                    .font_size(16)
+                    .font_size(FontSize::HeadingMajor)
                     .text_position(Positioning::CenteredInParent, Positioning::CenteredInParent)
                     .color(self.body.color)
                 );

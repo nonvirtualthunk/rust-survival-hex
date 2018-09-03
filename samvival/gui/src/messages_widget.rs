@@ -50,7 +50,7 @@ impl Default for MessageWidget {
         let background = Widget::window(Color::greyscale(0.7), 2)
             .surround_children()
             .margin(2.px());
-        let text = Widget::text("Message", 16).parent(&background);
+        let text = Widget::text("Message", FontSize::HeadingMajor).parent(&background);
         MessageWidget { background, text }
     }
 }

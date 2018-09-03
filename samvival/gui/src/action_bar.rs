@@ -12,6 +12,7 @@ use game::entities::Attack;
 use game::entities::AttackRef;
 use game::entities::MovementType;
 use game::entities::MovementTypeRef;
+use graphics::FontSize;
 
 
 #[derive(PartialEq, Clone, Debug, Hash)]
@@ -82,8 +83,8 @@ impl Default for ActionButton {
             .size(Sizing::constant(30.ux()), Sizing::constant(30.ux()))
             .margin(1.ux())
             .showing(false);
-        let info_name = Widget::text("Name: ", 14).parent(&info_body).named("info name");
-        let info_description = Widget::wrapped_text("Description: ", 14, TextWrap::WithinParent).parent(&info_body).named("info description")
+        let info_name = Widget::text("Name: ", FontSize::HeadingMinor).parent(&info_body).named("info name");
+        let info_description = Widget::wrapped_text("Description: ", FontSize::Standard, TextWrap::WithinParent).parent(&info_body).named("info description")
             .y(Positioning::below(&info_name, 1.ux()));
 
         let info_body_id = info_body.id();

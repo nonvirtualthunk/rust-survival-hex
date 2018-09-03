@@ -25,6 +25,9 @@ rusttype = { version = "0.6.2", features = ["gpu_cache"] }
 rect_packer = "0.2.1"
 log = "*"
 pretty_env_logger = "*"
+serde = "*"
+serde_derive = "*"
+ron = "*"
 
 [dependencies.arx_common]
 path = "../arx_common"

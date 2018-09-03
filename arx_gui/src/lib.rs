@@ -57,3 +57,5 @@ pub use piston_window::MouseButton;
 pub use piston_window::Key;
 
 pub mod prelude;
+
+pub use graphics::FontSize;

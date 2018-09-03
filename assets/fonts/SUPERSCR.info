@@ -1,0 +1,10 @@
+(
+    sizing_overrides: {
+	    Small: 8,
+        Standard: 10,
+	    HeadingMinor: 12,
+	    HeadingMajor: 14,
+	    Large: 16,
+	    ExtraLarge: 20
+    },
+)

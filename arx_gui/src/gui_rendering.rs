@@ -142,7 +142,7 @@ impl GUI {
                                 };
                                 let dims = g.string_dimensions(font.unwrap_or(g.default_font), text.as_str(), *font_size, wrap_dist);
                                 let dim = self.pixel_dim_axis_to_gui(dims[axis]);
-                                trace!(target: "gui_redraw", "Calculated derived dim for text[size {}] {} of {:?}", *font_size, text.replace('\n', "\\n"), dim);
+                                trace!(target: "gui_redraw", "Calculated derived dim for text[size {:?}] {} of {:?}", *font_size, text.replace('\n', "\\n"), dim);
                                 dim
                             }
                             other => {

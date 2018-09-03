@@ -422,23 +422,25 @@ pub fn handle_strike(world: &mut World, attacker_ref: Entity, primary_defender: 
             }
         }
 
-        let defenders = strike.per_target_breakdowns.map(|t| t.target);
-        let strike_event = GameEvent::Strike {
-            attacker : attacker_ref,
-            attack : box attack.clone(),
-            defenders,
-            strike_results : strike_results.clone(),
-        };
-        world.start_event(strike_event.clone());
+        if strike_results.non_empty() {
+            let defenders = strike.per_target_breakdowns.map(|t| t.target);
+            let strike_event = GameEvent::Strike {
+                attacker : attacker_ref,
+                attack : box attack.clone(),
+                defenders,
+                strike_results : strike_results.clone(),
+            };
+            world.start_event(strike_event.clone());
 
-        for (target, strike_result) in &strike_results {
-            if strike_result.hit {
-                logic::character::apply_damage_to_character(world, *target, strike_result.damage_done as u32, &strike_result.damage_types);
+            for (target, strike_result) in &strike_results {
+                if strike_result.hit {
+                    logic::character::apply_damage_to_character(world, *target, strike_result.damage_done as u32, &strike_result.damage_types);
+                }
             }
-        }
-        world.modify(attacker_ref, MovementData::moves.set_to(Sext::of(0)), None);
+            world.modify(attacker_ref, MovementData::moves.set_to(Sext::of(0)), None);
 
-        world.end_event(strike_event);
+            world.end_event(strike_event);
+        }
     }
 }
 

@@ -33,6 +33,9 @@ use image::RgbaImage;
 use piston_window::G2d;
 use core::FontSize;
 use text::ArxFont;
+use std::fs::File;
+use std::io::BufReader;
+use FontInfo;
 
 pub type RTFont = rt::Font<'static>;
 pub type RTPositionedGlyph = rt::PositionedGlyph<'static>;
@@ -218,7 +221,7 @@ impl GraphicsResources {
         self.assets.line_height(font, size)
     }
 
-    pub fn string_dimensions_no_wrap<'b>(&mut self, font_identifier: FontIdentifier, text: &'b str, size: u32) -> Vec2f {
+    pub fn string_dimensions_no_wrap<'b>(&mut self, font_identifier: FontIdentifier, text: &'b str, size: FontSize) -> Vec2f {
         self.assets.string_dimensions_no_wrap(font_identifier, text, size)
     }
 
@@ -286,8 +289,23 @@ impl GraphicsAssets {
             file.read_to_end(&mut file_buffer).expect("Could not read file to end to load font");
             let identifier = FontIdentifier(self.fonts.len());
             let rt_font = RTFont::from_bytes(file_buffer).expect("Could not load font");
-            let size_overrides = HashMap::new();
-            self.fonts.push(ArxFont { font : rt_font, sizing_overrides : size_overrides });
+
+            let info_name : String = strf(name).chars().take_while(|c| *c != '.').collect();
+            let font_info_path = self.assets_path.join("fonts").join(format!("{}.info",info_name));
+            println!("Attempting to load overrides from {:?}", font_info_path);
+            let font_info = if let Ok(file) = File::open(font_info_path) {
+                let buf_reader = BufReader::new(file);
+                use ron;
+                if let Ok(font_info) = ron::de::from_reader(buf_reader) {
+                    info!("loaded overrides:\n{:?}", font_info);
+                    font_info
+                } else {
+                    warn!("Could not deserialize font info, falling back on default");
+                    FontInfo::default()
+                }
+            } else { FontInfo::default() };
+
+            self.fonts.push(ArxFont { font : rt_font, font_info });
             identifier
         }
     }
@@ -327,12 +345,12 @@ impl GraphicsAssets {
         TextLayout::layout_text(text.text.as_str(), font, text.size, dpi_scale, text.wrap_to)
     }
 
-    pub fn line_height(&self, font: &ArxFont, size :u32) -> f32 {
+    pub fn line_height(&self, font: &ArxFont, size :FontSize) -> f32 {
         TextLayout::line_height(font, size, self.dpi_scale)
     }
 
 
-    pub fn string_dimensions<'b>(&mut self, font_identifier: FontIdentifier, text: &'b str, size: u32, wrap_at : f32) -> Vec2f {
+    pub fn string_dimensions<'b>(&mut self, font_identifier: FontIdentifier, text: &'b str, size: FontSize, wrap_at : f32) -> Vec2f {
         if text.is_empty() {
             v2(0.0,0.0)
         } else {
@@ -344,7 +362,21 @@ impl GraphicsAssets {
         }
     }
 
-    pub fn string_dimensions_no_wrap<'b>(&mut self, font_identifier: FontIdentifier, text: &'b str, size: u32) -> Vec2f {
+    pub fn string_dimensions_no_wrap<'b>(&mut self, font_identifier: FontIdentifier, text: &'b str, size: FontSize) -> Vec2f {
         self.string_dimensions(font_identifier, text, size, 10000000.0)
     }
+}
+
+#[test]
+pub fn test_func() {
+    let mut defaults = HashMap::new();
+    defaults.insert(FontSize::Small, 11u32);
+    defaults.insert(FontSize::Standard, 12u32);
+
+
+    let font_info = FontInfo { sizing_overrides : defaults };
+
+    use ron;
+    let serialized = ron::ser::to_string_pretty(&font_info, ron::ser::PrettyConfig::default()).expect("WAT");
+    println!("Serialized font info : \n{}", serialized);
 }

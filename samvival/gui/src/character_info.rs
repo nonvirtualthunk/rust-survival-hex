@@ -11,6 +11,7 @@ use state::GameState;
 use attack_descriptions::*;
 use state::ControlContext;
 use game::Entity;
+use graphics::FontSize;
 
 
 pub struct CharacterInfoWidget {
@@ -41,7 +42,7 @@ impl CharacterInfoWidget {
             .showing(false)
             .apply(gui);
 
-        let name_widget = Widget::text("Name", 20)
+        let name_widget = Widget::text("Name", FontSize::HeadingMajor)
             .x(Positioning::CenteredInParent)
             .parent(&main_widget)
             .apply(gui);
@@ -119,7 +120,7 @@ impl CharacterInfoWidget {
                     _ => (stat.cur_value_func)(world_view, selected)
                 };
                 let text = format!("{}: {}", stat.name, numeral_display);
-                stat_w.text.set_widget_type(WidgetType::text(text, 11))
+                stat_w.text.set_widget_type(WidgetType::text(text, FontSize::Standard))
                     .set_color(Color::black())
                     .set_height(Sizing::Derived)
                     .set_tooltip(stat.tooltip);
@@ -164,7 +165,7 @@ pub struct SkillWidget {
 impl Default for SkillWidget {
     fn default() -> Self {
         SkillWidget {
-            text: Widget::text("", 14),
+            text: Widget::text("", FontSize::Standard),
             xp_bar_empty: Widget::segmented_image("ui/pill", Color::white(), ImageSegmentation::Horizontal)
                 .size(Sizing::DeltaOfParent(-10.px()), Sizing::Constant(13.px()))
                 .x(Positioning::Constant(5.px())),

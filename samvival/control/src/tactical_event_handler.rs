@@ -32,6 +32,7 @@ use cgmath::InnerSpace;
 use std::f64::consts;
 use std::collections::HashMap;
 use serde::de::DeserializeOwned;
+use graphics::FontSize;
 
 pub fn animation_elements_for_new_event(world_view: &WorldView, wrapper: &GameEventWrapper<GameEvent>, resources: &mut GraphicsResources) -> Vec<Box<AnimationElement>> {
     if wrapper.is_starting() {
@@ -204,7 +205,7 @@ fn animate_attack(world_view: &WorldView, attacker: Entity, defenders: &Vec<Enti
         if !strike_result.hit {
             let defender_pos = world_view.data::<PositionData>(*target).hex.as_cart_vec();
             let (msg, color) = (String::from("miss"), Color::new(0.1, 0.0, 0.0, 1.0));
-            let rising_damage_text = TextAnimationElement::new(msg, 20, defender_pos + CartVec::new(0.0, 0.5), color, 3.0)
+            let rising_damage_text = TextAnimationElement::new(msg, FontSize::HeadingMajor, defender_pos + CartVec::new(0.0, 0.5), color, 3.0)
                 .with_delta(CartVec::new(0.0, 1.0), InterpolationType::Linear)
                 .with_end_color(color.with_a(0.0), InterpolationType::Linear)
                 .with_blocking_duration(0.0);
@@ -242,7 +243,7 @@ fn animate_damage(world_view: &WorldView, entity: Entity, damage_done: u32) -> V
     }
 
     let (msg, color) = (damage_done.to_string(), Color::new(0.9, 0.2, 0.2, 1.0));
-    let rising_damage_text = TextAnimationElement::new(msg, 20, entity_data.position.hex.as_cart_vec() + CartVec::new(0.0, 0.5), color, 3.0)
+    let rising_damage_text = TextAnimationElement::new(msg, FontSize::HeadingMajor, entity_data.position.hex.as_cart_vec() + CartVec::new(0.0, 0.5), color, 3.0)
         .with_delta(CartVec::new(0.0, 1.0), InterpolationType::Linear)
         .with_end_color(color.with_a(0.0), InterpolationType::Linear)
         .with_blocking_duration(0.0);

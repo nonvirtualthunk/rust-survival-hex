@@ -95,7 +95,7 @@ impl TacticalGui {
             .parent(&main_area)
             .apply(gui);
 
-        let victory_text = Widget::text("Victory!", 30).centered().parent(&victory_widget).apply(gui);
+        let victory_text = Widget::text("Victory!", FontSize::Points(30)).centered().parent(&victory_widget).apply(gui);
 
         let defeat_widget = Widget::window(Color::greyscale(0.9), 2)
             .size(Sizing::ux(50.0), Sizing::ux(30.0))
@@ -103,7 +103,7 @@ impl TacticalGui {
             .showing(false)
             .apply(gui);
 
-        let defeat_text = Widget::text("Defeat!", 30).color(Color::new(0.6,0.1,0.1,1.0)).centered().parent(&defeat_widget).apply(gui);
+        let defeat_text = Widget::text("Defeat!", FontSize::Points(30)).color(Color::new(0.6,0.1,0.1,1.0)).centered().parent(&defeat_widget).apply(gui);
 
         let event_bus = EventBus::new();
         let event_bus_handle = event_bus.register_consumer(true);

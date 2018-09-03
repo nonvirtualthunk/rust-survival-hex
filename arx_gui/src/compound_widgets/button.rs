@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use ui_event_types::*;
 use widgets::*;
 use widget_delegation::DelegateToWidget;
+use graphics::FontSize;
 
 #[derive(Default, Clone)]
 pub struct Button {
@@ -59,7 +60,7 @@ impl Button {
         let body = Button::create_body(String::from("ui/blank"));
 
         Button {
-            text: Widget::text(text, 14)
+            text: Widget::text(text, FontSize::Standard)
                 .size(Sizing::Derived, Sizing::Derived)
                 .position(Positioning::Constant(0.px()), Positioning::Constant(0.px()))
                 .parent(&body),
@@ -111,7 +112,7 @@ impl Button {
         self
     }
 
-    pub fn font_size(mut self, s: u32) -> Self {
+    pub fn font_size(mut self, s: FontSize) -> Self {
         self.text.modify_widget_type(|m| if let WidgetType::Text { ref mut font_size, .. } = m { *font_size = s; });
         self
     }

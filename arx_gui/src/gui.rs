@@ -44,6 +44,7 @@ use std::time::Duration;
 use events::ui_event_types::HOVER_START;
 use events::ui_event_types::HOVER_END;
 use widgets::TextDisplayWidget;
+use graphics::FontSize;
 
 
 #[derive(Clone, Copy, PartialEq, Neg, Debug)]
@@ -358,7 +359,7 @@ impl GUI {
 
                 None
             } else {
-                let mut tdw = TextDisplayWidget::new(tooltip_string.clone(), 14, None, ImageSegmentation::None)
+                let mut tdw = TextDisplayWidget::new(tooltip_string.clone(), FontSize::Standard, None, ImageSegmentation::None)
                     .parent_id(widget.id())
                     .draw_layer_for_all(GUILayer::Overlay)
                     .ignore_parent_bounds()

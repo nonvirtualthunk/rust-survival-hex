@@ -23,6 +23,9 @@ extern crate rect_packer;
 extern crate graphics;
 extern crate pretty_env_logger;
 #[macro_use] extern crate log;
+#[macro_use] extern crate serde_derive;
+extern crate ron;
+#[macro_use] extern crate serde;
 
 pub mod core;
 pub use core::*;

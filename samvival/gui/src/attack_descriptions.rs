@@ -106,16 +106,16 @@ impl Default for AttackDescriptionWidget {
             .with_tooltip("This will be used when attacking, click another to select it instead")
             .named("active attack indicator");
 
-        let name = Widget::text("Name here", 14)
+        let name = Widget::text("Name here", FontSize::Standard)
             .x(Positioning::constant(13.px()))
             .with_tooltip("The name of the attack")
             .named("attack description name");
-        let to_hit = Widget::text("To hit here", 14)
+        let to_hit = Widget::text("To hit here", FontSize::Standard)
             .y(Positioning::below(&name, 2.px()))
             .x(Positioning::constant(13.px()))
             .with_tooltip("Bonus applied to every roll to determine if the attack hits")
             .named("attack to hit text");
-        let damage = Widget::text("Damage here", 14)
+        let damage = Widget::text("Damage here", FontSize::Standard)
             .x(Positioning::constant(13.px()))
             .y(Positioning::below(&to_hit, 2.px()))
             .with_tooltip("The amount and kind of damage done on a successful hit. \
@@ -162,26 +162,26 @@ impl AttackDetailsWidget {
             .size(Sizing::surround_children(), Sizing::surround_children())
             .margin(2.px());
 
-        let name = Widget::text("name", 16).parent(&body).named("ADT name");
+        let name = Widget::text("name", FontSize::HeadingMinor).parent(&body).named("ADT name");
 
         let to_hit_div = Widget::div().below(&name, 1.px()).named("ADT to hit div").parent(&body);
         let damage_div = Widget::div().below(&name, 1.px()).named("ADT damage div").right_of(&to_hit_div, 9.px()).parent(&body);
 
-        let to_hit = Widget::text("to hit", 14).named("ADT to hit").parent(&to_hit_div);
+        let to_hit = Widget::text("to hit", FontSize::Standard).named("ADT to hit").parent(&to_hit_div);
         let divider = Widget::window(Color::greyscale(0.5), 1).size(Sizing::PcntOfParentAllowingLoop(1.0), Sizing::constant(3.px())).below(&to_hit, 3.px()).named("ADT divider").parent(&body);
 
         let to_hit_details_div = Widget::div().below(&to_hit, 10.px()).named("ADT to hit DT div").parent(&to_hit_div);
 
-        let to_hit_details = Widget::text("to hit details", 12).color(positive_color).named("ADT to hit details").parent(&to_hit_details_div);
-        let to_miss_details = Widget::text("to miss details", 12).below(&to_hit_details, 2.px()).color(negative_color).named("ADT to miss details").parent(&to_hit_details_div);
+        let to_hit_details = Widget::text("to hit details", FontSize::Small).color(positive_color).named("ADT to hit details").parent(&to_hit_details_div);
+        let to_miss_details = Widget::text("to miss details", FontSize::Small).below(&to_hit_details, 2.px()).color(negative_color).named("ADT to miss details").parent(&to_hit_details_div);
 
 
         let damage_details_div = Widget::div().match_y_of(&to_hit_details_div).named("ADT damage details div").parent(&damage_div);
-        let damage_dice_details = Widget::text("damage dice details", 12).color(neutral_color).named("ADT damage dice").parent(&damage_details_div);
-        let damage_bonus_details = Widget::text("damage bonus details", 12).below(&damage_dice_details, 1.px()).color(positive_color).named("ADT damage bonus").parent(&damage_details_div);
-        let damage_absorption_details = Widget::text("damage absorption", 12).below(&damage_bonus_details, 1.px()).color(negative_color).named("ADT damage absorb").parent(&damage_details_div);
+        let damage_dice_details = Widget::text("damage dice details", FontSize::Small).color(neutral_color).named("ADT damage dice").parent(&damage_details_div);
+        let damage_bonus_details = Widget::text("damage bonus details", FontSize::Small).below(&damage_dice_details, 1.px()).color(positive_color).named("ADT damage bonus").parent(&damage_details_div);
+        let damage_absorption_details = Widget::text("damage absorption", FontSize::Small).below(&damage_bonus_details, 1.px()).color(negative_color).named("ADT damage absorb").parent(&damage_details_div);
 
-        let damage = Widget::text("damage", 14).match_y_of(&to_hit).match_x_of(&damage_div).named("ADT damage").parent(&body);
+        let damage = Widget::text("damage", FontSize::Standard).match_y_of(&to_hit).match_x_of(&damage_div).named("ADT damage").parent(&body);
 
         AttackDetailsWidget {
             body,

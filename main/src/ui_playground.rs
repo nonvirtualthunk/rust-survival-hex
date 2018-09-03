@@ -96,13 +96,13 @@ fn make_windows(gui: &mut GUI) {
         .parent(&test_window)
         .apply(gui);
 
-    let sub_text = Widget::text(String::from("Hello, world\nNewline"), 16)
+    let sub_text = Widget::text(String::from("Hello, world\nNewline"), FontSize::HeadingMajor)
         .size(Sizing::Derived, Sizing::Derived)
         .position(Positioning::Constant(1.0.ux()), Positioning::Constant(1.0.ux()))
         .parent(&sub_window)
         .apply(gui);
 
-    let right_text = Widget::text(String::from("| Right |"), 16)
+    let right_text = Widget::text(String::from("| Right |"), FontSize::HeadingMajor)
         .size(Sizing::Derived, Sizing::Derived)
         .position(Positioning::right_of(&sub_text, 1.px()), Positioning::match_to(&sub_text))
         .parent(&sub_window)
@@ -135,7 +135,7 @@ fn make_windows(gui: &mut GUI) {
         .parent(&test_window)
         .apply_all(gui);
 
-    let foo_widget = Widget::text("This is the Foo Tab", 14)
+    let foo_widget = Widget::text("This is the Foo Tab", FontSize::HeadingMinor)
         .position(Positioning::CenteredInParent, Positioning::CenteredInParent)
         .parent(tab_widget.tab_named("Foo"))
         .apply(gui);

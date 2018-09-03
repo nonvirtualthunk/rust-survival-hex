@@ -30,18 +30,18 @@ impl MainMenu {
             .centered()
             .width(Sizing::surround_children())
             .height(Sizing::surround_children())
-            .margin(00.px())
+            .margin(20.px())
             .apply(gui);
 
         let new_button = Button::new("New Game")
             .parent(&menu)
-            .font_size(26)
+            .font_size(FontSize::ExtraLarge)
             .x(Positioning::centered())
             .apply(gui);
 
         let mut load_button = Button::new("Continue")
             .parent(&menu)
-            .font_size(26)
+            .font_size(FontSize::ExtraLarge)
             .below(&new_button, 5.px())
             .x(Positioning::centered())
             .apply(gui);
@@ -51,7 +51,7 @@ impl MainMenu {
 
         let exit_button = Button::new("Exit")
             .parent(&menu)
-            .font_size(26)
+            .font_size(FontSize::ExtraLarge)
             .below(&load_button, 5.px())
             .x(Positioning::centered())
 

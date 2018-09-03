@@ -81,14 +81,29 @@ impl Quad {
     }
 }
 
-#[derive(Clone,Copy,Debug)]
+#[derive(Clone,Copy,Debug,PartialEq,Eq,Hash,Serialize,Deserialize)]
 pub enum FontSize {
     Small,
     Standard,
-    Heading,
+    HeadingMinor,
+    HeadingMajor,
     Large,
     ExtraLarge,
-    Pixel(u32)
+    Points(u32)
+}
+impl FontSize {
+
+    pub fn default_point_size(&self) -> u32 {
+        match self {
+            FontSize::Small => 11,
+            FontSize::Standard => 12,
+            FontSize::HeadingMinor => 14,
+            FontSize::HeadingMajor => 16,
+            FontSize::Large => 20,
+            FontSize::ExtraLarge => 26,
+            FontSize::Points(pts) => *pts
+        }
+    }
 }
 
 pub struct Text {

@@ -9,6 +9,7 @@ use gui::TabWidget;
 use state::ControlContext;
 use control_events::*;
 use std::collections::HashSet;
+use gui::FontSize;
 
 // we actually want two things here, one to just display an inventory, and another to display multiple inventories together
 // to allow moving items back and forth between them.
@@ -179,7 +180,7 @@ pub struct InventoryItemToggleEquip { item : Entity }
 impl Default for ItemNameDisplay {
     fn default() -> Self {
         ItemNameDisplay {
-            name: Widget::text("Test", 14).x(32.px()).y(Positioning::centered()),
+            name: Widget::text("Test", FontSize::HeadingMinor).x(32.px()).y(Positioning::centered()),
             picked_up_indicator: Widget::image("ui/hand_icon", Color::white(), 1)
                 .size(30.px(), 30.px())
                 .y(Positioning::centered())

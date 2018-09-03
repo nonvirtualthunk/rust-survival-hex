@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use ui_event_types::*;
 use widgets::*;
 use widget_delegation::DelegateToWidget;
+use graphics::FontSize;
 
 #[derive(Default, Clone)]
 pub struct TextDisplayWidget {
@@ -37,7 +38,7 @@ impl DelegateToWidget for TextDisplayWidget {
 }
 
 impl TextDisplayWidget {
-    pub fn new<S>(text: S, font_size : u32, image: Option<ImageIdentifier>, segment: ImageSegmentation) -> TextDisplayWidget where S: Into<String> {
+    pub fn new<S>(text: S, font_size : FontSize, image: Option<ImageIdentifier>, segment: ImageSegmentation) -> TextDisplayWidget where S: Into<String> {
         let body = Widget::new(WidgetType::Window { image, segment })
             .border_width(1)
             .border_color(Color::black())

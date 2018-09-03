@@ -28,6 +28,7 @@ use std::sync::Mutex;
 use ui_event_types::*;
 use compound_widgets::TextDisplayWidget;
 use widget_delegation::DelegateToWidget;
+use graphics::FontSize;
 
 pub static WIDGET_ID_COUNTER: AtomicUsize = ATOMIC_USIZE_INIT;
 
@@ -155,15 +156,15 @@ pub enum TextWrap {
 
 #[derive(Clone, PartialEq, Debug)]
 pub enum WidgetType {
-    Text { text: String, font: Option<FontIdentifier>, font_size: u32, wrap: Option<TextWrap> },
+    Text { text: String, font: Option<FontIdentifier>, font_size: FontSize, wrap: Option<TextWrap> },
     Window { image: Option<String>, segment: ImageSegmentation },
 }
 
 impl WidgetType {
-    pub fn text<S>(text: S, font_size: u32) -> WidgetType where S: Into<String> {
+    pub fn text<S>(text: S, font_size: FontSize) -> WidgetType where S: Into<String> {
         WidgetType::Text { text: text.into(), font_size, font: None, wrap: None }
     }
-    pub fn wrapped_text<S>(text: S, font_size: u32, wrap : TextWrap) -> WidgetType where S: Into<String> {
+    pub fn wrapped_text<S>(text: S, font_size: FontSize, wrap : TextWrap) -> WidgetType where S: Into<String> {
         WidgetType::Text { text: text.into(), font_size, font: None, wrap : Some(wrap) }
     }
     pub fn window() -> WidgetType {
@@ -433,13 +434,13 @@ impl Widget {
             .color(color)
     }
 
-    pub fn text<S>(text: S, font_size: u32) -> Widget where S: Into<String> {
+    pub fn text<S>(text: S, font_size: FontSize) -> Widget where S: Into<String> {
         Widget::new(WidgetType::text(text, font_size))
             .color(Color::black())
             .size(Sizing::Derived, Sizing::Derived)
     }
 
-    pub fn wrapped_text<S>(text: S, font_size: u32, wrap : TextWrap) -> Widget where S: Into<String> {
+    pub fn wrapped_text<S>(text: S, font_size: FontSize, wrap : TextWrap) -> Widget where S: Into<String> {
         Widget::new(WidgetType::wrapped_text(text, font_size, wrap))
             .color(Color::black())
             .size(Sizing::Derived, Sizing::Derived)
