@@ -119,7 +119,7 @@ impl CharacterInfoWidget {
                     _ => (stat.cur_value_func)(world_view, selected)
                 };
                 let text = format!("{}: {}", stat.name, numeral_display);
-                stat_w.text.set_widget_type(WidgetType::text(text, 14))
+                stat_w.text.set_widget_type(WidgetType::text(text, 11))
                     .set_color(Color::black())
                     .set_height(Sizing::Derived)
                     .set_tooltip(stat.tooltip);

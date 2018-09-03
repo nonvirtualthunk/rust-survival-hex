@@ -39,7 +39,13 @@ pub fn derive_print_entity_data_fields(input: proc_macro::TokenStream) -> proc_m
     }
 
     // throw in the visit derivation regardless
-    internal_derive_visit(&input).into()
+    let visit = internal_derive_visit(&input);
+    if let Ok(value) = env::var("PRINT_VISIT_CODE") {
+        if value == "true" {
+            println!("Visit code:\n{}", visit);
+        }
+    }
+    visit.into()
 }
 
 fn internal_derive_visit(input: &DeriveInput) -> TokenStream {

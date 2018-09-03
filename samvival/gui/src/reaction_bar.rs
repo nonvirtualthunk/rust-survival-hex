@@ -5,7 +5,7 @@ use game::Entity;
 use std::collections::HashMap;
 use state::GameState;
 use state::ControlContext;
-use control_events::ControlEvents;
+use control_events::TacticalEvents;
 
 #[derive(Default)]
 pub struct ReactionBar {
@@ -92,7 +92,7 @@ impl ReactionBar {
                 if let UIEvent::WidgetEvent{ event, .. } = event {
                     if let WidgetEvent::ListItemClicked(index, button_) = event {
                         let reaction_type = self.reactions[*index].clone();
-                        control_context.event_bus.push_event(ControlEvents::ReactionSelected(reaction_type));
+                        control_context.event_bus.push_event(TacticalEvents::ReactionSelected(reaction_type));
                     }
                 }
             }

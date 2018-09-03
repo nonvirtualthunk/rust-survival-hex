@@ -7,7 +7,7 @@ use game::logic::combat;
 use game::entities::combat::Attack;
 use game::entities::combat::AttackRef;
 use state::ControlContext;
-use control_events::ControlEvents;
+use control_events::TacticalEvents;
 use common::hex::AxialCoord;
 
 
@@ -69,8 +69,8 @@ impl AttackDescriptionsWidget {
                 if let WidgetEvent::ListItemClicked(index, button) = event {
                     if let Some(attack_ref) = attack_refs[*index].as_option() {
                         match button {
-                            MouseButton::Left => control.event_bus.push_event(ControlEvents::AttackSelected(attack_ref.clone())),
-                            _ => control.event_bus.push_event(ControlEvents::CounterattackSelected(attack_ref.clone()))
+                            MouseButton::Left => control.event_bus.push_event(TacticalEvents::AttackSelected(attack_ref.clone())),
+                            _ => control.event_bus.push_event(TacticalEvents::CounterattackSelected(attack_ref.clone()))
                         }
                     } else {
                         println!("attack didn't resolve when trying to select");

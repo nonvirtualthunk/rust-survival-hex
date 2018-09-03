@@ -30,8 +30,10 @@ use game::world_util::*;
 use game::entities::modifiers::*;
 use game::logic::visibility::VisibilityComputor;
 use game;
+use game::universe::*;
 use game::entities::CharacterData;
 use gui;
+use common::EventBus;
 
 use game::logic::combat::*;
 
@@ -69,42 +71,8 @@ use gui::state::GameState;
 use game::entities::time::TurnData;
 use std::fs::File;
 use std::path::Path;
-
-#[derive(PartialOrd, PartialEq, Copy, Clone)]
-pub struct Cost(pub R32);
-
-impl Eq for Cost {}
-
-impl Ord for Cost {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap()
-    }
-}
-
-impl Zero for Cost {
-    fn zero() -> Self {
-        Cost(R32::new(0.0))
-    }
-
-    fn is_zero(&self) -> bool {
-        self.0 == R32::new(0.0)
-    }
-}
-
-impl Add<Cost> for Cost {
-    type Output = Cost;
-
-    fn add(self, rhs: Cost) -> Self::Output {
-        Cost(self.0 + rhs.0)
-    }
-}
-
-impl Cost {
-    pub fn new(f: f64) -> Cost {
-        Cost(R32::from_f64(f))
-    }
-}
-
+use std::sync::Mutex;
+use gui::control_events::GameModeEvent;
 
 pub struct AnimationElementWrapper {
     pub animation: Box<AnimationElement>,
@@ -122,6 +90,7 @@ impl AnimationElementWrapper {
 }
 
 pub struct TacticalMode {
+    pub world_ref: WorldRef,
     pub selected_character: Option<Entity>,
     pub tile_radius: f32,
     pub mouse_pos: Vec2f,
@@ -150,19 +119,19 @@ pub struct TacticalMode {
     display_world_view: WorldView,
     show_real_world: bool,
     skipped_characters: HashSet<Entity>,
+    start_at_beginning: bool,
 }
 
 impl TacticalMode {
-    pub fn new(gui: &mut GUI, world: &World, player_faction : Entity) -> TacticalMode {
+    pub fn new(gui: &mut GUI, world_ref: WorldRef, start_at_beginning: bool) -> TacticalMode {
         let tile_radius = 35.5;
         let mut camera = Camera2d::new();
         camera.move_speed = tile_radius * 20.0;
         camera.zoom = 1.0;
 
-
-        let dec = world.events::<GameEvent>().find(|e| e.is_ended() && (if let GameEvent::WorldStart = e.event { true } else { false })).map(|e| e.occurred_at).unwrap_or(0);
         TacticalMode {
-            display_world_view: world.view_at_time(dec),
+            world_ref,
+            display_world_view: WorldView::default(),
             selected_character: None,
             tile_radius,
             mouse_pos: v2(0.0, 0.0),
@@ -175,7 +144,7 @@ impl TacticalMode {
             terrain_renderer: TerrainRenderer::default(),
             unit_renderer: UnitRenderer {},
             item_renderer: ItemRenderer::new(),
-            display_event_clock: dec,
+            display_event_clock: 0,
             last_realtime_clock: 0.0,
             realtime_clock: 0.0,
             realtime_clock_speed: 1.0,
@@ -184,7 +153,7 @@ impl TacticalMode {
             event_clock_last_advanced: 0.0,
             last_time: Instant::now(),
             last_update_time: Instant::now(),
-            player_faction,
+            player_faction : Entity::sentinel(),
             minimum_active_event_clock: 0,
             event_start_times: vec![0.0],
             victory_time: None,
@@ -194,6 +163,7 @@ impl TacticalMode {
             show_real_world: false,
             skipped_characters: HashSet::new(),
             visibility_computor: VisibilityComputor::new(),
+            start_at_beginning,
         }
     }
 
@@ -482,15 +452,28 @@ impl TacticalMode {
     fn update_world_view(&mut self, world : &World) {
         world.update_view_to_time(&mut self.display_world_view, self.display_event_clock);
     }
+
+    fn active_world<'a, 'b>(&'a self, universe : &'b mut Universe) -> &'b mut World {
+        universe.world(self.world_ref)
+    }
 }
 
 impl GameMode for TacticalMode {
-    fn enter(&mut self, world: &mut World) {
+    fn enter(&mut self, gui: &mut GUI, universe: &mut Universe, event_bus: &mut EventBus<GameModeEvent>) {
+        let world = self.active_world(universe);
+
+        self.player_faction = *world.view().entities_with_data::<FactionData>().iter().find(|(ent,faction_data)| faction_data.player_faction).unwrap().0;
+
+        let dec = if self.start_at_beginning {
+            world.events::<GameEvent>().find(|e| e.is_ended() && (if let GameEvent::WorldStart = e.event { true } else { false })).map(|e| e.occurred_at).unwrap_or(0)
+        } else {
+            world.next_time-1
+        };
+        self.display_event_clock = dec;
+        self.display_world_view = world.view_at_time(dec);
+
         world.add_callback(|world, event| {
             logic::reaction::trigger_reactions_for_event(world, event);
-//            for (ent,act_data) in world.view().entities_with_data::<ActionData>() {
-//                (act_data.active_reaction.resolve().on_event)(world, *ent, event);
-//            }
         });
 
         game::components::SpawningComponent::register(world);
@@ -498,17 +481,21 @@ impl GameMode for TacticalMode {
         VisibilityComputor::register(world);
     }
 
-    fn update(&mut self, _: &mut World, _: f64) {
+    fn update(&mut self, universe: &mut Universe, _: f64, event_bus: &mut EventBus<GameModeEvent>) {
+        let world = self.active_world(universe);
         let dt = Instant::now().duration_since(self.last_update_time).subsec_nanos() as f64 / 1e9f64;
         self.last_update_time = Instant::now();
         self.camera.position = self.camera.position + self.camera.move_delta * (dt as f32) * self.camera.move_speed;
     }
 
-    fn update_gui(&mut self, world: &mut World, ui: &mut GUI, frame_id: Option<Wid>) {
-        self.gui.update_gui(world, &self.display_world_view, ui, frame_id, self.current_game_state(world));
+    fn update_gui(&mut self, universe: &mut Universe, ui: &mut GUI, frame_id: Option<Wid>, event_bus: &mut EventBus<GameModeEvent>) {
+        let world = self.active_world(universe);
+        let game_state = self.current_game_state(world);
+        self.gui.update_gui(world, &self.display_world_view, ui, frame_id, game_state, event_bus);
     }
 
-    fn draw(&mut self, world_in: &mut World, g: &mut GraphicsWrapper) {
+    fn draw(&mut self, universe: &mut Universe, g: &mut GraphicsWrapper, event_bus: &mut EventBus<GameModeEvent>) {
+        let world_in = self.active_world(universe);
 //        let active_events = self.active_events(world_in);
 //        let mut world_view = world_in.view_at_time(self.display_event_clock);
 
@@ -574,15 +561,13 @@ impl GameMode for TacticalMode {
         self.render_draw_list(unit_draw_list, g);
         self.render_draw_list(anim_draw_list, g);
 
-        let gui_camera = Camera2d::new();
-        g.context.view = gui_camera.matrix(self.viewport);
-
-
         self.display_world_view.clear_overlay();
     }
 
 
-    fn handle_event(&mut self, world: &mut World, gui: &mut GUI, event: &UIEvent) {
+    fn handle_event(&mut self, universe: &mut Universe, gui: &mut GUI, event: &UIEvent, event_bus: &mut EventBus<GameModeEvent>) {
+        let world = self.active_world(universe);
+
         match event {
             UIEvent::MouseMove { pos, .. } => {
                 self.mouse_pos = pos.pixel_pos
@@ -690,7 +675,11 @@ impl GameMode for TacticalMode {
                     Key::Escape => {
                         // close auxiliary windows if any are open, otherwise cancel character selection
                         if ! self.gui.close_all_auxiliary_windows(gui) {
-                            self.selected_character = None
+                            if self.selected_character.is_some() {
+                                self.selected_character = None
+                            } else {
+                                self.gui.toggle_escape_menu(gui);
+                            }
                         }
                     },
                     Key::LShift => self.realtime_clock_speed = 1.0,
@@ -731,7 +720,8 @@ impl GameMode for TacticalMode {
     }
 
 
-    fn on_event(&mut self, world: &mut World, gui: &mut GUI, event: &UIEvent) {
+    fn on_event(&mut self, universe: &mut Universe, gui: &mut GUI, event: &UIEvent, event_bus: &mut EventBus<GameModeEvent>) {
+        let world = self.active_world(universe);
         gui.handle_ui_event_2(event, self, world);
     }
 }

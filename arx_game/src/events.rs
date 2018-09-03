@@ -74,7 +74,7 @@ impl GameEventState {
 }
 
 
-#[derive(Clone,Copy,Debug,Serialize,Deserialize)]
+#[derive(Clone,Copy,Debug,Serialize,Deserialize,PartialEq)]
 pub enum CoreEvent {
     WorldInitialized,
     EffectEnded,

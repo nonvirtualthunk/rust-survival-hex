@@ -6,7 +6,6 @@ use common::Rect;
 use events::EventPosition;
 use events::UIEvent;
 use graphics::core::Quad;
-use graphics::DEFAULT_FONT_IDENTIFIER;
 use graphics::DrawList;
 use graphics::GraphicsAssets;
 use graphics::GraphicsResources;
@@ -51,171 +50,173 @@ impl GUI {
 
     pub fn update_widget(&mut self, g: &mut GraphicsAssets, wid: Wid, secondary: bool) -> bool {
         let mut internal_state = self.widget_reifications.remove(&wid).expect("every wid called to update must have existing internal state");
+        let child_dependent = internal_state.widget.dependent_on_children();
+        if child_dependent && ! secondary { internal_state.update_in_progress = true; }
 
-        let child_dependent = {
-            let widget = &internal_state.widget;
-            let parent_position = widget.parent_id.map(|parent_id| self.widget_reifications.get(&parent_id).expect("parent must exist").inner_position);
-            let parent_size = widget.parent_id.map(|parent_id| self.widget_reifications.get(&parent_id).expect("parent must exist").inner_dimensions);
-            let parent_bounding_box = widget.parent_id.map(|parent_id| self.widget_reifications.get(&parent_id).expect("parent must exist").inner_bounding_box)
-                .unwrap_or_else(|| Some(Rect::new(0.0, 0.0, self.gui_size.x, self.gui_size.y)));
-            let pixels_per_ux = self.pixels_per_ux();
+        let widget = &internal_state.widget;
 
-            if (parent_bounding_box.is_some() || widget.ignores_parent_bounds) && widget.showing {
-                let parent_bounding_box = parent_bounding_box.unwrap_or_else(|| Rect::new(0.0, 0.0, 100000.0, 100000.0));
-                for axis in 0..2 {
-                    let anchor_pos = match widget.position[axis] {
-                        Positioning::DeltaOfWidget(other_wid, _, _) => self.widget_reifications.get(&other_wid).expect("dependent wid must exist").position[axis],
-                        Positioning::MatchWidget(other_wid) => self.widget_reification(other_wid).position[axis],
-                        _ => parent_position.map(|p| p[axis]).unwrap_or(0.0)
-                    };
-                    let anchor_size = match widget.position[axis] {
-                        Positioning::DeltaOfWidget(other_wid, _, _) => self.widget_reifications.get(&other_wid).expect("dependent wid must exist").dimensions[axis],
-                        _ => parent_size.map(|p| p[axis]).unwrap_or(self.gui_size[axis])
-                    };
+        let (parent_position, parent_size, parent_bounding_box, parent_in_progress) = if let Some(parent_id) = widget.parent_id {
+            if let Some(parent) = self.widget_reifications.get(&parent_id) {
+                (Some(parent.inner_position), Some(parent.inner_dimensions), parent.inner_bounding_box, parent.update_in_progress)
+            } else {
+                warn!("Widget {} expected to have parent {}, but that parent was no present in the reifications", internal_state.widget.signifier(), parent_id);
+                (None, None, Some(Rect::new(0.0, 0.0, self.gui_size.x, self.gui_size.y)), false)
+            }
+        } else {
+            (None, None, Some(Rect::new(0.0, 0.0, self.gui_size.x, self.gui_size.y)), false)
+        };
+        let pixels_per_ux = self.pixels_per_ux();
 
-                    let (alignment_point, inverter, dim_multiplier) = match widget.alignment[axis] {
-                        Alignment::Left | Alignment::Top => (anchor_pos, 1.0, 0.0),
-                        Alignment::Right | Alignment::Bottom => (anchor_pos + anchor_size, -1.0, -1.0)
-                    };
+        if (parent_bounding_box.is_some() || widget.ignores_parent_bounds) && widget.showing {
+            let parent_bounding_box = parent_bounding_box.unwrap_or_else(|| Rect::new(0.0f32, 0.0f32, 100000.0f32, 100000.0f32));
+            for axis in 0..2 {
+                let anchor_pos = match widget.position[axis] {
+                    Positioning::DeltaOfWidget(other_wid, _, _) => self.widget_reifications.get(&other_wid).expect("dependent wid must exist").position[axis],
+                    Positioning::MatchWidget(other_wid) => self.widget_reification(other_wid).position[axis],
+                    _ => parent_position.map(|p| p[axis]).unwrap_or(0.0)
+                };
+                let anchor_size = match widget.position[axis] {
+                    Positioning::DeltaOfWidget(other_wid, _, _) => self.widget_reifications.get(&other_wid).expect("dependent wid must exist").dimensions[axis],
+                    _ => parent_size.map(|p| p[axis]).unwrap_or(self.gui_size[axis])
+                };
 
-                    let border_width = widget.border.width;
-                    let border_width = self.pixel_dim_axis_to_gui(border_width as f32);
-                    let border_width_near = if widget.border.sides.has_near_side_for_axis(axis) { border_width } else { 0.0 };
-                    let border_width_far = if widget.border.sides.has_far_side_for_axis(axis) { border_width } else { 0.0 };
+                let (alignment_point, inverter, dim_multiplier) = match widget.alignment[axis] {
+                    Alignment::Left | Alignment::Top => (anchor_pos, 1.0, 0.0),
+                    Alignment::Right | Alignment::Bottom => (anchor_pos + anchor_size, -1.0, -1.0)
+                };
 
-                    let margin = widget.margin.ux(pixels_per_ux);
+                let border_width = widget.border.width;
+                let border_width = self.pixel_dim_axis_to_gui(border_width as f32);
+                let border_width_near = if widget.border.sides.has_near_side_for_axis(axis) { border_width } else { 0.0 };
+                let border_width_far = if widget.border.sides.has_far_side_for_axis(axis) { border_width } else { 0.0 };
 
-                    let effective_dim = match widget.size[axis] {
-                        Sizing::SurroundChildren => {
-                            // the children have to have been computed for this to work, so only do the computation the second time around
-                            if secondary {
-                                let mut enclosing_rect = None;
-                                for child_wid in &internal_state.children {
-                                    let child_reif = self.widget_reifications.get(child_wid).expect("child must exist");
+                let margin = widget.margin.ux(pixels_per_ux);
 
-                                    match child_reif.widget.position[axis] {
-                                        Positioning::CenteredInParent | Positioning::PcntOfParent(_) =>
-                                            warn!("Loop, parent is dependent on surrounding children, but children are positioned relative to parent dim, widget: {:?}", child_reif.widget.signifier()),
-                                        _ => ()
-                                    };
-                                    match child_reif.widget.size[axis] {
-                                        Sizing::PcntOfParent(_) | Sizing::DeltaOfParent(_) =>
-                                            warn!("Loop, parent is dependent on surrounding children, but children are sized relative to parent dim, widget: {:?}", child_reif.widget.signifier()),
-                                        _ => ()
-                                    };
+                let effective_dim = match widget.size[axis] {
+                    Sizing::SurroundChildren => {
+                        // the children have to have been computed for this to work, so only do the computation the second time around
+                        if secondary {
+                            let mut enclosing_rect = None;
+                            for child_wid in &internal_state.children {
+                                let child_reif = self.widget_reifications.get(child_wid).expect("child must exist");
 
-                                    match child_reif.widget.size[axis] {
-                                        Sizing::PcntOfParentAllowingLoop(_) | Sizing::ExtendToParentEdge => (), // ignore, looping parent based sizing is ignored
-                                        _ => {
-                                            if child_reif.widget.showing {
-                                                let child_bounds = child_reif.bounds();
-                                                enclosing_rect = match enclosing_rect {
-                                                    Some(existing) => Some(Rect::enclosing_both(existing, child_bounds)),
-                                                    None => Some(child_bounds)
-                                                };
-                                            }
+                                match child_reif.widget.size[axis] {
+                                    Sizing::PcntOfParent(_) | Sizing::DeltaOfParent(_) =>
+                                        warn!("Loop, parent is dependent on surrounding children, but children are sized relative to parent dim, widget: {:?}", child_reif.widget.signifier()),
+                                    _ => ()
+                                };
+
+                                match child_reif.widget.size[axis] {
+                                    Sizing::PcntOfParentAllowingLoop(_) | Sizing::ExtendToParentEdge => (), // ignore, looping parent based sizing is ignored
+                                    _ => {
+                                        if child_reif.widget.showing {
+                                            let child_bounds = child_reif.bounds();
+                                            enclosing_rect = match enclosing_rect {
+                                                Some(existing) => Some(Rect::enclosing_both(existing, child_bounds)),
+                                                None => Some(child_bounds)
+                                            };
                                         }
                                     }
                                 }
-                                let comparison_pos = internal_state.inner_position[axis];
-                                trace!(target: "gui_redraw", "Computed enclosing rect of {} children : {:?} for axis {} with comp-pos: {}", internal_state.children.len(), enclosing_rect, axis, comparison_pos);
-                                enclosing_rect.map(|r| r.max()[axis] - comparison_pos).unwrap_or(1.0) + border_width_near + border_width_far + margin * 2.0
-                            } else {
+                            }
+                            let comparison_pos = internal_state.inner_position[axis];
+                            trace!(target: "gui_redraw", "Computed enclosing rect of {} children : {:?} for axis {} with comp-pos: {}", internal_state.children.len(), enclosing_rect, axis, comparison_pos);
+                            enclosing_rect.map(|r| r.max()[axis] - comparison_pos).unwrap_or(1.0) + border_width_near + border_width_far + margin * 2.0
+                        } else {
+                            0.0
+                        }
+                    }
+                    Sizing::Derived => {
+                        match &widget.widget_type {
+                            WidgetType::Text { font, text, font_size, wrap, .. } => {
+                                let wrap_dist = if let Some(wrap) = wrap {
+                                    match wrap {
+                                        TextWrap::WithinParent => parent_size.map(|p| p[0]).unwrap_or(self.gui_size[0]) * pixels_per_ux - (match widget.position[0] {
+                                            Positioning::Constant(constant) => constant.px(pixels_per_ux) as f32,
+                                            _ => 0.0
+                                        }),
+                                        TextWrap::ToMaximumOf(units) => units.px(pixels_per_ux) as f32
+                                    }
+                                } else {
+                                    100000000.0
+                                };
+                                let dims = g.string_dimensions(font.unwrap_or(g.default_font), text.as_str(), *font_size, wrap_dist);
+                                let dim = self.pixel_dim_axis_to_gui(dims[axis]);
+                                trace!(target: "gui_redraw", "Calculated derived dim for text[size {}] {} of {:?}", *font_size, text.replace('\n', "\\n"), dim);
+                                dim
+                            }
+                            other => {
+                                trace!(target: "gui_redraw", "Widget had derived size, but non-derivable widget type {:?}", other);
                                 0.0
                             }
                         }
-                        Sizing::Derived => {
-                            match &widget.widget_type {
-                                WidgetType::Text { font, text, font_size, wrap, .. } => {
-                                    let wrap_dist = if let Some(wrap) = wrap {
-                                        match wrap {
-                                            TextWrap::WithinParent => parent_size.map(|p| p[0]).unwrap_or(self.gui_size[0]) * pixels_per_ux - (match widget.position[0] {
-                                                Positioning::Constant(constant) => constant.px(pixels_per_ux) as f32,
-                                                _ => 0.0
-                                            }),
-                                            TextWrap::ToMaximumOf(units) => units.px(pixels_per_ux) as f32
-                                        }
-                                    } else {
-                                        100000000.0
-                                    };
-                                    let dims = g.string_dimensions(font.unwrap_or(DEFAULT_FONT_IDENTIFIER), text.as_str(), *font_size, wrap_dist);
-                                    let dim = self.pixel_dim_axis_to_gui(dims[axis]);
-                                    trace!(target: "gui_redraw", "Calculated derived dim for text {} of {:?}", text.replace('\n', "\\n"), dim);
-                                    dim
-                                }
-                                other => {
-                                    trace!(target: "gui_redraw", "Widget had derived size, but non-derivable widget type {:?}", other);
-                                    0.0
-                                }
-                            }
-                        }
-                        Sizing::ExtendToParentEdge => {
-                            0.0
-                        }
-                        sizing => self.compute_raw_widget_size(sizing, anchor_size)
-                    };
-
-                    let effective_pos = match widget.position[axis] {
-                        Positioning::Constant(constant) => alignment_point + constant.ux(pixels_per_ux) * inverter,
-                        Positioning::PcntOfParent(pcnt) => alignment_point + (anchor_size * pcnt) * inverter,
-                        Positioning::CenteredInParent => alignment_point + (anchor_size - effective_dim) * 0.5,
-                        Positioning::DeltaOfWidget(other_wid, delta, anchor_alignment) => {
-                            match anchor_alignment {
-                                Alignment::Right | Alignment::Bottom => anchor_pos + anchor_size + delta.ux(pixels_per_ux),
-                                _ => anchor_pos - effective_dim - delta.ux(pixels_per_ux)
-                            }
-                        }
-                        Positioning::MatchWidget(other_wid) => alignment_point,
-                        Positioning::Absolute(absolute_position) => absolute_position.ux(pixels_per_ux),
-                    } + effective_dim * dim_multiplier;
-                    trace!(target: "gui_redraw_quads", "effective_pos {:?}, effective_dim {:?}, dim_multiplier {:?}", effective_pos, effective_dim, dim_multiplier);
-
-                    let effective_dim = if Sizing::ExtendToParentEdge == widget.size[axis] {
-                        // TODO: support non-left/top aligned
-                        if widget.alignment[axis] != Alignment::Top && widget.alignment[axis] != Alignment::Left {
-                            error!("extend to parent not currently supported for non top/left aligned widgets");
-                            effective_dim
-                        } else {
-                            let far_parent = parent_position.map(|p| p[axis]).unwrap_or(0.0) + parent_size.map(|p| p[axis]).unwrap_or(self.gui_size[axis]);
-                            let new_dim = far_parent - effective_pos;
-                            new_dim
-                        }
-                    } else {
-                        effective_dim
-                    };
-
-                    internal_state.dimensions[axis] = effective_dim;
-                    internal_state.inner_dimensions[axis] = effective_dim - border_width_near - border_width_far - margin * 2.0;
-                    internal_state.position[axis] = effective_pos;
-                    internal_state.inner_position[axis] = effective_pos + border_width_near + margin;
-                }
-                let main_rect = Rect::new(internal_state.position.x, internal_state.position.y, internal_state.dimensions.x, internal_state.dimensions.y);
-                let inner_rect = Rect::new(internal_state.inner_position.x, internal_state.inner_position.y, internal_state.inner_dimensions.x, internal_state.inner_dimensions.y);
-                if widget.ignores_parent_bounds {
-                    internal_state.bounding_box = Some(main_rect);
-                    internal_state.inner_bounding_box = Some(inner_rect);
-                } else {
-                    let bounding_box = parent_bounding_box.intersect(main_rect);
-
-                    if widget.dependent_on_children() && !secondary {
-                        internal_state.bounding_box = Some(Rect::new(0.0, 0.0, 1000.0, 1000.0));
-                        internal_state.inner_bounding_box = Some(Rect::new(0.0, 0.0, 1000.0, 1000.0));
-                    } else {
-                        internal_state.bounding_box = bounding_box;
-                        internal_state.inner_bounding_box = bounding_box.and_then(|bb| bb.intersect(inner_rect));
                     }
-                }
-            } else {
-                internal_state.dimensions = v2(0.0, 0.0);
-                internal_state.inner_dimensions = v2(0.0, 0.0);
-                internal_state.position = v2(0.0, 0.0);
-                internal_state.inner_position = v2(0.0, 0.0);
-                internal_state.bounding_box = None;
-                internal_state.inner_bounding_box = None;
-            }
+                    Sizing::ExtendToParentEdge => {
+                        0.0
+                    }
+                    sizing => self.compute_raw_widget_size(sizing, anchor_size)
+                };
 
-            widget.dependent_on_children()
-        };
+                let effective_pos = match widget.position[axis] {
+                    Positioning::Constant(constant) => alignment_point + constant.ux(pixels_per_ux) * inverter,
+                    Positioning::PcntOfParent(pcnt) => alignment_point + (anchor_size * pcnt) * inverter,
+                    Positioning::CenteredInParent => if parent_in_progress { alignment_point } else { alignment_point + (anchor_size - effective_dim) * 0.5 },
+                    Positioning::DeltaOfWidget(other_wid, delta, anchor_alignment) => {
+                        match anchor_alignment {
+                            Alignment::Right | Alignment::Bottom => anchor_pos + anchor_size + delta.ux(pixels_per_ux),
+                            _ => anchor_pos - effective_dim - delta.ux(pixels_per_ux)
+                        }
+                    }
+                    Positioning::MatchWidget(other_wid) => alignment_point,
+                    Positioning::Absolute(absolute_position) => absolute_position.ux(pixels_per_ux),
+                } + effective_dim * dim_multiplier;
+                trace!(target: "gui_redraw_quads", "effective_pos {:?}, effective_dim {:?}, dim_multiplier {:?}", effective_pos, effective_dim, dim_multiplier);
+
+                let effective_dim = if Sizing::ExtendToParentEdge == widget.size[axis] {
+                    // TODO: support non-left/top aligned
+                    if widget.alignment[axis] != Alignment::Top && widget.alignment[axis] != Alignment::Left {
+                        error!("extend to parent not currently supported for non top/left aligned widgets");
+                        effective_dim
+                    } else {
+                        let far_parent = parent_position.map(|p| p[axis]).unwrap_or(0.0) + parent_size.map(|p| p[axis]).unwrap_or(self.gui_size[axis]);
+                        let new_dim = far_parent - effective_pos;
+                        new_dim
+                    }
+                } else {
+                    effective_dim
+                };
+
+                internal_state.dimensions[axis] = effective_dim;
+                internal_state.inner_dimensions[axis] = effective_dim - border_width_near - border_width_far - margin * 2.0;
+                internal_state.position[axis] = effective_pos;
+                internal_state.inner_position[axis] = effective_pos + border_width_near + margin;
+            }
+            let main_rect = Rect::new(internal_state.position.x, internal_state.position.y, internal_state.dimensions.x, internal_state.dimensions.y);
+            let inner_rect = Rect::new(internal_state.inner_position.x, internal_state.inner_position.y, internal_state.inner_dimensions.x, internal_state.inner_dimensions.y);
+            if widget.ignores_parent_bounds {
+                internal_state.bounding_box = Some(main_rect);
+                internal_state.inner_bounding_box = Some(inner_rect);
+            } else {
+                let bounding_box = parent_bounding_box.intersect(main_rect);
+
+                if widget.dependent_on_children() && !secondary {
+                    internal_state.bounding_box = Some(Rect::new(0.0, 0.0, 1000.0, 1000.0));
+                    internal_state.inner_bounding_box = Some(Rect::new(0.0, 0.0, 1000.0, 1000.0));
+                } else {
+                    internal_state.bounding_box = bounding_box;
+                    internal_state.inner_bounding_box = bounding_box.and_then(|bb| bb.intersect(inner_rect));
+                }
+            }
+        } else {
+            internal_state.dimensions = v2(0.0, 0.0);
+            internal_state.inner_dimensions = v2(0.0, 0.0);
+            internal_state.position = v2(0.0, 0.0);
+            internal_state.inner_position = v2(0.0, 0.0);
+            internal_state.bounding_box = None;
+            internal_state.inner_bounding_box = None;
+        }
+
+        if secondary { internal_state.update_in_progress = false; }
 
         self.widget_reifications.insert(wid, internal_state);
 
@@ -258,7 +259,7 @@ impl GUI {
                             internal_state.draw_list = internal_state.draw_list.add_text(
                                 Text::new(text.clone(), font_size)
                                     .color(widget.color)
-                                    .font(font.unwrap_or(DEFAULT_FONT_IDENTIFIER))
+                                    .font(font.unwrap_or(g.default_font))
                                     .centered(false, false)
                                     .offset(inner_pixel_offset - v2(0.0, effective_internal_dim.y))
                                     .wrap_to(wrap_dist)

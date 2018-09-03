@@ -2,9 +2,16 @@ use rusttype as rt;
 
 use common::Rect;
 use common::prelude::*;
+use core::FontSize;
+use std::collections::HashMap;
 
 pub type RTFont = rt::Font<'static>;
 pub type RTPositionedGlyph = rt::PositionedGlyph<'static>;
+
+pub struct ArxFont {
+    pub font : RTFont,
+    pub sizing_overrides : HashMap<FontSize, u32>
+}
 
 
 pub struct TextLayout {
@@ -26,7 +33,7 @@ impl TextLayout {
         v2(self.bounds.w / self.dpi_scale, self.bounds.h / self.dpi_scale)
     }
 
-    pub fn layout_text<'a,'b>(string : &'a str, font : &'b RTFont, size : u32, dpi_scale : f32, wrap_at: f32) -> TextLayout {
+    pub fn layout_text<'a,'b>(string : &'a str, font : &'b ArxFont, size : FontSize, dpi_scale : f32, wrap_at: f32) -> TextLayout {
 //        use rusttype::unicode_normalization::UnicodeNormalization;
 
         let scale = rt::Scale::uniform(((size * 4) as f32 / 3.0) * dpi_scale);
@@ -105,7 +112,8 @@ impl TextLayout {
         }
     }
 
-    pub fn line_height(font : &RTFont, size : u32, dpi_scale : f32) -> f32 {
+    pub fn line_height(font : &ArxFont, size : FontSize, dpi_scale : f32) -> f32 {
+        let effective_size = font.
         let scale = rt::Scale::uniform(((size * 4) as f32 / 3.0) * dpi_scale);
         let vmetrics = font.v_metrics(scale);
         vmetrics.ascent - vmetrics.descent + vmetrics.line_gap

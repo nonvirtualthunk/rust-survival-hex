@@ -94,7 +94,7 @@ impl InventoryDisplay {
                     error!("Our inventory setup kind of assumes one from-entity for equipping");
                 }
                 if let Some(entity) = entities.first() {
-                    control.trigger_event(ControlEvents::EquipItemRequested { item, equip_on : *entity });
+                    control.trigger_event(TacticalEvents::EquipItemRequested { item, equip_on : *entity });
                 }
             }
         }
@@ -120,7 +120,7 @@ impl InventoryDisplay {
                     let from_entities = transfer_from.inventories.iter().find(|idd| idd.items.contains(&selected)).map(|idd| idd.from_entities.clone()).unwrap_or(Vec::new());
                     let to_entities = transfer_to.active_inventory_data(gui).from_entities.clone();
                     if from_entities.non_empty() && to_entities.non_empty() {
-                        control.trigger_event(ControlEvents::ItemTransferRequested { item : selected, from : from_entities, to: to_entities });
+                        control.trigger_event(TacticalEvents::ItemTransferRequested { item : selected, from : from_entities, to: to_entities });
                         self.selected_item = None;
                     } else {
                         warn!("From/to entities weren't valid for inventory transfer: {:?}, {:?}", from_entities, to_entities);

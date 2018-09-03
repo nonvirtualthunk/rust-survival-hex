@@ -28,7 +28,6 @@ use world::storage::*;
 use world::WorldView;
 use entity::Entity;
 use entity::EntityData;
-use entity::ENTITY_ID_COUNTER;
 use storage::MultiTypeEventContainer;
 use events::GameEventType;
 use events::CoreEvent;
@@ -43,6 +42,12 @@ use events::CoreEvent::DataRegistered;
 use serde::Deserialize;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::Deserializer;
+use serde::de::Visitor;
+use serde::Serializer;
+use serde::de::SeqAccess;
+use serde::de;
+use serde::de::MapAccess;
 
 pub struct ModifiersApplication {
     disable_func: fn(&mut World, ModifierReference),
@@ -52,24 +57,26 @@ pub struct ModifiersApplication {
     remove_entity_func: fn(&mut WorldView, Entity),
     bootstrap_entity_func: fn(&World, &mut WorldView, Entity),
     register_func: fn(&mut WorldView),
-    registered_at: GameEventClock
+    registered_at: GameEventClock,
 }
 
 pub struct IndexApplication {
     index_func: Rc<Fn(&World, &mut WorldView)>
 }
 
-#[derive(Debug,Clone,Copy,PartialEq,Eq,Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ModifierReferenceType {
     Permanent,
     Dynamic,
     Archetype,
-    Sentinel
+    Sentinel,
 }
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModifierReference(pub(crate) usize, pub(crate) ModifierReferenceType, pub(crate) usize);
+
 impl ModifierReference {
-    pub fn sentinel() -> ModifierReference { ModifierReference(0,ModifierReferenceType::Sentinel,0)}
+    pub fn sentinel() -> ModifierReference { ModifierReference(0, ModifierReferenceType::Sentinel, 0) }
     pub fn as_opt(&self) -> Option<&ModifierReference> {
         if self.is_sentinel() {
             None
@@ -85,7 +92,7 @@ impl ModifierReference {
     }
 }
 
-#[derive(Serialize,Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct World {
     pub(crate) entities: Vec<EntityContainer>,
     pub self_entity: Entity,
@@ -96,7 +103,8 @@ pub struct World {
     pub next_time: GameEventClock,
     pub(crate) events: MultiTypeEventContainer,
     pub entity_indices: MultiTypeContainer,
-    // runtime only
+    pub entity_id_counter : usize,
+    // runtime only -----------------------------------------------------------------------
     #[serde(skip_serializing, skip_deserializing)]
     pub view: UnsafeCell<WorldView>,
     #[serde(skip_serializing, skip_deserializing)]
@@ -105,9 +113,10 @@ pub struct World {
     pub index_applications: Vec<IndexApplication>,
 }
 
+
 impl World {
     pub fn new() -> World {
-        let self_ent = World::create_entity();
+        let self_ent = Entity(1);
 
         let mut world = World {
             entities: vec![],
@@ -135,12 +144,23 @@ impl World {
             modifier_application_by_type: hash_map::HashMap::new(),
             entity_indices: MultiTypeContainer::new(),
             index_applications: vec![],
+            entity_id_counter: 2
         };
 
-        world.register_event_type::<CoreEvent>();
-        world.register::<DebugData>();
+        world.register_core_types();
 
         world
+    }
+
+    /// must be called after deserializing a world for it to work properly
+    pub fn initialize_loaded_world(&mut self){
+        self.initialize_internal_view();
+        self.register_core_types();
+    }
+
+    pub(crate) fn register_core_types(&mut self) {
+        self.register_event_type::<CoreEvent>();
+        self.register::<DebugData>();
     }
 
     pub fn current_time(&self) -> GameEventClock {
@@ -163,7 +183,7 @@ impl World {
         });
     }
 
-    pub fn register_event_type< E: GameEventType + 'static + Serialize + Default>(&mut self) where for<'de> E: serde::Deserialize<'de> {
+    pub fn register_event_type<E: GameEventType + 'static + Serialize + Default>(&mut self) where for<'de> E: serde::Deserialize<'de> {
         self.events.register_event_type::<E>();
         self.mut_view().events.register_event_type::<E>();
     }
@@ -172,17 +192,32 @@ impl World {
         self.modifiers.get::<ModifiersContainer<T>>()
     }
 
-    pub fn register<T: EntityData>(&mut self) where T : DeserializeOwned {
-        if self.data.contains::<DataContainer<T>>() {
-            return;
-        }
+    pub(crate) fn initialize_internal_view(&mut self) {
+        self.view = UnsafeCell::new(WorldView {
+            entities: vec![],
+            entity_set: HashSet::new(),
+            self_entity: self.self_entity,
+            constant_data: MultiTypeContainer::new(),
+            effective_data: MultiTypeContainer::new(),
+            overlay_data: MultiTypeContainer::new(),
+            current_time: 0,
+            events: MultiTypeEventContainer::new(),
+            modifier_cursor: 0,
+            modifier_indices: hash_map::HashMap::new(),
+            entity_indices: MultiTypeContainer::new(),
+            has_overlay: false,
+        });
+        let mut_view = self.mut_view();
+        self.update_view_to_time_intern(mut_view, self.next_time-1, true);
+    }
 
+    pub fn register<T: EntityData>(&mut self) where T: DeserializeOwned {
         self.data.register::<DataContainer<T>>();
         self.modifiers.register::<ModifiersContainer<T>>();
 
         let register_func = |view: &mut WorldView| {
             if view.constant_data.contains::<DataContainer<T>>() {
-                error!("Registered twice, that's not good, we're hitting it more often than expected");
+                error!("Registered {} twice, that's not good, we're hitting it more often than expected", typename::<T>());
             }
             view.constant_data.register::<DataContainer<T>>();
             view.effective_data.register::<DataContainer<T>>();
@@ -195,17 +230,17 @@ impl World {
                 ModifierReferenceType::Dynamic => {
                     panic!("Disabling dynamic modifiers not re-implemented yet");
 //                    all_modifiers.dynamic_modifiers.get_mut(index).expect("cannot disable a non-existent modifier").disabled_at = Some(world.next_time);
-                },
+                }
                 ModifierReferenceType::Permanent => {
-                    if let Some((index, modifier)) = all_modifiers.modifiers.iter_mut().enumerate().find(|(i,e)| e.modifier_index == modifier_clock) {
+                    if let Some((index, modifier)) = all_modifiers.modifiers.iter_mut().enumerate().find(|(i, e)| e.modifier_index == modifier_clock) {
                         modifier.disabled_at = Some(world.next_time);
                         all_modifiers.modifiers_by_disabled_at.entry(world.next_time).or_insert_with(|| Vec::new()).push(index);
                     }
 //                    trace!("Disabling modifier with reference {:?} and marking disabled at to {:?}", modifier_ref, world.next_time);
 //                    let modifier = all_modifiers.modifiers.get_mut(index).expect("cannot disable a non-existent modifier").disabled_at = Some(world.next_time);
 //                    all_modifiers.modifiers_by_disabled_at.entry(world.next_time).or_insert_with(|| Vec::new()).push(index);
-                },
-                ModifierReferenceType::Archetype => { warn!("it makes no sense to attempt to disable a modifier archetype") },
+                }
+                ModifierReferenceType::Archetype => { warn!("it makes no sense to attempt to disable a modifier archetype") }
                 ModifierReferenceType::Sentinel => { warn!("removing a sentinel reference is a no-op") }
             }
         };
@@ -375,12 +410,12 @@ impl World {
             }
         };
 
-        let remove_entity_func = |view : &mut WorldView, entity : Entity| {
+        let remove_entity_func = |view: &mut WorldView, entity: Entity| {
             view.effective_data.get_mut::<DataContainer<T>>().storage.remove(&entity);
             view.constant_data.get_mut::<DataContainer<T>>().storage.remove(&entity);
         };
 
-        let bootstrap_entity_func = |world : &World, view: &mut WorldView, entity : Entity| {
+        let bootstrap_entity_func = |world: &World, view: &mut WorldView, entity: Entity| {
             if let Some(existing_data) = world.raw_data_opt::<T>(entity) {
                 view.effective_data.get_mut::<DataContainer<T>>().storage.insert(entity, existing_data.clone());
             }
@@ -394,7 +429,7 @@ impl World {
             remove_entity_func,
             bootstrap_entity_func,
             register_func,
-            registered_at: self.next_time
+            registered_at: self.next_time,
         });
 
         self.add_event(DataRegistered);
@@ -411,7 +446,7 @@ impl World {
 
     pub fn view_at_time(&self, at_time: GameEventClock) -> WorldView {
         let entities = self.entities.iter().filter(|e| e.1 <= at_time).cloned().collect_vec();
-        let entity_set : HashSet<Entity> = entities.iter().map(|e| e.0).collect();
+        let entity_set: HashSet<Entity> = entities.iter().map(|e| e.0).collect();
         let mut new_view = WorldView {
             entity_set,
             entities,
@@ -443,7 +478,7 @@ impl World {
         self.update_view_to_time_intern(view, at_time, false);
     }
 
-    fn update_view_to_time_intern(&self, view: &mut WorldView, at_time: GameEventClock, is_init : bool) {
+    fn update_view_to_time_intern(&self, view: &mut WorldView, at_time: GameEventClock, is_init: bool) {
         let cur_time = view.current_time;
         trace!("{:?} view-------------------------------------------", (if is_init { "Initializing" } else { "Updating" }));
         if cur_time >= at_time {
@@ -453,11 +488,10 @@ impl World {
 
         self.index_applications.iter().for_each(|idx| (idx.index_func)(self, view));
 
-        if ! is_init {
+        if !is_init {
             for (type_id, application_capability) in &self.modifier_application_by_type {
                 if application_capability.registered_at <= at_time && (application_capability.registered_at > view.current_time || view.current_time == 0) {
                     (application_capability.register_func)(view);
-
                 }
             }
         }
@@ -468,7 +502,7 @@ impl World {
         let new_entities: Vec<EntityContainer> = self.entities.iter().rev()
             .skip_while(|e| e.1 >= at_time)
             .take_while(|e| e.1 >= cur_time)
-            .filter(|e| ! existing_set.contains(&e.0))
+            .filter(|e| !existing_set.contains(&e.0))
             .cloned()
             .collect();
 
@@ -541,7 +575,7 @@ impl World {
             if application_capability.registered_at <= at_time {
                 let current_index = 0;
                 walkers.push((application_capability.apply_func.clone(), Some(current_index), type_id));
-                if ! is_init {
+                if !is_init {
                     (application_capability.reset_func)(self, view);
                 }
             }
@@ -606,7 +640,7 @@ impl World {
         if modifier.modifier_type() == ModifierType::Dynamic {
             let index = all_modifiers.dynamic_modifiers.len();
             all_modifiers.dynamic_modifiers.push(ModifierContainer {
-                modifier : modifier.into(),
+                modifier: modifier.into(),
                 applied_at: self.next_time,
                 disabled_at: None,
                 modifier_index: self.total_dynamic_modifier_count,
@@ -619,7 +653,7 @@ impl World {
         } else {
             let index = all_modifiers.modifiers.len();
             all_modifiers.modifiers.push(ModifierContainer {
-                modifier : modifier.into(),
+                modifier: modifier.into(),
                 applied_at: self.next_time,
                 disabled_at: None,
                 modifier_index: self.total_modifier_count,
@@ -719,7 +753,7 @@ impl World {
         let self_data: &mut DataContainer<T> = self.data.get_mut::<DataContainer<T>>();
         self_data.entities_with_data.push(entity);
         if let Some(prev) = self_data.storage.insert(entity, data) {
-            error!("Attached data multiple times, that's going to super-break stuff {:?}", Backtrace::new());
+            error!("Attached data <{:?}> multiple times, that's going to super-break stuff {:?}", typename::<T>(), Backtrace::new());
         }
     }
 
@@ -728,8 +762,9 @@ impl World {
         self.attach_data(ent, data);
     }
 
-    pub fn create_entity() -> Entity {
-        let id = ENTITY_ID_COUNTER.fetch_add(1, Ordering::SeqCst) + 1;
+    pub fn create_entity(&mut self) -> Entity {
+        let id = self.entity_id_counter;
+        self.entity_id_counter += 1;
         Entity(id)
     }
 
@@ -744,15 +779,15 @@ impl World {
         rng
     }
 
-    pub fn raw_data<T : EntityData>(&self, entity : Entity) -> &T {
-        self.raw_data_opt::<T>(entity).unwrap_or_else(|| panic!(format!("Attempted to get raw data of type {:?}, but entity {:?} had none", unsafe {std::intrinsics::type_name::<T>()}, entity)))
+    pub fn raw_data<T: EntityData>(&self, entity: Entity) -> &T {
+        self.raw_data_opt::<T>(entity).unwrap_or_else(|| panic!(format!("Attempted to get raw data of type {:?}, but entity {:?} had none", unsafe { std::intrinsics::type_name::<T>() }, entity)))
     }
-    pub fn raw_data_opt<T : EntityData>(&self, entity : Entity) -> Option<&T> {
+    pub fn raw_data_opt<T: EntityData>(&self, entity: Entity) -> Option<&T> {
         self.data.get::<DataContainer<T>>().storage.get(&entity)
     }
 
-    pub fn world_data_mut<T : EntityData>(&mut self) -> &T {
-        self.data.get_mut::<DataContainer<T>>().storage.entry(self.self_entity).or_insert_with(||T::default())
+    pub fn world_data_mut<T: EntityData>(&mut self) -> &T {
+        self.data.get_mut::<DataContainer<T>>().storage.entry(self.self_entity).or_insert_with(|| T::default())
     }
 }
 

@@ -6,7 +6,7 @@ use game::Entity;
 use std::collections::HashMap;
 use state::GameState;
 use state::ControlContext;
-use control_events::ControlEvents;
+use control_events::TacticalEvents;
 use std::time::Duration;
 use std::time::Instant;
 use std::collections::VecDeque;

@@ -99,8 +99,6 @@ fn main() {
     let mut game = Game::new(window.factory.clone());
     game.on_load(&mut window);
 
-    game.active_mode.enter(&mut game.world);
-
     while let Some(e) = window.next() {
         if let Some(render_args) = e.render_args() {
             let adjusted_viewport = render_args.viewport();
@@ -130,5 +128,9 @@ fn main() {
         }
 
         game.on_event(&e);
+
+        if game.exit_requested {
+            break;
+        }
     }
 }

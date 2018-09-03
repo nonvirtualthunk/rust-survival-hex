@@ -110,7 +110,7 @@ impl AnimationElement for AnimationGroup {
 #[derive(Debug)]
 pub struct TextAnimationElement {
     pub text: String,
-    pub text_size: u32,
+    pub text_size: FontSize,
     pub duration: f64,
     pub blocking_duration: Option<f64>,
     pub position_interpolation : Interpolation<CartVec>,
@@ -118,7 +118,7 @@ pub struct TextAnimationElement {
 }
 
 impl TextAnimationElement {
-    pub fn new (text : String, text_size : u32, position : CartVec, color : Color, duration : f64) -> TextAnimationElement {
+    pub fn new (text : String, text_size : FontSize, position : CartVec, color : Color, duration : f64) -> TextAnimationElement {
         TextAnimationElement {
             text,
             text_size,

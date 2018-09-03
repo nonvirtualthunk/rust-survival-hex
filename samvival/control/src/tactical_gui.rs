@@ -1,5 +1,4 @@
 use common::prelude::*;
-use tactical::TacticalMode;
 use game::World;
 use game::Entity;
 use game::WorldView;
@@ -26,7 +25,7 @@ use game::logic;
 use common::prelude::*;
 use graphics::core::GraphicsWrapper;
 use common::event_bus::EventBus;
-use gui::control_events::ControlEvents;
+use gui::control_events::TacticalEvents;
 use common::event_bus::ConsumerHandle;
 use graphics::core::DrawList;
 use graphics::Quad;
@@ -45,12 +44,16 @@ use gui::messages_widget::Message;
 use gui::inventory_widget::*;
 use game::entities::inventory::InventoryData;
 use action_ui_handlers::*;
-
-
-pub struct TacticalEventBundle<'a, 'b> {
-    pub tactical: &'a mut TacticalMode,
-    pub world: &'b mut World,
-}
+use gui::action_bar::ActionBar;
+use gui::reaction_bar::ReactionBar;
+use gui::character_info::CharacterInfoWidget;
+use gui::state::GameState;
+use gui::action_bar::PlayerActionType;
+use gui::inventory_widget;
+use gui::escape_menu::*;
+use std::fs::File;
+use gui::state::ControlContext;
+use gui::control_events::GameModeEvent;
 
 #[derive(PartialEq,Clone,Copy)]
 pub enum AuxiliaryWindows {
@@ -63,7 +66,7 @@ pub struct TacticalGui {
     defeat_widget : Widget,
     action_bar : ActionBar,
     reaction_bar : ReactionBar,
-    event_bus : EventBus<ControlEvents>,
+    event_bus : EventBus<TacticalEvents>,
     event_bus_handle : ConsumerHandle,
     character_info_widget : CharacterInfoWidget,
     targeting_draw_list : DrawList,
@@ -72,6 +75,7 @@ pub struct TacticalGui {
     messages_display : MessagesDisplay,
     inventory_widget: inventory_widget::InventoryDisplay,
     open_auxiliary_windows : Vec<AuxiliaryWindows>,
+    escape_menu : EscapeMenu,
 
 }
 
@@ -101,7 +105,6 @@ impl TacticalGui {
 
         let defeat_text = Widget::text("Defeat!", 30).color(Color::new(0.6,0.1,0.1,1.0)).centered().parent(&defeat_widget).apply(gui);
 
-
         let event_bus = EventBus::new();
         let event_bus_handle = event_bus.register_consumer(true);
 
@@ -118,8 +121,9 @@ impl TacticalGui {
             attack_details_widget : AttackDetailsWidget::new().draw_layer_for_all(GUILayer::Overlay),
             messages_display : MessagesDisplay::new(gui, &main_area),
             inventory_widget : inventory_widget::InventoryDisplay::new(strf("Character Inventory"), &main_area),
+            open_auxiliary_windows: Vec::new(),
+            escape_menu : EscapeMenu::new(gui, &main_area),
             main_area,
-            open_auxiliary_windows: Vec::new()
         }
     }
 
@@ -228,7 +232,7 @@ impl TacticalGui {
 //    }
 
 
-    pub fn update_gui(&mut self, world: &mut World, world_view : &WorldView, gui: &mut GUI, frame_id: Option<Wid>, game_state: GameState) {
+    pub fn update_gui(&mut self, world: &mut World, world_view : &WorldView, gui: &mut GUI, frame_id: Option<Wid>, game_state: GameState, game_mode_event_bus : &mut EventBus<GameModeEvent>) {
 //        let world_view = world.view_at_time(game_state.display_event_clock);
 
         self.messages_display.update(gui);
@@ -291,18 +295,24 @@ impl TacticalGui {
             self.inventory_widget.set_showing(false).reapply(gui);
         }
 
+        for event in gui.events_for(&self.main_area) {
+            if let Some((tactical_event,_)) = event.as_custom_event::<TacticalEvents>() {
+                self.event_bus.push_event(tactical_event);
+            }
+        }
+
         for event in self.event_bus.events_for(&mut self.event_bus_handle) {
             if let Some(selected) = game_state.selected_character {
                 match event {
-                    ControlEvents::ActionSelected(action_type) => {
+                    TacticalEvents::ActionSelected(action_type) => {
                         println!("Selected action type : {:?}", action_type);
                     },
-                    ControlEvents::AttackSelected(attack_ref) => {
+                    TacticalEvents::AttackSelected(attack_ref) => {
                         println!("Attack selected");
                         world.modify(selected, CombatData::active_attack.set_to(attack_ref.clone()), "attack selected");
                         world.add_event(GameEvent::SelectedAttackChanged { entity : selected, attack_ref : attack_ref.clone() });
                     },
-                    ControlEvents::CounterattackSelected(attack_ref) => {
+                    TacticalEvents::CounterattackSelected(attack_ref) => {
                         println!("Counter selected");
                         if logic::combat::is_valid_counter_attack(world, selected, attack_ref) {
                             world.modify(selected, CombatData::active_counterattack.set_to(attack_ref.clone()), "counter-attack selected");
@@ -311,12 +321,12 @@ impl TacticalGui {
                             self.messages_display.add_message(Message::new("Only melee attacks can be used as counter-attacks, reach and ranged cannot."));
                         }
                     },
-                    ControlEvents::ReactionSelected(reaction_type) => {
+                    TacticalEvents::ReactionSelected(reaction_type) => {
                         println!("Selected reaction type : {:?}", reaction_type);
                         world.modify(selected, ActionData::active_reaction.set_to(reaction_type.clone()), "reaction selected");
                         world.add_event(GameEvent::SelectedReactionChanged { entity : selected, reaction_type : reaction_type.clone() });
                     },
-                    ControlEvents::ItemTransferRequested { item , from, to } => {
+                    TacticalEvents::ItemTransferRequested { item , from, to } => {
                         if let Some(from) = from.find(|ent| world_view.data_opt::<InventoryData>(*ent).map(|inv| inv.items.contains(item)).unwrap_or(false)) {
                             let from_pos = world_view.data_opt::<PositionData>(*from).map(|pd| pd.hex).unwrap_or(AxialCoord::new(0,0));
                             // if these are ground tiles, pick the closest one
@@ -340,14 +350,25 @@ impl TacticalGui {
                             error!("none of the from entities actually held the desired item")
                         }
                     },
-                    ControlEvents::EquipItemRequested { item, equip_on } => {
+                    TacticalEvents::EquipItemRequested { item, equip_on } => {
                         if ! logic::item::is_item_equipped_by(world, *item, *equip_on) {
                             logic::item::equip_item(world, *item, *equip_on, true);
                         } else {
                             logic::item::unequip_item(world, *item, *equip_on, true);
                         }
-                    }
+                    },
+                    _ => {}
                 }
+            }
+
+            match event {
+                TacticalEvents::Save => {
+                    game_mode_event_bus.push_event(GameModeEvent::Save(strf("savegame")));
+                },
+                TacticalEvents::MainMenu => {
+                    game_mode_event_bus.push_event(GameModeEvent::MainMenu);
+                },
+                _ => {}
             }
         }
 
@@ -362,5 +383,9 @@ impl TacticalGui {
                 self.defeat_widget.set_showing(true).reapply(gui);
             }
         }
+    }
+
+    pub fn toggle_escape_menu(&mut self, gui : &mut GUI) {
+        self.escape_menu.toggle_showing().reapply(gui)
     }
 }

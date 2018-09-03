@@ -6,7 +6,6 @@ use common::Rect;
 use events::EventPosition;
 use events::UIEvent;
 use graphics::core::Quad;
-use graphics::DEFAULT_FONT_IDENTIFIER;
 use graphics::DrawList;
 use graphics::GraphicsAssets;
 use graphics::GraphicsResources;

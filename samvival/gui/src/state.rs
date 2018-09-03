@@ -1,5 +1,5 @@
 use common::prelude::*;
-use control_events::ControlEvents;
+use control_events::TacticalEvents;
 use common::hex::*;
 use game::prelude::*;
 use common::EventBus;
@@ -23,11 +23,11 @@ impl GameState {
 
 
 pub struct ControlContext<'a> {
-    pub event_bus : &'a mut EventBus<ControlEvents>
+    pub event_bus : &'a mut EventBus<TacticalEvents>
 }
 
 impl <'a> ControlContext<'a> {
-    pub fn trigger_event(&mut self, evt : ControlEvents) {
+    pub fn trigger_event(&mut self, evt : TacticalEvents) {
         self.event_bus.push_event(evt);
     }
 }

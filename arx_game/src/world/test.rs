@@ -13,13 +13,13 @@ mod test {
     use super::super::super::entity;
     #[derive(Clone, Default, PartialEq, Debug, Serialize, Deserialize, PrintFields)]
     struct FooData {
-        a: i32,
-        b: Vec<f32>
+        pub a: i32,
+        pub b: Vec<f32>
     }
 
     #[derive(Clone, Default, PartialEq, Debug, Serialize, Deserialize, PrintFields)]
     struct BarData {
-        x: f32
+        pub x: f32
     }
 
     impl FooData { pub const a : Field < FooData , i32 > = Field :: new ( stringify ! ( a ) , | t | & t . a , | t | &mut t . a, | t , v | { t . a = v ; } ) ; pub const b : Field < FooData , Vec < f32 > > = Field :: new ( stringify ! ( b ) , | t | & t . b , | t | &mut t . b, | t , v | { t . b = v ; } ) ; }
@@ -367,6 +367,59 @@ mod test {
         assert_that(&view.has_data::<BarData>(ent1)).is_true();
         assert_that(&view.data::<BarData>(ent1).x).is_equal_to(4.0);
         assert_that(&view_2.data::<BarData>(ent1).x).is_equal_to(4.0);
+    }
 
+    #[test]
+    pub fn test_deserialization() {
+        use spectral::prelude::*;
+        rust_init();
+
+        let mut world : World = World::new();
+
+        world.register::<FooData>();
+
+        let ent1 = EntityBuilder::new()
+            .with(FooData {
+                a: 1,
+                b: vec![]
+            })
+            .create(&mut world);
+
+        let ent2 = EntityBuilder::new()
+            .with(FooData {
+                a: 2,
+                b: vec![]
+            })
+            .create(&mut world);
+
+        // add a simple modifier to increase a by 4, should now be 5. Keep a reference to the modifier
+        world.add_modifier(ent1, FooData::a.add(4), "simple addition");
+        world.add_event(CoreEvent::WorldInitialized);
+
+        world.register::<BarData>();
+
+        world.attach_data(ent1, BarData {x : 3.0});
+        world.add_modifier(ent1, BarData::x.add(1.0), "x addition");
+        world.add_event(CoreEvent::TimePassed);
+
+        use ron;
+
+        let serialized_world = ron::ser::to_string(&world).expect("Could not serialize world");
+
+        let mut deserialized_world : World = ron::de::from_str(&serialized_world).expect("Could not deserialize world");
+        deserialized_world.initialize_loaded_world();
+
+        deserialized_world.register::<FooData>();
+        deserialized_world.register::<BarData>();
+
+        let view = deserialized_world.view();
+        let foo1 = view.data::<FooData>(ent1);
+        assert_that(&foo1).is_equal_to(&FooData { a : 5 , b : vec![] });
+        let bar1 = view.data::<BarData>(ent1);
+        assert_that(&bar1).is_equal_to(&BarData { x: 4.0 });
+
+        let core_events = view.events::<CoreEvent>().collect_vec();
+        assert_that(&core_events).matching_contains(|w| w.event == CoreEvent::TimePassed);
+        assert_that(&core_events).matching_contains(|w| w.event == CoreEvent::WorldInitialized);
     }
 }

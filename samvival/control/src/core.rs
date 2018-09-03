@@ -1,248 +1,183 @@
+use cgmath::InnerSpace;
+use common::Color;
+use common::EventBus;
 use common::prelude::*;
-use game::World;
-use graphics::core::GraphicsWrapper;
-use piston_window::*;
+use game::DebugData;
+use game::entities::reactions::reaction_types;
 use game::entities::TileData;
-use common::hex::*;
+use game::GameEvent;
+use game::prelude::*;
+use game::reflect::*;
+use game::scenario::Scenario;
+use game::scenario::test_scenarios::FirstEverScenario;
+use game::universe::*;
+use game::World;
 use gfx_device_gl;
-use tactical::TacticalMode;
+//use graphics::core::Context as ArxContext;
+use graphics::core::GraphicsResources;
+use graphics::core::GraphicsWrapper;
 use gui::GUI;
+use gui::Sizing;
+use gui::UIEvent;
 use gui::Wid;
 use gui::Widget;
 use gui::WidgetType;
-use gui::Sizing;
-use gui::UIEvent;
-use common::Color;
-use game::entities::reactions::reaction_types;
-use game::DebugData;
-
-use game::prelude::*;
-use game::entities::combat::DamageType;
-use game::entities::*;
-use game::logic;
-use game::reflect::*;
-use game::GameEvent;
-use cgmath::InnerSpace;
-use game::archetypes::*;
-use game::entities::taxonomy;
-use game::terrain;
-use game::entities::reactions::ReactionTypeRef;
-
-//use graphics::core::Context as ArxContext;
-use graphics::core::GraphicsResources;
+use piston_window::*;
 use std::collections::HashMap;
+use std::path::Path;
+use tactical::TacticalMode;
+use game::entities::FactionData;
+use std::sync::Mutex;
+use std::rc::Rc;
+use common::event_bus::ConsumerHandle;
+use main_menu::*;
+use graphics::Camera2d;
+use gui::control_events::GameModeEvent;
+use std::io::BufReader;
+use std::fs::File;
 
-
-//pub static mut GLOBAL_MODIFIERS : Modifiers = Modifiers {
-//    alt : false,
-//    ctrl : false,
-//    shift : false
-//};
-//
-////pub static mut MOUSE_POSITION : Vec2f = Vec2f {
-////    x : 0.0,
-////    y : 0.0
-////};
-//
-//pub fn get_key_modifiers() -> Modifiers {
-//    unsafe {
-//        GLOBAL_MODIFIERS.clone()
-//    }
-//}
-//pub fn set_key_modifiers(modifiers : Modifiers) {
-//    unsafe {
-//        GLOBAL_MODIFIERS = modifiers;
-//    }
-//}
 
 pub trait GameMode {
-    fn enter(&mut self, world: &mut World);
-    fn update(&mut self, world: &mut World, dt: f64);
-    fn update_gui(&mut self, world: &mut World, ui: &mut GUI, frame_id: Option<Wid>);
-    fn draw(&mut self, world: &mut World, g: &mut GraphicsWrapper);
-    fn on_event<'a, 'b>(&'a mut self, world: &mut World, ui: &'b mut GUI, event: &UIEvent);
-    fn handle_event(&mut self, world: &mut World, gui: &mut GUI, event: &UIEvent);
+    fn enter(&mut self, gui: &mut GUI, universe: &mut Universe, event_bus: &mut EventBus<GameModeEvent>);
+    fn update(&mut self, universe: &mut Universe, dt: f64, event_bus: &mut EventBus<GameModeEvent>);
+    fn update_gui(&mut self, universe: &mut Universe, ui: &mut GUI, frame_id: Option<Wid>, event_bus: &mut EventBus<GameModeEvent>);
+    fn draw(&mut self, universe: &mut Universe, g: &mut GraphicsWrapper, event_bus: &mut EventBus<GameModeEvent>);
+    fn on_event<'a, 'b>(&'a mut self, universe: &mut Universe, ui: &'b mut GUI, event: &UIEvent, event_bus: &mut EventBus<GameModeEvent>);
+    fn handle_event(&mut self, universe: &mut Universe, gui: &mut GUI, event: &UIEvent, event_bus: &mut EventBus<GameModeEvent>);
+}
+
+#[derive(Serialize, Deserialize)]
+struct GameState {
+    universe: Universe,
+    active_world: Option<WorldRef>,
 }
 
 pub struct Game {
-    pub world: World,
+    state: GameState,
+    pub event_bus: EventBus<GameModeEvent>,
+    pub consumer_handle: ConsumerHandle,
     pub resources: GraphicsResources,
     pub active_mode: Box<GameMode>,
     pub viewport: Viewport,
     pub gui: GUI,
+    pub exit_requested: bool,
 }
 
 impl Game {
     pub fn new(factory: gfx_device_gl::Factory) -> Game {
         let mut gui = GUI::new();
 
-        let (world, player_faction) = Game::init_world();
-        let tactical_mode = TacticalMode::new(&mut gui, &world, player_faction);
+        let universe = Universe::new();
+        let main_mode = MainMenu::new(&mut gui);
 
+        let event_bus = EventBus::new();
+        let consumer_handle = event_bus.register_consumer(false);
         Game {
-            world,
+            state: GameState { universe, active_world: None },
+            event_bus,
+            consumer_handle,
             resources: GraphicsResources::new(factory, "survival"),
-            active_mode: Box::new(tactical_mode),
+            active_mode: Box::new(main_mode),
             gui,
             viewport: Viewport {
                 window_size: [256, 256],
                 draw_size: [256, 256],
                 rect: [0, 0, 256, 256],
             },
+            exit_requested : false,
         }
     }
 
 
     pub fn init_world() -> (World, Entity) {
-        let mut raw_world = create_world();
-        let world = &mut raw_world;
+        let world = FirstEverScenario {}.initialize_scenario_world();
+        let player_faction = world.view().entities_with_data::<FactionData>().iter().find(|(ent, faction_data)| faction_data.player_faction).unwrap();
 
-        for tile in terrain::generator::generate(70) {
-            let tile = tile.with(DebugData { name: strf("world tile") }).create(world);
-            let pos = world.data::<TileData>(tile).position;
-            world.index_entity(tile, pos);
-        }
-
-        let player_faction = EntityBuilder::new()
-            .with(FactionData {
-                name: String::from("Player"),
-                color: Color::new(1.1, 0.3, 0.3, 1.0),
-            })
-            .with(DebugData { name: strf("player faction") })
-            .create(world);
-
-        world.attach_world_data(TurnData {
-            turn_number: 0,
-            active_faction: player_faction,
-        });
-
-
-        let enemy_faction = EntityBuilder::new()
-            .with(FactionData {
-                name: String::from("Enemy"),
-                color: Color::new(0.3, 0.3, 0.9, 1.0),
-
-            })
-            .with(DebugData { name: strf("enemy faction") })
-            .create(world);
-
-
-        let weapon_archetypes = weapon_archetypes();
-
-        let character_archetypes = character_archetypes();
-
-        let bow = weapon_archetypes.with_name("longbow").create(world);
-
-
-        let char_base = |name: Str| character_archetypes.with_name("human").clone()
-            .with(IdentityData::new(name, &taxonomy::Person));
-
-        let archer = char_base("gunnar")
-            .with(CharacterData {
-                sprite: String::from("elf/archer"),
-                name: String::from("Archer"),
-                health: Reduceable::new(25),
-                action_points: Reduceable::new(8),
-                ..Default::default()
-            })
-            .with(AllegianceData { faction: player_faction })
-            .with(ActionData {
-                active_reaction: ReactionTypeRef::Dodge,
-                ..Default::default()
-            })
-            .with(DebugData { name: strf("archer") })
-            .create(world);
-
-        logic::item::equip_item(world, bow, archer, true);
-
-        world.modify(archer, CombatData::ranged_accuracy_bonus.add(1), "well rested");
-        world.modify(archer, CombatData::ranged_accuracy_bonus.add(3), "careful aim");
-
-        logic::movement::place_entity_in_world(world, archer, AxialCoord::new(0, 0));
-
-
-        let spearman = char_base("haftdar")
-            .with(CharacterData {
-                sprite: String::from("human/spearman"),
-                name: String::from("Spearman"),
-                health: Reduceable::new(45),
-                action_points: Reduceable::new(8),
-                ..Default::default()
-            })
-            .with(AllegianceData { faction: player_faction })
-            .with(ActionData {
-                active_reaction: ReactionTypeRef::Counterattack,
-                ..Default::default()
-            })
-            .with(DebugData { name: strf("spearman") })
-            .create(world);
-
-        let spear = weapon_archetypes.with_name("longspear").create(world);
-        logic::item::equip_item(world, spear, spearman, true);
-        logic::movement::place_entity_in_world(world, spearman, AxialCoord::new(1, -1));
-
-        let special_attack = EntityBuilder::new()
-            .with(DerivedAttackData {
-                character_condition: EntitySelectors::Any,
-                weapon_condition: EntitySelectors::is_a(&taxonomy::weapons::ReachWeapon),
-                attack_condition: EntitySelectors::is_a(&taxonomy::attacks::StabbingAttack).and(EntitySelectors::is_a(&taxonomy::attacks::ReachAttack)),
-                kind: DerivedAttackKind::PiercingStrike,
-            }).create(world);
-
-        world.modify(spearman, CombatData::special_attacks.append(special_attack), None);
-
-
-        let monster_base = character_archetypes.with_name("mud monster").clone()
-            .with(AllegianceData { faction: enemy_faction })
-            .with(DebugData { name: strf("monster") });
-
-        let create_monster_at = |world_in: &mut World, pos: AxialCoord| {
-            let monster = monster_base.clone().create(world_in);
-
-            logic::movement::place_entity_in_world(world_in, monster, pos);
-
-            monster
-        };
-
-        let monster1 = create_monster_at(world, AxialCoord::new(4, 0));
-        let monster2 = create_monster_at(world, AxialCoord::new(0, 4));
-
-        let spawner = EntityBuilder::new()
-            .with(CharacterData {
-                sprite: strf("void/summoner_monolith"),
-                name: strf("Summoning Stone"),
-                action_points: Reduceable::new(1),
-                health: Reduceable::new(100),
-                ..Default::default()
-            })
-            .with(MovementData { move_speed: Sext::of(0), ..Default::default() })
-            .with(AllegianceData { faction: enemy_faction })
-            .with(PositionData::default())
-            .with(CombatData { dodge_bonus: -10, ..Default::default() })
-            .with(MonsterSpawnerData {
-                spawns: vec![
-                    Spawn {
-                        entity: SpawnEntity::Character(strf("mud monster")),
-                        start_spawn_turn: 1,
-                        turns_between_spawns: 4,
-                    }]
-            })
-            .with(IdentityData::of_kind(taxon("summoning stone", &taxonomy::Monster)))
-            .create(world);
-        logic::movement::place_entity_in_world(world, spawner, AxialCoord::new(10, 0));
-
-        world.add_event(GameEvent::WorldStart);
-
-        (raw_world, player_faction)
+        (world, *player_faction.0)
     }
 
-    pub fn on_load(&mut self, _: &mut PistonWindow) {}
+    pub fn on_load(&mut self, _: &mut PistonWindow) {
+        self.active_mode.enter(&mut self.gui, &mut self.state.universe, &mut self.event_bus);
+    }
     pub fn on_update(&mut self, upd: UpdateArgs) {
-        self.active_mode.update(&mut self.world, upd.dt);
+        self.active_mode.update(&mut self.state.universe, upd.dt, &mut self.event_bus);
 
-        self.active_mode.update_gui(&mut self.world, &mut self.gui, None);
+        self.active_mode.update_gui(&mut self.state.universe, &mut self.gui, None, &mut self.event_bus);
 
         self.gui.reset_events();
+
+        let handle = &mut self.consumer_handle;
+        let mut mode_changed = false;
+        for event in self.event_bus.events_for(handle) {
+            match event {
+                GameModeEvent::EnterTacticalMode(world_ref, start_at_beginning) => {
+                    self.gui = GUI::new();
+                    let tactical_mode = TacticalMode::new(&mut self.gui, *world_ref, *start_at_beginning);
+                    self.active_mode = box tactical_mode;
+                    self.state.active_world = Some(*world_ref);
+                    mode_changed = true;
+                }
+                GameModeEvent::InitScenario(scenario) => {
+                    let world = scenario.initialize_scenario_world();
+                    let world_ref = self.state.universe.register_world(world);
+                    self.gui = GUI::new();
+                    let tactical_mode = TacticalMode::new(&mut self.gui, world_ref, true);
+                    self.active_mode = box tactical_mode;
+                    self.state.active_world = Some(world_ref);
+                    mode_changed = true;
+                }
+                GameModeEvent::Load(save_name) => {
+                    use gui::open_save_file;
+                    if let Some(save_file) = open_save_file(false) {
+                        let buf_reader = BufReader::new(save_file);
+                        use ron;
+                        if let Ok(game_state) = ron::de::from_reader(buf_reader) {
+                            self.state = game_state;
+                            // TODO: Once we have non-tactical worlds, this will get...different
+                            for world in &mut self.state.universe.worlds {
+                                world.initialize_loaded_world();
+                                register_world_data(world);
+                            }
+                            self.gui = GUI::new();
+                            let tactical_mode = TacticalMode::new(&mut self.gui, self.state.active_world.expect("Loaded with no active world, which is weird"), false);
+                            self.active_mode = box tactical_mode;
+                            mode_changed = true;
+                        } else {
+                            error!("Error while attempting to read save file");
+                        }
+                    } else {
+                        error!("Attempted to load non-existent save file");
+                    }
+                }
+                GameModeEvent::Save(save_name) => {
+                    use gui::open_save_file;
+                    use std::io::Write;
+
+                    if let Some(mut save_file) = open_save_file(true) {
+                        use ron;
+                        if let Ok(serialized) = ron::ser::to_string(&self.state) {
+                            save_file.write_all(serialized.as_bytes()).expect("failed to write to save file");
+                        } else {
+                            error!("Failed to serialize game state");
+                        }
+                    } else {
+                        error!("Attempted to load non-existent save file");
+                    }
+                },
+                GameModeEvent::MainMenu => {
+                    self.gui = GUI::new();
+                    let main_menu = MainMenu::new(&mut self.gui);
+                    self.active_mode = box main_menu;
+                    mode_changed = true;
+                },
+                GameModeEvent::Exit => {
+                  self.exit_requested = true;
+                }
+            }
+        }
+        if mode_changed {
+            self.active_mode.enter(&mut self.gui, &mut self.state.universe, &mut self.event_bus);
+        }
     }
 
     pub fn on_draw<'a>(&'a mut self, c: Context, g: &'a mut G2d) {
@@ -256,7 +191,11 @@ impl Game {
 
         let mut wrapper = GraphicsWrapper::new(c, &mut self.resources, g);
 
-        self.active_mode.draw(&mut self.world, &mut wrapper);
+        self.active_mode.draw(&mut self.state.universe, &mut wrapper, &mut self.event_bus);
+
+
+        let gui_camera = Camera2d::new();
+        wrapper.context.view = gui_camera.matrix(self.viewport);
 
         self.gui.draw(&mut wrapper);
         //        self.player.render(g, center);
@@ -265,13 +204,12 @@ impl Game {
     pub fn on_event(&mut self, event: &Event) {
         if let Some(ui_event) = self.gui.convert_event(event.clone()) {
             if !self.gui.handle_ui_event_for_self(&ui_event) {
-                self.active_mode.handle_event(&mut self.world, &mut self.gui, &ui_event);
+                self.active_mode.handle_event(&mut self.state.universe, &mut self.gui, &ui_event, &mut self.event_bus);
             }
-            self.active_mode.on_event(&mut self.world, &mut self.gui, &ui_event);
+            self.active_mode.on_event(&mut self.state.universe, &mut self.gui, &ui_event, &mut self.event_bus);
         }
     }
 }
-
 
 pub fn normalize_screen_pos(screen_pos: Vec2f, viewport: &Viewport) -> Vec2f {
     let in_x = screen_pos.x;

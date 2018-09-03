@@ -5,48 +5,51 @@ use data::events::GameEvent;
 
 
 pub fn create_world() -> World {
-    let mut raw_world = World::new();
-    {
-        let world = &mut raw_world;
-        // -------- entity data --------------
-        world.register::<TileData>();
-        world.register::<CharacterData>();
-        world.register::<CombatData>();
-        world.register::<EquipmentData>();
-        world.register::<InventoryData>();
-        world.register::<SkillData>();
-        world.register::<ItemData>();
-        world.register::<FactionData>();
-        world.register::<PositionData>();
-        world.register::<GraphicsData>();
-        world.register::<IdentityData>();
-        world.register::<ActionData>();
-        world.register::<ModifierTrackingData>();
-        world.register::<AttributeData>();
-        world.register::<AllegianceData>();
-        world.register::<ObserverData>();
-        world.register::<Attack>();
-        world.register::<MovementData>();
-        world.register::<DerivedAttackData>();
-        world.register::<MovementType>();
+    let mut world = World::new();
 
-        register_custom_ability_data(world);
-        // -------- world data ---------------
-        world.register::<MapData>();
-        world.register::<TurnData>();
-        world.register::<TimeData>();
-        world.register::<VisibilityData>();
+    register_world_data(&mut world);
 
-        world.register_index::<AxialCoord>();
+    world.attach_world_data(MapData {
+        min_tile_bound: AxialCoord::new(-30, -30),
+        max_tile_bound: AxialCoord::new(30, 30),
+    });
+    world.attach_world_data(VisibilityData::default());
 
-        world.register_event_type::<GameEvent>();
+    world
+}
 
-        world.attach_world_data(MapData {
-            min_tile_bound: AxialCoord::new(-30, -30),
-            max_tile_bound: AxialCoord::new(30, 30),
-        });
-        world.attach_world_data(VisibilityData::default());
-    }
+pub fn register_world_data(world : &mut World) {
+    // -------- entity data --------------
+    world.register::<TileData>();
+    world.register::<CharacterData>();
+    world.register::<CombatData>();
+    world.register::<EquipmentData>();
+    world.register::<InventoryData>();
+    world.register::<SkillData>();
+    world.register::<ItemData>();
+    world.register::<FactionData>();
+    world.register::<PositionData>();
+    world.register::<GraphicsData>();
+    world.register::<IdentityData>();
+    world.register::<ActionData>();
+    world.register::<ModifierTrackingData>();
+    world.register::<AttributeData>();
+    world.register::<AllegianceData>();
+    world.register::<ObserverData>();
+    world.register::<Attack>();
+    world.register::<MovementData>();
+    world.register::<DerivedAttackData>();
+    world.register::<MovementType>();
 
-    raw_world
+    register_custom_ability_data(world);
+    // -------- world data ---------------
+    world.register::<MapData>();
+    world.register::<TurnData>();
+    world.register::<TimeData>();
+    world.register::<VisibilityData>();
+
+    println!("Registering axial coord index");
+    world.register_index::<AxialCoord>();
+
+    world.register_event_type::<GameEvent>();
 }

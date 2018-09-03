@@ -7,7 +7,7 @@ use game::Entity;
 use std::collections::HashMap;
 use state::GameState;
 use state::ControlContext;
-use control_events::ControlEvents;
+use control_events::TacticalEvents;
 use game::entities::Attack;
 use game::entities::AttackRef;
 use game::entities::MovementType;
@@ -132,7 +132,7 @@ impl ActionBar {
                     if let WidgetEvent::ListItemClicked(index, button) = event {
                         let action_type = self.actions[*index].clone();
                         self.selected_actions.insert(selected_char, action_type.clone());
-                        control_context.event_bus.push_event(ControlEvents::ActionSelected(action_type));
+                        control_context.event_bus.push_event(TacticalEvents::ActionSelected(action_type));
                         selection_changed = true;
                     }
                 }

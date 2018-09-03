@@ -81,14 +81,21 @@ impl Quad {
     }
 }
 
-//pub const DEFAULT_FONT_IDENTIFIER: FontIdentifier = "NotoSans-Regular.ttf";
-pub const DEFAULT_FONT_IDENTIFIER: FontIdentifier = "pf_ronda_seven.ttf";
+#[derive(Clone,Copy,Debug)]
+pub enum FontSize {
+    Small,
+    Standard,
+    Heading,
+    Large,
+    ExtraLarge,
+    Pixel(u32)
+}
 
 pub struct Text {
     pub text: String,
-    pub font_identifier: FontIdentifier,
+    pub font_identifier: Option<FontIdentifier>,
     pub offset: Vec2f,
-    pub size: u32,
+    pub size: FontSize,
     pub color: Color,
     pub rounded: bool,
     pub centered_y: bool,
@@ -113,11 +120,11 @@ impl Clone for Text {
 }
 
 impl Text {
-    pub fn new(text: String, size: u32) -> Text {
+    pub fn new(text: String, size: FontSize) -> Text {
         Text {
             text,
             size,
-            font_identifier: DEFAULT_FONT_IDENTIFIER,
+            font_identifier: None,
             offset: v2(0.0f32, 0.0f32),
             color: Color([0.0, 0.0, 0.0, 1.0]),
             rounded: true,
@@ -143,7 +150,7 @@ impl Text {
     }
 
     pub fn font(mut self, font_identifier: FontIdentifier) -> Self {
-        self.font_identifier = font_identifier;
+        self.font_identifier = Some(font_identifier);
         self
     }
 

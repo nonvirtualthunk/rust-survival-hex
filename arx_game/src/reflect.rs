@@ -598,7 +598,7 @@ impl<'de, E: EntityData> Visitor<'de> for FieldModifierVisitor<E> {
     fn visit_seq<V>(self, mut seq: V) -> Result<Box<Modifier<E>>, V::Error> where V: SeqAccess<'de> {
         let field_name: String = seq.next_element()?.ok_or_else(|| panic!("panicked earlier than expected"))?;
 
-        E::visit_field_named(field_name.as_str(), EFieldVisitor::<E>::default(), &mut seq).unwrap_or_else(|| Err(V::Error::custom("could not identify field")))
+        E::visit_field_named(field_name.as_str(), EFieldVisitor::<E>::default(), &mut seq).unwrap_or_else(|| Err(V::Error::custom(format!("could not identify field {}", field_name))))
     }
 }
 

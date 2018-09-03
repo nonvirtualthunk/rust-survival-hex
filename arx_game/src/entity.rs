@@ -2,7 +2,6 @@ use std::fmt::Debug;
 use std::any::Any;
 use std::fmt;
 use world::World;
-use std::sync::atomic::{ATOMIC_USIZE_INIT, AtomicUsize, Ordering};
 use std::rc::Rc;
 use std::fmt::Formatter;
 use std::fmt::Error;
@@ -12,7 +11,7 @@ use world::view::WorldView;
 use common::reflect::Field;
 use serde;
 
-pub static ENTITY_ID_COUNTER: AtomicUsize = ATOMIC_USIZE_INIT;
+//pub static ENTITY_ID_COUNTER: AtomicUsize = ATOMIC_USIZE_INIT;
 
 type EntityId = usize;
 
@@ -94,7 +93,7 @@ impl EntityBuilder {
     }
 
     pub fn create(&self, world: &mut World) -> Entity {
-        let entity = World::create_entity();
+        let entity = world.create_entity();
         for initialization in self.initializations_by_type_id.values() {
             (initialization)(world, entity);
         }

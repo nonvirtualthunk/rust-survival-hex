@@ -40,6 +40,7 @@ pub fn in_custom_testbed<F : Fn(&mut World, Testbed)>(config : TestbedConfig, fu
         .with(FactionData {
             name: String::from("Player"),
             color: Color::new(1.1, 0.3, 0.3, 1.0),
+            player_faction: true,
         })
         .with(DebugData { name : strf("player faction") })
         .create(&mut world);
@@ -54,7 +55,7 @@ pub fn in_custom_testbed<F : Fn(&mut World, Testbed)>(config : TestbedConfig, fu
         .with(FactionData {
             name: String::from("Enemy"),
             color: Color::new(0.3, 0.3, 0.9, 1.0),
-
+            player_faction: false,
         })
         .with(DebugData { name : strf("enemy faction") })
         .create(&mut world);

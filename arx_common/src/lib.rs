@@ -24,6 +24,7 @@ extern crate pretty_env_logger;
 extern crate string_interner;
 extern crate ron;
 extern crate bincode;
+extern crate dirs;
 
 pub mod hex;
 pub use hex::*;
@@ -58,3 +59,5 @@ pub use string::*;
 pub mod serialize;
 
 pub mod multitype;
+
+pub mod file;

@@ -14,7 +14,6 @@ use graphics::Text;
 use std::collections::HashSet;
 use std::collections::BTreeSet;
 use piston_window::Viewport;
-use graphics::DEFAULT_FONT_IDENTIFIER;
 use num::Float;
 use num::ToPrimitive;
 use common::Rect;
@@ -119,7 +118,8 @@ pub(crate) struct WidgetReification {
     pub(crate) inner_bounding_box: Option<Rect<f32>>,
     pub(crate) widget_state: WidgetState,
     pub(crate) tooltip: Option<(Wid, Wid)>,
-    pub(crate) internal_callbacks: Vec<u32>
+    pub(crate) internal_callbacks: Vec<u32>,
+    pub(crate) update_in_progress: bool,
 }
 
 impl WidgetReification {
@@ -137,7 +137,8 @@ impl WidgetReification {
             inner_bounding_box: None,
             widget_state: WidgetState::NoState,
             tooltip: None,
-            internal_callbacks: Vec::new()
+            internal_callbacks: Vec::new(),
+            update_in_progress: false,
         }
     }
 

@@ -31,13 +31,18 @@ use texture_atlas::StoredTextureInfo;
 use gfx::format::Format;
 use image::RgbaImage;
 use piston_window::G2d;
+use core::FontSize;
+use text::ArxFont;
 
 pub type RTFont = rt::Font<'static>;
 pub type RTPositionedGlyph = rt::PositionedGlyph<'static>;
 
-pub type FontIdentifier = &'static str;
+#[derive(Clone,PartialEq,Copy,Hash,Eq,Debug)]
+pub struct FontIdentifier(usize);
 pub type ImageIdentifier = String;
 pub type TextureAtlasIdentifier = &'static str;
+
+
 
 #[derive(Clone)]
 pub struct TextureInfo {
@@ -47,7 +52,9 @@ pub struct TextureInfo {
 
 #[allow(dead_code)]
 pub struct GraphicsAssets {
-    fonts: HashMap<FontIdentifier, RTFont>,
+    fonts: Vec<ArxFont>,
+    font_identifiers_by_name: HashMap<Str, FontIdentifier>,
+    pub default_font: FontIdentifier,
     images: HashMap<ImageIdentifier, image_lib::RgbaImage>,
     atlases: HashMap<TextureAtlasIdentifier, TextureAtlas>,
     assets_path: PathBuf,
@@ -62,29 +69,30 @@ impl GraphicsAssets {
         cur_dir.pop();
         cur_dir.pop();
         cur_dir.pop();
-//        let assets_path = find_folder::Search::ParentsThenKids(3, 8).for_folder("assets").unwrap();
         let assets_path = find_folder::SearchFolder {
-//            start : Path::new("/Users/nvt/Code/samvival/target/release/bundle/osx/Samvival.app/Contents/").to_path_buf(),
             start : cur_dir,
             direction : find_folder::Search::Kids(6)
         }.for_folder("assets").expect("Could not find assets");
 
         println!("Found assets: {:?}", assets_path);
-//        let mut assets_path = PathBuf::new();
-//        assets_path.push(Path::new("/Users/nvt/Code/samvival/assets"));
-//        assets_path.push(Path::new("/Users/nvt/Code/samvival/target/release/bundle/osx/Samvival.app/Contents/Resources/_up_/assets"));
         let main_path = assets_path.join(base_path);
         let texture_path = main_path.join("textures");
 
-        GraphicsAssets {
-            fonts : HashMap::new(),
+        let mut assets = GraphicsAssets {
+            fonts : Vec::new(),
+            font_identifiers_by_name : HashMap::new(),
             images : HashMap::new(),
             atlases : HashMap::new(),
             assets_path,
             main_path,
             texture_path,
-            dpi_scale : 1.0
-        }
+            dpi_scale : 1.0,
+            default_font: FontIdentifier(0)
+        };
+        let default_font_name = ::std::env::var("DEFAULT_FONT").unwrap_or(strf("visitor1.ttf"));
+        let identifier = assets.load_font(default_font_name.as_str());
+        assets.default_font = identifier;
+        assets
     }
 }
 
@@ -192,22 +200,21 @@ impl GraphicsResources {
         self.texture_opt(identifier).is_some()
     }
 
-    pub fn font(&mut self, identifier: FontIdentifier) -> &RTFont {
+    pub fn font(&mut self, identifier: FontIdentifier) -> &ArxFont {
         self.assets.font(identifier)
     }
 
     /// Takes in the name of a font and returns the identifier by which it can be referenced. Currently that is
     /// just the name of the font, but if we want to change it later we may
     pub fn font_id(&mut self, identifier : &'static str) -> FontIdentifier {
-        self.font(identifier);
-        identifier
+        self.assets.load_font(identifier)
     }
 
     pub fn layout_text(&mut self, text : &Text) -> TextLayout {
         self.assets.layout_text(text)
     }
 
-    pub fn line_height(&self, font: &RTFont, size :u32) -> f32 {
+    pub fn line_height(&self, font: &ArxFont, size :FontSize) -> f32 {
         self.assets.line_height(font, size)
     }
 
@@ -268,16 +275,25 @@ impl GraphicsAssets {
         }
     }
 
-    pub fn font(&mut self, identifier: FontIdentifier) -> &RTFont {
-        if !self.fonts.contains_key(identifier) {
-            let font_path = self.assets_path.join("fonts").join(identifier);
+    pub fn load_font(&mut self, name : &str) -> FontIdentifier {
+        if let Some(ident) = self.font_identifiers_by_name.get(name) {
+            *ident
+        } else {
+            let font_path = self.assets_path.join("fonts").join(name);
             use std::io::Read;
             let mut file = std::fs::File::open(font_path).expect("Could not open font file");
             let mut file_buffer = Vec::new();
             file.read_to_end(&mut file_buffer).expect("Could not read file to end to load font");
-            self.fonts.insert(identifier, RTFont::from_bytes(file_buffer).expect("Could not load font"));
+            let identifier = FontIdentifier(self.fonts.len());
+            let rt_font = RTFont::from_bytes(file_buffer).expect("Could not load font");
+            let size_overrides = HashMap::new();
+            self.fonts.push(ArxFont { font : rt_font, sizing_overrides : size_overrides });
+            identifier
         }
-        self.fonts.get(identifier).unwrap()
+    }
+
+    pub fn font(&mut self, identifier: FontIdentifier) -> &ArxFont {
+        self.fonts.get(identifier.0).or(self.fonts.get(0)).expect("graphics assets must contain at least one font")
     }
 
     pub fn read_image(assets_path: &PathBuf, identifier: String) -> image_lib::RgbaImage {
@@ -307,11 +323,11 @@ impl GraphicsAssets {
 
     pub fn layout_text(&mut self, text : &Text) -> TextLayout {
         let dpi_scale = self.dpi_scale;
-        let font = self.font(text.font_identifier);
+        let font = self.font(text.font_identifier.unwrap_or(self.default_font));
         TextLayout::layout_text(text.text.as_str(), font, text.size, dpi_scale, text.wrap_to)
     }
 
-    pub fn line_height(&self, font: &RTFont, size :u32) -> f32 {
+    pub fn line_height(&self, font: &ArxFont, size :u32) -> f32 {
         TextLayout::line_height(font, size, self.dpi_scale)
     }
 

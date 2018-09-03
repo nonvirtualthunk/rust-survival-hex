@@ -373,71 +373,73 @@ pub fn handle_strike(world: &mut World, attacker_ref: Entity, primary_defender: 
 
     let mut strike_results = HashMap::new();
 
-    for target_breakdown in &strike.per_target_breakdowns {
-        let defender_ref = target_breakdown.target;
-        let defender = view.character(defender_ref);
 
-        if !attacker.is_alive() || !defender.is_alive() {
-            continue;
+    if attacker.is_alive() {
+        for target_breakdown in &strike.per_target_breakdowns {
+            let defender_ref = target_breakdown.target;
+            let defender = view.character(defender_ref);
+            if ! defender.is_alive() {
+                continue;
+            }
+
+            let to_miss_total = target_breakdown.to_miss_total();
+            let to_hit_total = target_breakdown.to_hit_total();
+
+            // base number needed to be hit with no modifiers one way or another. With a base value of 8, 85% of attacks will hit
+            // given no modifiers one way or another. We probably want to shift that a bit, and give a noticeable bump in the early
+            // levels of dodging/attacking such that unskilled commoners are pretty useless at attacking until they get a bit of experience
+            // 62.5% will have at least a 10, so it's still a decent chance to hit
+            let base_to_hit = 10;
+
+            let to_hit_modifiers = to_hit_total - to_miss_total;
+
+            let dice = DicePool::of(3, 6);
+            let is_hit = dice.roll(&mut rng).total_result as i32 + to_hit_modifiers >= base_to_hit;
+            if is_hit {
+                let damage_dice = target_breakdown.damage_dice_total();
+                let damage_total: i32 = damage_dice.map(|dd| dd.roll(&mut rng).total_result as i32).sum::<i32>()
+                    + target_breakdown.damage_bonus_total()
+                    - target_breakdown.damage_absorption_total();
+                let damage_total: u32 = damage_total.as_u32_or_0();
+
+                strike_results.insert(defender_ref, StrikeResult {
+                    damage_types: strike.damage_types.clone(),
+                    damage_done: damage_total as i32,
+                    hit: true,
+                    killing_blow: damage_total as i32 > defender.health.cur_value(),
+                    strike_number,
+                    weapon: if weapon == attacker_ref { None } else { Some(weapon) },
+                });
+            } else {
+                strike_results.insert(defender_ref, StrikeResult {
+                    damage_types: Vec::new(),
+                    damage_done: 0,
+                    hit: false,
+                    killing_blow: false,
+                    strike_number,
+                    weapon: if weapon == attacker_ref { None } else { Some(weapon) },
+                });
+            }
         }
 
-        let to_miss_total = target_breakdown.to_miss_total();
-        let to_hit_total = target_breakdown.to_hit_total();
+        let defenders = strike.per_target_breakdowns.map(|t| t.target);
+        let strike_event = GameEvent::Strike {
+            attacker : attacker_ref,
+            attack : box attack.clone(),
+            defenders,
+            strike_results : strike_results.clone(),
+        };
+        world.start_event(strike_event.clone());
 
-        // base number needed to be hit with no modifiers one way or another. With a base value of 8, 85% of attacks will hit
-        // given no modifiers one way or another. We probably want to shift that a bit, and give a noticeable bump in the early
-        // levels of dodging/attacking such that unskilled commoners are pretty useless at attacking until they get a bit of experience
-        // 62.5% will have at least a 10, so it's still a decent chance to hit
-        let base_to_hit = 10;
-
-        let to_hit_modifiers = to_hit_total - to_miss_total;
-
-        let dice = DicePool::of(3, 6);
-        let is_hit = dice.roll(&mut rng).total_result as i32 + to_hit_modifiers >= base_to_hit;
-        if is_hit {
-            let damage_dice = target_breakdown.damage_dice_total();
-            let damage_total: i32 = damage_dice.map(|dd| dd.roll(&mut rng).total_result as i32).sum::<i32>()
-                + target_breakdown.damage_bonus_total()
-                - target_breakdown.damage_absorption_total();
-            let damage_total: u32 = damage_total.as_u32_or_0();
-
-            strike_results.insert(defender_ref, StrikeResult {
-                damage_types: strike.damage_types.clone(),
-                damage_done: damage_total as i32,
-                hit: true,
-                killing_blow: damage_total as i32 > defender.health.cur_value(),
-                strike_number,
-                weapon: if weapon == attacker_ref { None } else { Some(weapon) },
-            });
-        } else {
-            strike_results.insert(defender_ref, StrikeResult {
-                damage_types: Vec::new(),
-                damage_done: 0,
-                hit: false,
-                killing_blow: false,
-                strike_number,
-                weapon: if weapon == attacker_ref { None } else { Some(weapon) },
-            });
+        for (target, strike_result) in &strike_results {
+            if strike_result.hit {
+                logic::character::apply_damage_to_character(world, *target, strike_result.damage_done as u32, &strike_result.damage_types);
+            }
         }
+        world.modify(attacker_ref, MovementData::moves.set_to(Sext::of(0)), None);
+
+        world.end_event(strike_event);
     }
-
-    let defenders = strike.per_target_breakdowns.map(|t| t.target);
-    let strike_event = GameEvent::Strike {
-        attacker : attacker_ref,
-        attack : box attack.clone(),
-        defenders,
-        strike_results : strike_results.clone(),
-    };
-    world.start_event(strike_event.clone());
-
-    for (target, strike_result) in &strike_results {
-        if strike_result.hit {
-            logic::character::apply_damage_to_character(world, *target, strike_result.damage_done as u32, &strike_result.damage_types);
-        }
-    }
-    world.modify(attacker_ref, MovementData::moves.set_to(Sext::of(0)), None);
-
-    world.end_event(strike_event);
 }
 
 pub fn accuracy_for_skill_level(level: u32) -> f64 {

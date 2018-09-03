@@ -126,6 +126,10 @@ pub trait DelegateToWidget where Self: Sized {
         self.as_widget().showing = showing;
         self
     }
+    fn toggle_showing(&mut self) -> &mut Self {
+        self.as_widget().showing = ! self.as_widget().showing;
+        self
+    }
 
     fn set_border(&mut self, border: Border) -> &mut Self {
         self.as_widget().border = border;

@@ -10,7 +10,8 @@ use game::entity;
 #[derive(Clone, Default, Debug, Serialize, Deserialize, PrintFields)]
 pub struct FactionData {
     pub name : String,
-    pub color : Color
+    pub color : Color,
+    pub player_faction : bool,
 }
 
 impl EntityData for FactionData {}

@@ -90,11 +90,11 @@ impl Button {
         self
     }
 
-    pub fn with_on_click<State: 'static, F: Fn(&mut State) -> () + 'static>(mut self, function: F) -> Self {
-        self.body = self.body.with_callback(move |state: &mut State, event: &UIEvent| {
-            if let UIEvent::WidgetEvent{ event, .. } = event {
+    pub fn with_on_click<F: Fn(&mut WidgetContext, &UIEvent) -> () + 'static>(mut self, function: F) -> Self {
+        self.body = self.body.with_callback(move |ctxt: &mut WidgetContext, evt: &UIEvent| {
+            if let UIEvent::WidgetEvent{ event, .. } = evt {
                 if let WidgetEvent::ButtonClicked(btn) = event {
-                    (function)(state)
+                    (function)(ctxt, evt)
                 }
             };
         });

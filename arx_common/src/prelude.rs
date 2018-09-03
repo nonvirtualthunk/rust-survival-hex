@@ -229,3 +229,7 @@ impl ToMillis for Duration {
 pub fn rust_init() {
     pretty_env_logger::try_init().ok();
 }
+
+
+
+pub fn typename<T>() -> Str { unsafe {::std::intrinsics::type_name::<T>()} }

@@ -78,3 +78,5 @@ pub use data::*;
 
 pub mod samvival_core;
 pub use samvival_core::*;
+
+pub mod scenario;
