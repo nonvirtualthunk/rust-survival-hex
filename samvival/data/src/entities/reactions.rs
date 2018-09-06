@@ -7,7 +7,7 @@ use common::prelude::*;
 use game::prelude::*;
 use GameEvent;
 
-use entities::EntitySelectors;
+use entities::EntitySelector;
 use entities::character::CharacterData;
 use entities::combat::CombatData;
 use entities::common_entities::ModifierTrackingData;
@@ -55,7 +55,7 @@ pub struct ReactionType {
     pub rules_description: Str,
     pub condition_description: Str,
     pub costs: Str,
-    pub condition: fn() -> EntitySelectors
+    pub condition: fn() -> EntitySelector
 //    pub condition_func: fn(&WorldView, Entity) -> bool,
 //    pub on_event: fn(&mut World, Entity, &GameEventWrapper<GameEvent>),
 }
@@ -125,7 +125,7 @@ pub mod reaction_types {
         and moving into or out of a hex you threaten.",
         costs: "1 stamina for every counter strike made",
         condition_description: "Must have a melee attack to use",
-        condition: || EntitySelectors::HasStamina(Sext::of_int(1)).and(EntitySelectors::has_attack_kind(&taxonomy::attacks::MeleeAttack))
+        condition: || EntitySelector::HasStamina(Sext::of_int(1)).and(EntitySelector::has_attack_kind(&taxonomy::attacks::MeleeAttack))
     };
 
     pub static Dodge: ReactionType = ReactionType {
@@ -136,7 +136,7 @@ pub mod reaction_types {
         rules_description: "Gain a +2 dodge bonus to avoid getting hit, or double your dodge bonus, whichever is higher",
         costs: "1 stamina for every 2 strikes against you",
         condition_description: "none",
-        condition: || EntitySelectors::HasStamina(Sext::of_int(1)),
+        condition: || EntitySelector::HasStamina(Sext::of_int(1)),
     };
 
 
@@ -148,7 +148,7 @@ pub mod reaction_types {
         rules_description: "Gain a +2 dodge bonus to avoid getting hit, or double your dodge bonus, whichever is better",
         costs: "1 stamina for every 2 strikes against you",
         condition_description: "none",
-        condition: || EntitySelectors::Any,
+        condition: || EntitySelector::Any,
     };
 
 
@@ -160,6 +160,6 @@ pub mod reaction_types {
         rules_description: "Gain a +1 bonus to defense.",
         costs: "none",
         condition_description: "none",
-        condition: || EntitySelectors::Any,
+        condition: || EntitySelector::Any,
     };
 }

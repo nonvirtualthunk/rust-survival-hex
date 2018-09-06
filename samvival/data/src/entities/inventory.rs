@@ -4,8 +4,9 @@ use game::world::WorldView;
 use common::hex::AxialCoord;
 use game::core::*;
 use game::entity;
+use entities::selectors::EntitySelector;
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PrintFields)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, Fields)]
 pub struct EquipmentData {
     pub equipped : Vec<Entity>,
 }
@@ -21,7 +22,7 @@ impl EquipmentDataStore for WorldView {
 }
 
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PrintFields)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, Fields)]
 pub struct InventoryData {
     pub items : Vec<Entity>,
     pub inventory_size : Option<u32>,
@@ -37,3 +38,12 @@ impl InventoryDataStore for WorldView {
         self.data::<InventoryData>(ent)
     }
 }
+
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize, Fields)]
+pub struct StackData {
+    pub stack_of : Entity,
+    pub stack_size : i32,
+    pub stack_limit : i32,
+}
+impl EntityData for StackData {}

@@ -8,6 +8,8 @@ use entities::combat::Attack;
 use entities::combat::StrikeResult;
 use std::collections::HashMap;
 use entities::reactions::ReactionTypeRef;
+use entities::actions::ActionType;
+use entities::actions::Action;
 
 
 #[derive(Clone, Debug,Serialize,Deserialize)]
@@ -30,6 +32,8 @@ pub enum GameEvent {
     SelectedCounterattackChanged { entity : Entity, attack_ref : AttackRef },
     SelectedReactionChanged { entity : Entity, reaction_type : ReactionTypeRef },
     ReactionEffectApplied { entity : Entity },
+    ActionTaken { entity : Entity, action : Action },
+    EntityHarvested { harvester : Entity, harvested : Entity, amount : i32 },
     Default
 }
 impl Default for GameEvent {

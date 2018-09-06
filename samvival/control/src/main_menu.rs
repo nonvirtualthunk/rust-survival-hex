@@ -42,7 +42,7 @@ impl MainMenu {
         let mut load_button = Button::new("Continue")
             .parent(&menu)
             .font_size(FontSize::ExtraLarge)
-            .below(&new_button, 5.px())
+            .below(&new_button, 10.px())
             .x(Positioning::centered())
             .apply(gui);
         if open_save_file(false).is_none() {
@@ -52,7 +52,7 @@ impl MainMenu {
         let exit_button = Button::new("Exit")
             .parent(&menu)
             .font_size(FontSize::ExtraLarge)
-            .below(&load_button, 5.px())
+            .below(&load_button, 10.px())
             .x(Positioning::centered())
 
             .apply(gui);

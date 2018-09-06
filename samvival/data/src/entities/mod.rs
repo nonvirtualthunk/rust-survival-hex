@@ -17,6 +17,7 @@ pub mod visibility;
 pub mod movement;
 pub mod selectors;
 pub mod effects;
+mod taxonomy_registration;
 
 pub mod fields;
 

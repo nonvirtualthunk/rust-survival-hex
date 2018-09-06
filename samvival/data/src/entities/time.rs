@@ -7,7 +7,7 @@ use common::reflect::*;
 use std::collections::HashMap;
 use game::prelude::*;
 
-#[derive(Clone, Default, Debug, Serialize, Deserialize, PrintFields)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, Fields)]
 pub struct TurnData {
     pub turn_number : u32,
     pub active_faction : Entity
@@ -42,7 +42,7 @@ impl Default for TimeOfDay {
     }
 }
 
-#[derive(Clone, Debug, PrintFields, Serialize, Deserialize)]
+#[derive(Clone, Debug, Fields, Serialize, Deserialize)]
 pub struct TimeData {
     pub moments_since_world_start : u32,
     pub moments_by_time_of_day : HashMap<TimeOfDay, u32>,

@@ -11,13 +11,13 @@ mod test {
     use modifiers::*;
 
     use super::super::super::entity;
-    #[derive(Clone, Default, PartialEq, Debug, Serialize, Deserialize, PrintFields)]
+    #[derive(Clone, Default, PartialEq, Debug, Serialize, Deserialize, Fields)]
     struct FooData {
         pub a: i32,
         pub b: Vec<f32>
     }
 
-    #[derive(Clone, Default, PartialEq, Debug, Serialize, Deserialize, PrintFields)]
+    #[derive(Clone, Default, PartialEq, Debug, Serialize, Deserialize, Fields)]
     struct BarData {
         pub x: f32
     }
@@ -121,7 +121,7 @@ mod test {
         assert_eq!(*test_data_1, initial_data);
         assert_eq!(test_data_1.a, 1);
 
-        world.add_modifier(ent1, box AddToAModifier { delta_a: 4 }, None);
+        world.modify_with_desc(ent1, box AddToAModifier { delta_a: 4 }, None);
         world.add_event(CoreEvent::TimePassed);
 
         assert_eq!(test_data_1.a, 5);
@@ -130,12 +130,12 @@ mod test {
         assert_eq!(view.data::<FooData>(ent1).a, 5);
         assert_eq!(view.data::<FooData>(ent2).a, 4);
 
-        world.add_modifier(ent1, box MultiplyByOtherEntityModifier { other_entity: ent2 }, None);
+        world.modify_with_desc(ent1, box MultiplyByOtherEntityModifier { other_entity: ent2 }, None);
         world.add_event(CoreEvent::TimePassed);
 
         assert_eq!(test_data_1.a, 20);
 
-        world.add_modifier(ent2, box AddToAModifier { delta_a: 1 }, None);
+        world.modify_with_desc(ent2, box AddToAModifier { delta_a: 1 }, None);
         world.add_event(CoreEvent::TimePassed);
 
         assert_that!(&test_data_2.a).is_equal_to(5);
@@ -181,7 +181,7 @@ mod test {
         assert_that(&foo_data_1.a).is_equal_to(1);
         assert_that(&bar_data_1.x).is_equal_to(bar_data_2.x);
 
-        world.add_modifier(ent1, box AddBarDataModifier { delta: 2.0 }, "test");
+        world.modify_with_desc(ent1, box AddBarDataModifier { delta: 2.0 }, "test");
         world.add_event(CoreEvent::TimePassed);
 
         // show up in chronological order, first created first in list
@@ -192,12 +192,12 @@ mod test {
         assert_that(&bar_data_1.x).is_not_equal_to(bar_data_2.x);
         assert_that(&bar_data_1.x).is_equal_to(3.0);
 
-        world.add_modifier(ent1, box MultiplyByOtherEntityModifier { other_entity: ent2 }, None);
+        world.modify_with_desc(ent1, box MultiplyByOtherEntityModifier { other_entity: ent2 }, None);
         world.add_event(CoreEvent::TimePassed);
 
         assert_that(&foo_data_1.a).is_equal_to(2);
 
-        world.add_modifier(ent2, box AddFooBValueModifier {}, None);
+        world.modify_with_desc(ent2, box AddFooBValueModifier {}, None);
         world.add_event(CoreEvent::TimePassed);
 
         assert_that(&bar_data_1.x).is_equal_to(3.0);
@@ -285,7 +285,7 @@ mod test {
         assert_that(&foo_data_2.b).is_equal_to(&Vec::new());
 
         // add a simple modifier to increase a by 4, should now be 5. Keep a reference to the modifier
-        let modifier_ref_1 = world.add_modifier(ent1, FooData::a.add(4), "simple addition");
+        let modifier_ref_1 = world.modify_with_desc(ent1, FooData::a.add(4), "simple addition");
         world.add_event(CoreEvent::WorldInitialized);
 
         let mut view_2 = world.view_at_time(world.next_time);
@@ -294,7 +294,7 @@ mod test {
         assert_that(&foo_data_1.a).is_equal_to(5);
 
         // add a modifier on top of that one that multiples by 2, should now be 10
-        world.add_modifier(ent1, FooData::a.mul(2), "multiply by 2");
+        world.modify_with_desc(ent1, FooData::a.mul(2), "multiply by 2");
         world.add_event(CoreEvent::WorldInitialized);
 
         assert_that(&foo_data_1.a).is_equal_to(10);
@@ -307,7 +307,7 @@ mod test {
         assert_that(&foo_data_1.a).is_equal_to(2);
 
 //        println!("Applying modifier to take effect at {:?}", world.next_time);
-        world.add_modifier(ent1, FooData::a.add(4), None);
+        world.modify_with_desc(ent1, FooData::a.add(4), None);
         world.add_event(CoreEvent::TimePassed);
 
 //        println!("next time: {:?}, mut_view.cur_time: {:?}, just_disabled_time: {:?}", world.next_time, view.current_time, just_disabled_time);
@@ -353,13 +353,13 @@ mod test {
         assert_that(&foo_data_2.b).is_equal_to(&Vec::new());
 
         // add a simple modifier to increase a by 4, should now be 5. Keep a reference to the modifier
-        world.add_modifier(ent1, FooData::a.add(4), "simple addition");
+        world.modify_with_desc(ent1, FooData::a.add(4), "simple addition");
         world.add_event(CoreEvent::WorldInitialized);
 
         world.register::<BarData>();
 
         world.attach_data(ent1, BarData {x : 3.0});
-        world.add_modifier(ent1, BarData::x.add(1.0), "x addition");
+        world.modify_with_desc(ent1, BarData::x.add(1.0), "x addition");
         world.add_event(CoreEvent::TimePassed);
 
         world.update_view_to_time(&mut view_2, world.next_time);
@@ -393,13 +393,13 @@ mod test {
             .create(&mut world);
 
         // add a simple modifier to increase a by 4, should now be 5. Keep a reference to the modifier
-        world.add_modifier(ent1, FooData::a.add(4), "simple addition");
+        world.modify_with_desc(ent1, FooData::a.add(4), "simple addition");
         world.add_event(CoreEvent::WorldInitialized);
 
         world.register::<BarData>();
 
         world.attach_data(ent1, BarData {x : 3.0});
-        world.add_modifier(ent1, BarData::x.add(1.0), "x addition");
+        world.modify_with_desc(ent1, BarData::x.add(1.0), "x addition");
         world.add_event(CoreEvent::TimePassed);
 
         use ron;

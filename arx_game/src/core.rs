@@ -8,6 +8,7 @@ use std::fmt::Error;
 use std::fmt::Formatter;
 use std::u64;
 use std::fmt::Debug;
+use common::prelude::ExtendedCollection;
 
 //use num;
 
@@ -72,26 +73,30 @@ impl<T: ReduceableType> Reduceable<T> {
 }
 
 
-#[derive(Clone, Debug, Copy, PartialEq, Serialize, Deserialize)]
-pub struct DicePool {
-    pub die: u32,
-    pub count: u32,
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum DicePool {
+    Single { die : u32, count : u32 },
+    Compound(Vec<DicePool>),
+    None
 }
 
-impl Default for DicePool { fn default() -> Self { DicePool { die: 1, count: 1 } } }
+impl Default for DicePool { fn default() -> Self { DicePool::none() } }
 
 impl Display for DicePool {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        write!(f, "{}d{}", self.count, self.die)
+        write!(f, "{}", self.to_d20_string())
     }
 }
 
 impl DicePool {
     pub fn of(count: u32, die: u32) -> DicePool {
-        DicePool {
+        DicePool::Single {
             die,
             count,
         }
+    }
+    pub fn none() -> DicePool {
+        DicePool::None
     }
 
     pub fn from_str<S: Into<String>>(string: S) -> Option<DicePool> {
@@ -114,11 +119,25 @@ impl DicePool {
         let mut res: Vec<u32> = vec!();
         let mut total = 0u32;
 
-        for _ in 0..self.count {
-            let val = rng.gen_range(1, self.die + 1);
-            res.push(val);
-            total += val;
+        match self {
+            DicePool::Single { die, count } => {
+                for _ in 0..*count {
+                    let val = rng.gen_range(1, *die + 1);
+                    res.push(val);
+                    total += val;
+                }
+            },
+            DicePool::Compound(pools) => {
+                for pool in pools {
+                    let DiceRoll { die_results, total_result, pool : _ } = pool.roll(rng);
+                    res.extend(die_results);
+                    total += total_result
+                }
+            },
+            DicePool::None => {}
         }
+
+
 
         DiceRoll {
             pool: self.clone(),
@@ -128,11 +147,47 @@ impl DicePool {
     }
 
     pub fn avg_roll(&self) -> f32 {
-        ((self.die + 1) as f32) * 0.5 * self.count as f32
+        match self {
+            DicePool::Single { die, count } => ((*die + 1) as f32) * 0.5 * *count as f32,
+            DicePool::Compound(pools) => pools.iter().map(|p| p.avg_roll()).sum(),
+            DicePool::None => { 0.0f32 }
+        }
+    }
+
+    pub fn min_roll(&self) -> u32 {
+        match self {
+            DicePool::Single { die, count } => *count,
+            DicePool::Compound(pools) => pools.iter().map(|p| p.min_roll()).sum(),
+            DicePool::None => { 0.0f32 }
+        }
+    }
+
+    pub fn max_roll(&self) -> u32 {
+        match self {
+            DicePool::Single { die, count } => die * count,
+            DicePool::Compound(pools) => pools.iter().map(|p| p.max_roll()).sum(),
+            DicePool::None => { 0.0f32 }
+        }
     }
 
     pub fn to_d20_string(&self) -> String {
-        format!("{}d{}", self.count, self.die)
+        match self {
+            DicePool::Single { die, count } => format!("{}d{}", *count, *die),
+            DicePool::Compound(pools) => pools.iter().map(|p| p.to_d20_string()).join(" + "),
+            DicePool::None => { String::from("none") }
+        }
+    }
+}
+
+impl ::std::ops::Add<DicePool> for DicePool {
+    type Output = DicePool;
+
+    fn add(self, rhs: DicePool) -> DicePool {
+        match self {
+            DicePool::Compound(pools) => DicePool::Compound(pools.extended_by(vec![rhs])),
+            DicePool::Single { .. } => DicePool::Compound(vec![self, rhs]),
+            DicePool::None => rhs,
+        }
     }
 }
 
@@ -351,6 +406,9 @@ impl<T: PartialOrd + Default + Clone + Debug> Progress<T> {
             current: t,
             required: self.required.clone(),
         }
+    }
+    pub fn new(current : T, required : T) -> Progress<T> {
+        Progress { current, required }
     }
 }
 

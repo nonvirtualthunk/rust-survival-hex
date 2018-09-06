@@ -19,15 +19,19 @@ impl DelegateToWidget for EscapeMenu {
 
 impl EscapeMenu {
     pub fn new(gui : &mut GUI, parent : &Widget) -> EscapeMenu {
-        let body = Widget::window(Color::greyscale(0.8), 2).surround_children().margin(10.px()).centered().parent(parent).apply(gui);
+        let body = Widget::window(Color::greyscale(0.8), 2).surround_children().margin(20.px()).centered().parent(parent).apply(gui);
 
         let save_button = Button::new("Save").parent(&body)//.x(Positioning::CenteredInParent)
+            .font_size(FontSize::Large)
+            .x(Positioning::centered())
             .with_on_click(|ctxt : &mut WidgetContext, evt : &UIEvent| {
                ctxt.trigger_event(UIEvent::custom_event(TacticalEvents::Save, ctxt.widget_id));
             }).apply(gui);
 
         let main_menu_button = Button::new("Main Menu").parent(&body)//.x(Positioning::CenteredInParent)
-            .below(&save_button, 5.px())
+            .below(&save_button, 10.px())
+            .x(Positioning::centered())
+            .font_size(FontSize::Large)
             .with_on_click(|ctxt : &mut WidgetContext, evt : &UIEvent| {
                 ctxt.trigger_event(UIEvent::custom_event(TacticalEvents::MainMenu, ctxt.widget_id));
             }).apply(gui);

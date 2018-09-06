@@ -201,11 +201,11 @@ pub fn handle_move(world : &mut World, mover : Entity, path : &[AxialCoord]) {
             if ap_required <= view.character(mover).action_points.cur_value() {
                 let moves_converted = view.character(mover).movement.move_speed * ap_required;
                 let net_moves_lost : Sext = hex_cost - moves_converted;
-                world.modify(mover, CharacterData::action_points.reduce_by(ap_required), None);
-                world.modify(mover, MovementData::moves.sub(net_moves_lost), None);
-                world.modify(mover, PositionData::hex.set_to(hex), None);
-                world.modify(prev_hex_ent, TileData::occupied_by.set_to(None), None);
-                world.modify(hex_ent, TileData::occupied_by.set_to(Some(mover)), None);
+                world.modify_with_desc(mover, CharacterData::action_points.reduce_by(ap_required), None);
+                world.modify_with_desc(mover, MovementData::moves.sub(net_moves_lost), None);
+                world.modify_with_desc(mover, PositionData::hex.set_to(hex), None);
+                world.modify_with_desc(prev_hex_ent, TileData::occupied_by.set_to(None), None);
+                world.modify_with_desc(hex_ent, TileData::occupied_by.set_to(Some(mover)), None);
 
 //                modify(world, mover, SkillXPMod(Skill::ForestSurvival, 1));
                 // advance the event clock
@@ -224,8 +224,8 @@ pub fn place_entity_in_world(world: &mut World, character : Entity, pos : AxialC
     let view = world.view();
     if let Some(tile) = view.tile_ent_opt(pos) {
         if tile.occupied_by.is_none() {
-            world.modify(tile.entity, TileData::occupied_by.set_to(Some(character)), None);
-            world.modify(character, PositionData::hex.set_to(pos), "placement");
+            world.modify_with_desc(tile.entity, TileData::occupied_by.set_to(Some(character)), None);
+            world.modify_with_desc(character, PositionData::hex.set_to(pos), "placement");
 
             world.add_event(GameEvent::EntityAppears { entity: character, at : pos });
 
@@ -239,7 +239,7 @@ pub fn remove_entity_from_world(world: &mut World, entity : Entity) {
     let view = world.view();
     if let Some(cur_pos) = view.data_opt::<PositionData>(entity) {
         if let Some(tile) = view.tile_ent_opt(cur_pos.hex) {
-            world.modify(tile.entity, TileData::occupied_by.set_to(None), "entity removed");
+            world.modify_with_desc(tile.entity, TileData::occupied_by.set_to(None), "entity removed");
         }
     }
 }

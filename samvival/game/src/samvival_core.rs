@@ -2,6 +2,7 @@ use common::prelude::*;
 use game::prelude::*;
 use data::entities::*;
 use data::events::GameEvent;
+use logic::visibility::VisibilityComputor;
 
 
 pub fn create_world() -> World {
@@ -40,6 +41,7 @@ pub fn register_world_data(world : &mut World) {
     world.register::<MovementData>();
     world.register::<DerivedAttackData>();
     world.register::<MovementType>();
+    world.register::<VisibilityComputor>();
 
     register_custom_ability_data(world);
     // -------- world data ---------------

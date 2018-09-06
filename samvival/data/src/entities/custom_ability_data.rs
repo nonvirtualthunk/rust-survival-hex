@@ -18,7 +18,7 @@ pub struct Spawn {
     pub start_spawn_turn : i32
 }
 
-#[derive(Default,Clone,Debug,Serialize, Deserialize, PrintFields)]
+#[derive(Default,Clone,Debug,Serialize, Deserialize, Fields)]
 pub struct MonsterSpawnerData {
     pub spawns : Vec<Spawn>
 }

@@ -22,10 +22,7 @@ pub fn weapon_archetypes() -> ArchetypeLibrary {
                 verb: Some(strf("shoot")),
                 attack_type: AttackType::Projectile,
                 ap_cost: 4,
-                damage_dice: DicePool {
-                    die: 8,
-                    count: 1,
-                },
+                damage_dice: DicePool::of(1,8),
                 damage_bonus: 1,
                 to_hit_bonus: 1,
                 primary_damage_type: DamageType::Piercing,

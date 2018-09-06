@@ -67,13 +67,13 @@ mod test {
     use events::CoreEvent;
 
     use super::super::entity;
-    #[derive(Clone,Default,Debug, Serialize, Deserialize, PrintFields)]
+    #[derive(Clone,Default,Debug, Serialize, Deserialize, Fields)]
     struct Nested {
         a : f32,
         b : f32
     }
 
-    #[derive(Clone,Default,Debug,Serialize, Deserialize, PrintFields)]
+    #[derive(Clone,Default,Debug,Serialize, Deserialize, Fields)]
     struct TestData {
         foo : i32,
         bar : Reduceable<i32>,
@@ -108,26 +108,26 @@ mod test {
             .with(x)
             .create(&mut world);
 
-        world.add_modifier(ent, FieldModifier::permanent(&TestData::foo, transformations::SetTo(7i32)), "Test 1");
+        world.modify_with_desc(ent, FieldModifier::permanent(&TestData::foo, transformations::SetTo(7i32)), "Test 1");
         world.add_event(CoreEvent::TimePassed);
         assert_that(&view.data::<TestData>(ent).foo).is_equal_to(&7);
 
-        world.add_modifier(ent, TestData::foo.set_to(9), "Test 2");
+        world.modify_with_desc(ent, TestData::foo.set_to(9), "Test 2");
         world.add_event(CoreEvent::TimePassed);
         assert_that(&view.data::<TestData>(ent).foo).is_equal_to(&9);
 
-        world.add_modifier(ent, TestData::foo.add(1), "Test 3");
+        world.modify_with_desc(ent, TestData::foo.add(1), "Test 3");
         world.add_event(CoreEvent::TimePassed);
         assert_that(&view.data::<TestData>(ent).foo).is_equal_to(&10);
 
 
         let data = view.data::<TestData>(ent);
         assert_that(&data.bar).is_equal_to(&Reduceable::new(3));
-        world.add_modifier(ent, FieldModifier::permanent(&TestData::bar, transformations::ReduceBy(1)), "Test 4");
+        world.modify_with_desc(ent, FieldModifier::permanent(&TestData::bar, transformations::ReduceBy(1)), "Test 4");
         world.add_event(CoreEvent::TimePassed);
         assert_that(&data.bar.cur_value()).is_equal_to(&2);
 
-        world.add_modifier(ent, TestData::bar.recover_by(1), "Test 5");
+        world.modify_with_desc(ent, TestData::bar.recover_by(1), "Test 5");
         world.add_event(CoreEvent::TimePassed);
         assert_that(&data.bar.cur_value()).is_equal_to(&3);
 

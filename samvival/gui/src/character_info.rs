@@ -127,7 +127,8 @@ impl CharacterInfoWidget {
             });
 
 
-            let mut character_skills: Vec<(Skill, i32)> = skills.skill_levels();
+
+            let mut character_skills: Vec<(Skill, i32)> = ::game::logic::skill::skill_levels(world_view, selected);
             character_skills.sort_by_key(|&(_, lvl)| -(lvl as i32));
 
             self.skills.update(gui, character_skills.as_ref(), |skill_w, skill| {

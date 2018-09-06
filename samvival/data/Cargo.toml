@@ -31,6 +31,7 @@ erased-serde = "*"
 serde_derive = "*"
 serde = { version = "*", features = ["rc"] }
 ron = "*"
+regex = "1"
 
 [dependencies.arx_common]
 path = "../../arx_common"

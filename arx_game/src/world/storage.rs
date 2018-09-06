@@ -62,37 +62,43 @@ impl MultiTypeEventContainer {
             update_to_time_funcs: Vec::new(),
         }
     }
+
+    pub(crate) fn is_registered<E: GameEventType + 'static + Serialize + Default + DeserializeOwned>(&self) -> bool {
+        self.event_containers.contains::<EventContainer<E>>()
+    }
     pub(crate) fn register_event_type<'de, E: GameEventType + 'static + Serialize + Default + DeserializeOwned>(&mut self) {
 //        println!("Registering event of type {:?}, nth registered: {:?}", unsafe {std::intrinsics::type_name::<E>()}, self.event_containers.len());
 //        println!("MTE: {:?}", (self as *const MultiTypeEventContainer));
-        self.event_containers.register::<EventContainer<E>>();
+        if ! self.event_containers.contains::<EventContainer<E>>() {
+            self.event_containers.register::<EventContainer<E>>();
 
-        self.clone_up_to_time_funcs.push(|mte: &mut MultiTypeEventContainer, from: &MultiTypeEventContainer, time: GameEventClock| {
-            mte.register_event_type::<E>();
+            self.clone_up_to_time_funcs.push(|mte: &mut MultiTypeEventContainer, from: &MultiTypeEventContainer, time: GameEventClock| {
+                mte.register_event_type::<E>();
 
-            mte.event_containers.get_mut::<EventContainer<E>>().events =
-                from.events::<E>().filter(|e| e.occurred_at <= time).cloned().collect();
-        });
+                mte.event_containers.get_mut::<EventContainer<E>>().events =
+                    from.events::<E>().filter(|e| e.occurred_at <= time).cloned().collect();
+            });
 
-        self.update_to_time_funcs.push(|mte: &mut MultiTypeEventContainer, from: &MultiTypeEventContainer, end_time: GameEventClock| {
-            let cur_high_time = mte.event_containers.get::<EventContainer<E>>().events
-                .last()
-                .map(|ec| ec.occurred_at)
-                .unwrap_or(0);
+            self.update_to_time_funcs.push(|mte: &mut MultiTypeEventContainer, from: &MultiTypeEventContainer, end_time: GameEventClock| {
+                let cur_high_time = mte.event_containers.get::<EventContainer<E>>().events
+                    .last()
+                    .map(|ec| ec.occurred_at)
+                    .unwrap_or(0);
 
-            // events are stored in order oldest to newest, so we start from the back, taking newest to oldest, ignore all that are newer
-            // than our target time, take all that are newer than our start time, now we have all new events ordered newest to oldest. Take
-            // that and reverse it and we can tack it onto the end.
-            let mut new_events = from.event_containers.get::<EventContainer<E>>().events.iter()
-                .rev()
-                .skip_while(|ec| ec.occurred_at > end_time)
-                .take_while(|ec| ec.occurred_at > cur_high_time)
-                .cloned()
-                .collect_vec();
-            new_events.reverse();
+                // events are stored in order oldest to newest, so we start from the back, taking newest to oldest, ignore all that are newer
+                // than our target time, take all that are newer than our start time, now we have all new events ordered newest to oldest. Take
+                // that and reverse it and we can tack it onto the end.
+                let mut new_events = from.event_containers.get::<EventContainer<E>>().events.iter()
+                    .rev()
+                    .skip_while(|ec| ec.occurred_at > end_time)
+                    .take_while(|ec| ec.occurred_at > cur_high_time)
+                    .cloned()
+                    .collect_vec();
+                new_events.reverse();
 
-            mte.event_containers.get_mut::<EventContainer<E>>().events.extend(new_events);
-        });
+                mte.event_containers.get_mut::<EventContainer<E>>().events.extend(new_events);
+            });
+        }
     }
     pub(crate) fn add_callback<E: GameEventType + 'static>(&mut self, callback: EventCallback<E>) {
         let event_container = self.event_containers.get_mut::<EventContainer<E>>();
@@ -144,6 +150,7 @@ pub struct ModifierContainer<T: EntityData> {
 #[derive(Serialize,Deserialize,Clone)]
 pub struct ModifierArchetypeContainer<T: EntityData> {
     pub(crate) modifier: Rc<Modifier<T>>,
+    pub(crate) modifier_index: ModifierClock,
 }
 
 impl<T: EntityData> ModifierContainer<T> {
@@ -185,9 +192,9 @@ impl<T: EntityData> ModifiersContainer<T> {
         self.dynamic_modifiers.iter().filter(move |mc| mc.entity == entity)
     }
 
-    pub fn register_modifier_archetype(&mut self, modifier: Rc<Modifier<T>>) -> ModifierReference {
-        self.modifier_archetypes.push(ModifierArchetypeContainer { modifier });
-        ModifierReference(0, ModifierReferenceType::Archetype, self.modifier_archetypes.len() - 1)
+    pub fn register_modifier_archetype(&mut self, modifier: Rc<Modifier<T>>, modifier_clock: ModifierClock) -> ModifierReference {
+        self.modifier_archetypes.push(ModifierArchetypeContainer { modifier, modifier_index: modifier_clock });
+        ModifierReference(modifier_clock, ModifierReferenceType::Archetype, self.modifier_archetypes.len() - 1)
     }
 }
 
@@ -309,7 +316,7 @@ mod test {
         t: T
     }
 
-    #[derive(Clone, Default, PrintFields, Debug, Serialize, Deserialize)]
+    #[derive(Clone, Default, Fields, Debug, Serialize, Deserialize)]
     pub struct Bar {
         pub f: f32,
         pub b: i32,

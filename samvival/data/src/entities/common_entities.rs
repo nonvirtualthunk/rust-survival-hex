@@ -27,7 +27,7 @@ use serde::de::EnumAccess;
 use serde::de::SeqAccess;
 use serde::ser::SerializeTuple;
 
-#[derive(Default, Clone, Debug, Serialize, Deserialize, PrintFields)]
+#[derive(Default, Clone, Debug, Serialize, Deserialize, Fields)]
 pub struct PositionData {
     pub hex: AxialCoord,
 }
@@ -40,7 +40,7 @@ impl PositionData {
 }
 
 
-#[derive(Clone, Debug, Serialize, Deserialize, PrintFields)]
+#[derive(Clone, Debug, Serialize, Deserialize, Fields)]
 pub struct IdentityData {
     pub name : Option<String>,
     pub kinds : Vec<Taxon>
@@ -90,18 +90,6 @@ impl Default for IdentityData {
         }
     }
 }
-
-
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PrintFields)]
-pub struct ActionData {
-    pub active_action : Option<Action>,
-    pub active_reaction: ReactionTypeRef,
-}
-impl EntityData for ActionData {}
-
-//impl Default for ActionData {
-//
-//}
 
 
 
@@ -368,15 +356,6 @@ pub fn taxon2(name : Str, parent1 : &'static Taxon, parent2 : &'static Taxon) ->
 
 
 pub mod taxonomy {
-    pub const fn root_taxon(name : Str) -> Taxon {
-        Taxon::ConstTaxon { name, parents : [None,None,None,None] }
-    }
-    pub const fn taxon(name : Str, parent : &'static Taxon) -> Taxon {
-        Taxon::ConstTaxon { name, parents : [Some(parent),None,None,None] }
-    }
-    pub const fn taxon2(name : Str, parent1 : &'static Taxon, parent2 : &'static Taxon) -> Taxon {
-        Taxon::ConstTaxon { name, parents : [Some(parent1), Some(parent2), None, None] }}
-
     use super::Taxon;
     use std::sync::Mutex;
     use std::collections::HashMap;
@@ -387,12 +366,18 @@ pub mod taxonomy {
     pub static Unknown : Taxon = root_taxon("unknown thing");
 
     pub static Item : Taxon = root_taxon("item");
+    pub static DelicateItem : Taxon = taxon("delicate item", &Item);
+    pub static SturdyItem : Taxon = taxon("sturdy item", &Item);
 
-    pub static Weapon : Taxon = taxon("weapon", &Item);
+    pub static Axe : Taxon = taxon("axe", &Item);
+
+    pub static Weapon : Taxon = taxon("weapon", &SturdyItem);
     pub mod weapons {
         use super::*;
         pub static MeleeWeapon : Taxon = taxon("melee weapon", &Weapon);
         pub static RangedWeapon : Taxon = taxon("ranged weapon", &Weapon);
+
+        pub static ImprovisedWeapon : Taxon = taxon("improvised weapon", &Weapon);
 
         pub static StabbingWeapon: Taxon = taxon("stabbing weapon", &MeleeWeapon);
         pub static BladedWeapon: Taxon = taxon("bladed weapon", &MeleeWeapon);
@@ -403,8 +388,20 @@ pub mod taxonomy {
         pub static Sword : Taxon = taxon("sword", &BladedWeapon);
         pub static Bow : Taxon = taxon("bow", &ProjectileWeapon);
         pub static Spear : Taxon = taxon2("spear", &StabbingWeapon, &ReachWeapon);
+        pub static BattleAxe : Taxon = taxon2("battle axe", &BladedWeapon, &Axe);
     }
 
+    pub static Tool : Taxon = taxon("tool", &Item);
+    pub mod tools {
+        use super::*;
+        pub static SharpTool : Taxon = taxon("bladed tool", &Tool);
+
+        pub static Rod : Taxon = taxon("rod", &Tool);
+
+        pub static ToolAxe : Taxon = taxon2("tool axe", &Tool, &Axe);
+        pub static Scythe : Taxon = taxon("scythe", &SharpTool);
+        pub static Hammer : Taxon = taxon("Hammer", &Tool);
+    }
 
     pub static Armor : Taxon = taxon("armor", &Item);
     // --------------- armors -------------------------
@@ -455,6 +452,8 @@ pub mod taxonomy {
         pub static BludgeoningAttack : Taxon = taxon("bludgeoning attack", &Attack);
         pub static MagicAttack : Taxon = taxon("magic attack", &Attack);
         pub static NaturalAttack : Taxon = taxon("natural attack", &Attack);
+
+        pub static ImprovisedAttack : Taxon = taxon("improvised attack", &Attack); // an attack with something that isn't really a weapon
     }
 
     pub static Movement : Taxon = taxon("movement", &Action);
@@ -489,94 +488,13 @@ pub mod taxonomy {
         static ref CONST_TAXONS: Mutex<HashMap<String, &'static Taxon>> = Mutex::new(HashMap::new());
     }
 
-    fn register_taxon(taxon : &'static Taxon) {
+    pub(crate) fn register_taxon(taxon : &'static Taxon) {
         if let Taxon::ConstTaxon { name , .. } = taxon {
             CONST_TAXONS.lock().unwrap().insert(String::from(*name), taxon);
         } else { error!("Cannot const-register non-const taxons") }
     }
     pub fn register() {
-        use super::taxonomy::weapons::*;
-        use super::taxonomy::projectiles::*;
-        use super::taxonomy::resources::*;
-        use super::taxonomy::plants::*;
-        use super::taxonomy::attacks::*;
-
-        register_taxon(&Unknown);
-        register_taxon(&Item);
-
-        register_taxon(&Weapon);
-        register_taxon(&StabbingWeapon);
-        register_taxon(&BladedWeapon);
-        register_taxon(&ProjectileWeapon);
-
-        register_taxon(&ReachWeapon);
-
-        register_taxon(&Sword);
-        register_taxon(&Bow);
-        register_taxon(&Spear);
-
-
-        register_taxon(&Armor);
-        register_taxon(&PlateArmor);
-        register_taxon(&LeatherArmor);
-
-        register_taxon(&Shield);
-        register_taxon(&LightShield);
-        register_taxon(&HeavyShield);
-        register_taxon(&TowerShield);
-
-
-        register_taxon(&LivingThing);
-
-        register_taxon(&Creature);
-
-        register_taxon(&Person);
-        register_taxon(&Monster);
-        register_taxon(&Animal);
-
-
-        register_taxon(&Projectile);
-        register_taxon(&Arrow);
-        register_taxon(&Bolt);
-
-        register_taxon(&Action);
-
-        register_taxon(&Attack);
-        register_taxon(&RangedAttack);
-
-        register_taxon(&ProjectileAttack);
-        register_taxon(&ThrownAttack);
-
-        register_taxon(&SlashingAttack);
-
-        register_taxon(&PiercingAttack);
-        register_taxon(&StabbingAttack);
-
-        register_taxon(&ReachAttack);
-        register_taxon(&BludgeoningAttack);
-        register_taxon(&MagicAttack);
-        register_taxon(&NaturalAttack);
-
-        register_taxon(&Movement);
-
-
-        register_taxon(&Plant);
-        register_taxon(&Tree);
-
-        register_taxon(&Resource);
-        register_taxon(&Material);
-
-        register_taxon(&Mineral);
-        register_taxon(&Metal);
-
-        register_taxon(&PlantResource);
-
-        register_taxon(&Straw);
-        register_taxon(&Fruit);
-        register_taxon(&Wood);
-
-        register_taxon(&Stone);
-        register_taxon(&Iron);
+        ::entities::taxonomy_registration::register_taxonomy()
     }
     pub fn taxon_by_name(name : &str) -> &'static Taxon {
         CONST_TAXONS.lock().unwrap().get(name).unwrap_or(&&Unknown)
@@ -584,10 +502,20 @@ pub mod taxonomy {
     pub fn taxon_by_name_opt(name : &str) -> Option<&'static Taxon> {
         CONST_TAXONS.lock().unwrap().get(name).map(|t| *t)
     }
+
+
+    pub const fn root_taxon(name : Str) -> Taxon {
+        Taxon::ConstTaxon { name, parents : [None,None,None,None] }
+    }
+    pub const fn taxon(name : Str, parent : &'static Taxon) -> Taxon {
+        Taxon::ConstTaxon { name, parents : [Some(parent),None,None,None] }
+    }
+    pub const fn taxon2(name : Str, parent1 : &'static Taxon, parent2 : &'static Taxon) -> Taxon {
+        Taxon::ConstTaxon { name, parents : [Some(parent1), Some(parent2), None, None] }}
 }
 
 
-#[derive(Clone, Debug, PrintFields, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Fields, Default, Serialize, Deserialize)]
 pub struct ModifierTrackingData {
     pub modifiers_by_key : HashMap<String, ModifierReference>
 }
@@ -618,5 +546,55 @@ mod test {
 
         assert_eq!(&deserialized, &runtime_taxon);
         assert_eq!(deserialized.parents(), runtime_taxon.parents());
+    }
+
+    #[test]
+    pub fn generate_registration_function() {
+        if let Ok(mut file) = ::std::fs::File::open("/Users/nvt/code/samvival/samvival/data/src/entities/common_entities.rs") {
+            use std::io::Read;
+            use regex::Regex;
+
+            let taxon_re = Regex::new(".*pub static ([A-Za-z]*?) : Taxon.*").unwrap();
+            let mod_re = Regex::new(".*pub mod ([A-Za-z]*?)\\s+\\{").unwrap();
+
+            let mut registration_file = String::new();
+            registration_file.push_str("use entities::common_entities::taxonomy;\n");
+            registration_file.push_str("pub(crate) fn register_taxonomy() {\n");
+
+            let mut mods = Vec::new();
+            let mut contents = String::new();
+            match file.read_to_string(&mut contents) {
+                Ok(_) => {
+                    for line in contents.lines() {
+                        if let Some(captures) = taxon_re.captures(line) {
+                            let name = &captures[1];
+                            let mod_name : String = mods.iter().join("::");
+                            registration_file.push_str(format!("\t\ttaxonomy::register_taxon(&{}::{});\n", mod_name, name).as_str());
+                        } else if let Some(captures) = mod_re.captures(line) {
+                            let mod_name = &captures[1];
+                            mods.push(strf(mod_name));
+                        } else if line.contains("}") {
+                            mods.pop();
+                        }
+                    }
+                },
+                Err(err) => println!("Could not read: {:?}", err)
+            }
+
+            registration_file.push_str("}");
+
+            if let Ok(mut file) = ::std::fs::File::create("/Users/nvt/code/samvival/samvival/data/src/entities/taxonomy_registration.rs") {
+                use std::io::Write;
+                if let Ok(_) = file.write_all(registration_file.as_bytes()) {
+                    println!("Writing registration file complete");
+                } else {
+                    println!("Write registration file failed");
+                }
+            } else {
+                println!("Could not create registration file");
+            }
+        } else {
+            println!("Could not open");
+        }
     }
 }

@@ -135,8 +135,8 @@ impl Game {
                             self.state = game_state;
                             // TODO: Once we have non-tactical worlds, this will get...different
                             for world in &mut self.state.universe.worlds {
-                                world.initialize_loaded_world();
                                 register_world_data(world);
+                                world.initialize_loaded_world();
                             }
                             self.gui = GUI::new();
                             let tactical_mode = TacticalMode::new(&mut self.gui, self.state.active_world.expect("Loaded with no active world, which is weird"), false);

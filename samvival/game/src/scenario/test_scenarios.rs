@@ -81,8 +81,8 @@ impl Scenario for FirstEverScenario {
 
             logic::item::equip_item(world, bow, archer, true);
 
-            world.modify(archer, CombatData::ranged_accuracy_bonus.add(1), "well rested");
-            world.modify(archer, CombatData::ranged_accuracy_bonus.add(3), "careful aim");
+            world.modify_with_desc(archer, CombatData::ranged_accuracy_bonus.add(1), "well rested");
+            world.modify_with_desc(archer, CombatData::ranged_accuracy_bonus.add(3), "careful aim");
 
             logic::movement::place_entity_in_world(world, archer, AxialCoord::new(0, 0));
 
@@ -109,13 +109,13 @@ impl Scenario for FirstEverScenario {
 
             let special_attack = EntityBuilder::new()
                 .with(DerivedAttackData {
-                    character_condition: EntitySelectors::Any,
-                    weapon_condition: EntitySelectors::is_a(&taxonomy::weapons::ReachWeapon),
-                    attack_condition: EntitySelectors::is_a(&taxonomy::attacks::StabbingAttack).and(EntitySelectors::is_a(&taxonomy::attacks::ReachAttack)),
+                    character_condition: EntitySelector::Any,
+                    weapon_condition: EntitySelector::is_a(&taxonomy::weapons::ReachWeapon),
+                    attack_condition: EntitySelector::is_a(&taxonomy::attacks::StabbingAttack).and(EntitySelector::is_a(&taxonomy::attacks::ReachAttack)),
                     kind: DerivedAttackKind::PiercingStrike,
                 }).create(world);
 
-            world.modify(spearman, CombatData::special_attacks.append(special_attack), None);
+            world.modify_with_desc(spearman, CombatData::special_attacks.append(special_attack), None);
 
 
             let monster_base = character_archetypes.with_name("mud monster").clone()

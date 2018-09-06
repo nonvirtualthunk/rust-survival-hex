@@ -13,7 +13,7 @@ use entities::common_entities::Taxon;
 use game::prelude::*;
 use game::entity;
 
-use entities::selectors::EntitySelectors;
+use entities::selectors::EntitySelector;
 use entities::common_entities::IdentityData;
 
 #[derive(Clone,Debug,Serialize,Deserialize)]
@@ -42,11 +42,11 @@ impl DerivedAttackKind {
 }
 
 /// Entity data to represent a special, derived attack. The weapon entity points to the
-#[derive(Clone,Debug,Serialize, Deserialize, PrintFields)]
+#[derive(Clone,Debug,Serialize, Deserialize, Fields)]
 pub struct DerivedAttackData {
-    pub weapon_condition : EntitySelectors,
-    pub character_condition : EntitySelectors,
-    pub attack_condition : EntitySelectors,
+    pub weapon_condition : EntitySelector,
+    pub character_condition : EntitySelector,
+    pub attack_condition : EntitySelector,
     pub kind : DerivedAttackKind,
 }
 
@@ -55,9 +55,9 @@ impl EntityData for DerivedAttackData {}
 impl Default for DerivedAttackData {
     fn default() -> Self {
         DerivedAttackData {
-            weapon_condition : EntitySelectors::Any,
-            character_condition : EntitySelectors::Any,
-            attack_condition : EntitySelectors::Any,
+            weapon_condition : EntitySelector::Any,
+            character_condition : EntitySelector::Any,
+            attack_condition : EntitySelector::Any,
             kind : DerivedAttackKind::None
         }
     }
@@ -76,7 +76,7 @@ impl Default for DerivedAttackData {
 //    character_condition : EntitySelectors,
 //}
 
-#[derive(Clone, Debug, Serialize, Deserialize, PrintFields)]
+#[derive(Clone, Debug, Serialize, Deserialize, Fields)]
 pub struct CombatData {
     pub active_attack : AttackRef,
     pub active_counterattack : AttackRef,
@@ -178,7 +178,7 @@ pub enum HexPattern {
 impl Default for HexPattern { fn default() -> Self { HexPattern::Single } }
 
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, PrintFields)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Fields)]
 pub struct Attack {
     pub name : String,
     pub verb : Option<String>,

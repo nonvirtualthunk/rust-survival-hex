@@ -55,9 +55,9 @@ pub trait AddToKeyableField<E: EntityData, K: Clone + Hash + Eq + 'static + serd
     fn sub_from_key(&'static self, key: K, new_value: V) -> Box<FieldModifier<E, HashMap<K, V>>>;
 }
 
-impl<E, K: Clone + Hash + Eq + 'static + serde::Serialize, V: Clone + 'static + serde::Serialize + ops::Add<Output=V> + ops::Sub<Output=V> + Default + ops::Neg<Output=V>> AddToKeyableField<E, K, V> for Field<E, HashMap<K, V>> where E: EntityData {
+impl<E, K: Clone + Hash + Eq + 'static + serde::Serialize, V: Clone + 'static + serde::Serialize + ops::Add<Output=V> + ops::Sub<Output=V> + Default> AddToKeyableField<E, K, V> for Field<E, HashMap<K, V>> where E: EntityData {
     fn add_to_key(&'static self, key: K, new_value: V) -> Box<FieldModifier<E, HashMap<K, V>>> { FieldModifier::permanent(self, transformations::AddToKey(key, new_value)) }
-    fn sub_from_key(&'static self, key: K, new_value: V) -> Box<FieldModifier<E, HashMap<K, V>>> { FieldModifier::permanent(self, transformations::AddToKey(key, -new_value)) }
+    fn sub_from_key(&'static self, key: K, new_value: V) -> Box<FieldModifier<E, HashMap<K, V>>> { FieldModifier::permanent(self, transformations::SubFromKey(key, new_value)) }
 }
 
 pub trait AddableField<E: EntityData, T: 'static> {
@@ -246,6 +246,22 @@ pub mod transformations {
         fn apply(&self, current: &mut Reduceable<R>) { current.reset() }
         fn description(&self) -> Transformation { Transformation::Reset }
         fn name(&self) -> &'static str { "reset" }
+    }
+
+    #[derive(Serialize, Deserialize, Clone)]
+    pub struct SubFromKey<K: Clone + Hash + Eq + 'static + serde::Serialize, V: Clone + 'static + serde::Serialize> (pub K, pub V);
+
+    impl<K: Clone + Hash + Eq + 'static + serde::Serialize, V: Clone + serde::Serialize + ops::Sub<Output=V> + Default, S: BuildHasher> FieldTransformation<HashMap<K, V, S>>
+    for SubFromKey<K, V> {
+        fn apply(&self, current: &mut HashMap<K, V, S>) {
+            let cur = current.entry(self.0.clone()).or_insert_with(|| V::default());
+            *cur = cur.clone() - self.1.clone();
+        }
+
+        fn description(&self) -> Transformation {
+            Transformation::SubFromKey(box self.0.clone(), box self.1.clone())
+        }
+        fn name(&self) -> &'static str { "sub_from_key" }
     }
 
     #[derive(Serialize, Deserialize, Clone)]
@@ -441,6 +457,7 @@ implement_transform_ser!(DeserializeAppendTransformation, deserialize_append, Ve
 implement_transform_ser!(DeserializeRemoveTransformation, deserialize_remove, Vec<T>, transformations::Remove<T>, + PartialEq<T>);
 
 implement_map_transform_ser!(DeserializeAddToKeyTransformation, deserialize_add_to_key, transformations::AddToKey<K,V>, + ops::Add<Output=V> + Default);
+implement_map_transform_ser!(DeserializeSubFromKeyTransformation, deserialize_sub_from_key, transformations::SubFromKey<K,V>, + ops::Sub<Output=V> + Default);
 implement_map_transform_ser!(DeserializeSetKeyToTransformation, deserialize_set_key_to, transformations::SetKeyTo<K,V>,);
 implement_map_transform_ser!(DeserializeRemoveKeyTransformation, deserialize_remove_key, transformations::RemoveKey<K>,);
 
@@ -542,6 +559,7 @@ pub fn deserialize_to_transform<'de, T, V>(seq: &mut V) -> Result<Box<FieldTrans
         "increase_by" => T::deserialize_increase_by(seq),
         "reset" => T::deserialize_reset(seq),
         "add_to_key" => T::deserialize_add_to_key(seq),
+        "sub_from_key" => T::deserialize_sub_from_key(seq),
         "set_key_to" => T::deserialize_set_key_to(seq),
         "remove_key" => T::deserialize_remove_key(seq),
         "append" => T::deserialize_append(seq),
@@ -625,7 +643,7 @@ mod test {
     use super::super::entity;
     use common::reflect::Field;
 
-    #[derive(Clone, Default, PrintFields, Debug, Serialize, Deserialize)]
+    #[derive(Clone, Default, Fields, Debug, Serialize, Deserialize)]
     pub struct Bar {
         pub f: f32,
         pub b: i32,

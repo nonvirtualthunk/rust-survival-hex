@@ -7,7 +7,7 @@ use game::EntityBuilder;
 use entities::common_entities::IdentityData;
 use entities::taxonomy;
 
-#[derive(Clone, Debug, Serialize, Deserialize, PrintFields)]
+#[derive(Clone, Debug, Serialize, Deserialize, Fields)]
 pub struct MovementType {
     pub name: String,
     pub move_multiplier: Sext,
@@ -64,7 +64,7 @@ impl MovementTypeRef {
 
 // --------------------------------------------------
 
-#[derive(Clone, Debug, Serialize, Deserialize, PrintFields)]
+#[derive(Clone, Debug, Serialize, Deserialize, Fields)]
 pub struct MovementData {
     pub active_movement_type: Option<MovementTypeRef>,
     pub move_speed: Sext,

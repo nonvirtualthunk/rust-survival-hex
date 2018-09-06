@@ -5,7 +5,7 @@ use common::hex::AxialCoord;
 use game::core::*;
 use game::entity;
 
-#[derive(Clone, Default, Debug, Serialize, Deserialize, PrintFields)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, Fields)]
 pub struct MapData {
     pub min_tile_bound : AxialCoord,
     pub max_tile_bound : AxialCoord

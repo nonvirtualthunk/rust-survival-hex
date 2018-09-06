@@ -29,26 +29,26 @@ pub fn trigger_reactions_for_event(world: &mut World, event: &GameEventWrapper<G
                             let modifier_applied = match reaction {
                                 ReactionTypeRef::Dodge => {
                                     let increase_dodge_by = (world.view().data::<CombatData>(ent).dodge_bonus * 2).max(2);
-                                    world.modify(ent, CombatData::dodge_bonus.add(increase_dodge_by), "dodge reaction")
+                                    world.modify_with_desc(ent, CombatData::dodge_bonus.add(increase_dodge_by), "dodge reaction")
                                 }
                                 ReactionTypeRef::Counterattack => {
                                     if let Some(counter_attack) = logic::combat::counter_attack_ref_to_use(view, ent) {
                                         if let Some(counter_attack) = counter_attack.resolve(view, ent) {
                                             let increase_counters_by = view.data::<CharacterData>(ent).action_points.max_value() / counter_attack.ap_cost as i32;
-                                            world.modify(ent, CombatData::counters_remaining.increase_by(increase_counters_by), "counterattack reaction")
+                                            world.modify_with_desc(ent, CombatData::counters_remaining.increase_by(increase_counters_by), "counterattack reaction")
                                         } else { ModifierReference::sentinel() }
                                     } else { ModifierReference::sentinel() }
                                 }
                                 ReactionTypeRef::Defend => {
-                                    world.modify(ent, CombatData::defense_bonus.add(1), "defense reaction")
+                                    world.modify_with_desc(ent, CombatData::defense_bonus.add(1), "defense reaction")
                                 }
                                 ReactionTypeRef::Block => {
-                                    world.modify(ent, CombatData::defense_bonus.add(1), "block reaction")
+                                    world.modify_with_desc(ent, CombatData::defense_bonus.add(1), "block reaction")
                                 }
                             };
 
                             if let Some(modifier) = modifier_applied.as_opt() {
-                                world.modify(ent, ModifierTrackingData::modifiers_by_key.set_key_to(modifier_key, modifier.clone()), None);
+                                world.modify_with_desc(ent, ModifierTrackingData::modifiers_by_key.set_key_to(modifier_key, modifier.clone()), None);
                                 world.add_event(GameEvent::ReactionEffectApplied { entity: ent });
                             }
                         } else if event.is_starting() {

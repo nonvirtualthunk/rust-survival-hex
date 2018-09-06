@@ -10,7 +10,7 @@ use data::entities::item::ItemData;
 use data::entities::combat::AttackRef;
 use game::events::CoreEvent;
 use data::entities::combat::DerivedAttackData;
-use data::entities::selectors::EntitySelectors;
+use data::entities::selectors::EntitySelector;
 use data::entities::taxonomy;
 use data::entities::combat::*;
 
@@ -39,7 +39,7 @@ pub fn test_basic_equip_and_select_attack() {
 
         // give the character a spear, now that should be part of the attacks
         let spear = weapon_archetypes().with_name("longspear").create(world);
-        logic::item::put_item_in_inventory(world, spear, character);
+        logic::item::put_item_in_inventory(world, spear, character, false);
         logic::item::equip_item(world, spear, character, true);
 
         { // the spear should now also be included in the possible attacks
@@ -60,7 +60,7 @@ pub fn test_basic_equip_and_select_attack() {
             assert_that(&primary_attack).contains(&default_attack);
 
             // explicitly override the active attack to point at a natural attack
-            world.modify(character, CombatData::active_attack.set_to(AttackRef::new(natural_attacks[0], character)), None);
+            world.modify_with_desc(character, CombatData::active_attack.set_to(AttackRef::new(natural_attacks[0], character)), None);
             world.add_event(CoreEvent::TimePassed);
 
             // now the primary should be the natural attack instead
@@ -69,7 +69,7 @@ pub fn test_basic_equip_and_select_attack() {
             assert_that(natural_attacks).contains(&primary_attack.unwrap().attack_entity);
 
             // now clear it
-            world.modify(character, CombatData::active_attack.set_to(AttackRef::none()), None);
+            world.modify_with_desc(character, CombatData::active_attack.set_to(AttackRef::none()), None);
             world.add_event(CoreEvent::TimePassed);
         }
     })
@@ -83,19 +83,19 @@ pub fn test_derived_attack() {
 
         // give the character a spear, now that should be part of the attacks
         let spear = weapon_archetypes().with_name("longspear").create(world);
-        logic::item::put_item_in_inventory(world, spear, character);
+        logic::item::put_item_in_inventory(world, spear, character, false);
         logic::item::equip_item(world, spear, character, true);
 
 
         let special_attack = EntityBuilder::new()
             .with(DerivedAttackData {
-                character_condition: EntitySelectors::Any,
-                weapon_condition: EntitySelectors::is_a(&taxonomy::weapons::ReachWeapon),
-                attack_condition: EntitySelectors::is_a(&taxonomy::attacks::StabbingAttack).and(EntitySelectors::is_a(&taxonomy::attacks::ReachAttack)),
+                character_condition: EntitySelector::Any,
+                weapon_condition: EntitySelector::is_a(&taxonomy::weapons::ReachWeapon),
+                attack_condition: EntitySelector::is_a(&taxonomy::attacks::StabbingAttack).and(EntitySelector::is_a(&taxonomy::attacks::ReachAttack)),
                 kind: DerivedAttackKind::PiercingStrike,
             }).create(world);
 
-        world.modify(character, CombatData::special_attacks.append(special_attack), None);
+        world.modify_with_desc(character, CombatData::special_attacks.append(special_attack), None);
         world.add_event(CoreEvent::TimePassed);
 
         {

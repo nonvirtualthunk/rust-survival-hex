@@ -48,6 +48,7 @@ use serde::Serializer;
 use serde::de::SeqAccess;
 use serde::de;
 use serde::de::MapAccess;
+use entity::EntityMetadata;
 
 pub struct ModifiersApplication {
     disable_func: fn(&mut World, ModifierReference),
@@ -57,6 +58,8 @@ pub struct ModifiersApplication {
     remove_entity_func: fn(&mut WorldView, Entity),
     bootstrap_entity_func: fn(&World, &mut WorldView, Entity),
     register_func: fn(&mut WorldView),
+    clone_into_func: fn(&mut World,Entity,Entity),
+    apply_modifier_archetype_func: fn(&mut World, Entity, ModifierReference, Option<String>) -> Option<ModifierReference>,
     registered_at: GameEventClock,
 }
 
@@ -72,7 +75,8 @@ pub enum ModifierReferenceType {
     Sentinel,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// (cross-type modifier clock, reference type, within-type index)
+#[derive(Debug, Clone, Serialize, Deserialize, Copy, PartialEq, Eq)]
 pub struct ModifierReference(pub(crate) usize, pub(crate) ModifierReferenceType, pub(crate) usize);
 
 impl ModifierReference {
@@ -99,6 +103,7 @@ pub struct World {
     pub data: MultiTypeContainer,
     pub modifiers: MultiTypeContainer,
     pub total_modifier_count: ModifierClock,
+    pub total_modifier_archetype_count: ModifierClock,
     pub total_dynamic_modifier_count: ModifierClock,
     pub next_time: GameEventClock,
     pub(crate) events: MultiTypeEventContainer,
@@ -111,6 +116,27 @@ pub struct World {
     pub modifier_application_by_type: hash_map::HashMap<TypeId, ModifiersApplication>,
     #[serde(skip_serializing, skip_deserializing)]
     pub index_applications: Vec<IndexApplication>,
+    #[serde(skip_serializing, skip_deserializing)]
+    pub initialized: bool
+}
+
+pub trait OptionalStringArg {
+    fn into_string_opt(self) -> Option<String>;
+}
+impl OptionalStringArg for &'static str {
+    fn into_string_opt(self) -> Option<String> {
+        Some(String::from(self))
+    }
+}
+impl OptionalStringArg for Option<String> {
+    fn into_string_opt(self) -> Option<String> {
+        self
+    }
+}
+impl OptionalStringArg for String {
+    fn into_string_opt(self) -> Option<String> {
+        Some(self)
+    }
 }
 
 
@@ -124,6 +150,7 @@ impl World {
             data: MultiTypeContainer::new(),
             modifiers: MultiTypeContainer::new(),
             total_modifier_count: 0,
+            total_modifier_archetype_count: 0,
             total_dynamic_modifier_count: 0,
             next_time: 0,
             events: MultiTypeEventContainer::new(),
@@ -144,7 +171,8 @@ impl World {
             modifier_application_by_type: hash_map::HashMap::new(),
             entity_indices: MultiTypeContainer::new(),
             index_applications: vec![],
-            entity_id_counter: 2
+            entity_id_counter: 2,
+            initialized: true
         };
 
         world.register_core_types();
@@ -154,13 +182,15 @@ impl World {
 
     /// must be called after deserializing a world for it to work properly
     pub fn initialize_loaded_world(&mut self){
-        self.initialize_internal_view();
         self.register_core_types();
+        self.initialize_internal_view();
+        self.initialized = true;
     }
 
-    pub(crate) fn register_core_types(&mut self) {
+    pub fn register_core_types(&mut self) {
         self.register_event_type::<CoreEvent>();
         self.register::<DebugData>();
+        self.register::<EntityMetadata>();
     }
 
     pub fn current_time(&self) -> GameEventClock {
@@ -193,22 +223,8 @@ impl World {
     }
 
     pub(crate) fn initialize_internal_view(&mut self) {
-        self.view = UnsafeCell::new(WorldView {
-            entities: vec![],
-            entity_set: HashSet::new(),
-            self_entity: self.self_entity,
-            constant_data: MultiTypeContainer::new(),
-            effective_data: MultiTypeContainer::new(),
-            overlay_data: MultiTypeContainer::new(),
-            current_time: 0,
-            events: MultiTypeEventContainer::new(),
-            modifier_cursor: 0,
-            modifier_indices: hash_map::HashMap::new(),
-            entity_indices: MultiTypeContainer::new(),
-            has_overlay: false,
-        });
-        let mut_view = self.mut_view();
-        self.update_view_to_time_intern(mut_view, self.next_time-1, true);
+        let view = self.view_at_time(self.next_time-1);
+        self.view = UnsafeCell::new(view);
     }
 
     pub fn register<T: EntityData>(&mut self) where T: DeserializeOwned {
@@ -218,6 +234,7 @@ impl World {
         let register_func = |view: &mut WorldView| {
             if view.constant_data.contains::<DataContainer<T>>() {
                 error!("Registered {} twice, that's not good, we're hitting it more often than expected", typename::<T>());
+                error!("\tBacktrace\n{:?}", Backtrace::new());
             }
             view.constant_data.register::<DataContainer<T>>();
             view.effective_data.register::<DataContainer<T>>();
@@ -232,13 +249,14 @@ impl World {
 //                    all_modifiers.dynamic_modifiers.get_mut(index).expect("cannot disable a non-existent modifier").disabled_at = Some(world.next_time);
                 }
                 ModifierReferenceType::Permanent => {
-                    if let Some((index, modifier)) = all_modifiers.modifiers.iter_mut().enumerate().find(|(i, e)| e.modifier_index == modifier_clock) {
-                        modifier.disabled_at = Some(world.next_time);
-                        all_modifiers.modifiers_by_disabled_at.entry(world.next_time).or_insert_with(|| Vec::new()).push(index);
+                    // grab the modifier at the index the reference points to
+                    if let Some(modifier_at_index) = all_modifiers.modifiers.get_mut(index) {
+                        // check to see if this is the correct type (there's one modifier at that index in every T, potentially) by looking at the global modifier clock
+                        if modifier_at_index.modifier_index == modifier_clock {
+                            modifier_at_index.disabled_at = Some(world.next_time);
+                            all_modifiers.modifiers_by_disabled_at.entry(world.next_time).or_insert_with(|| Vec::new()).push(index);
+                        }
                     }
-//                    trace!("Disabling modifier with reference {:?} and marking disabled at to {:?}", modifier_ref, world.next_time);
-//                    let modifier = all_modifiers.modifiers.get_mut(index).expect("cannot disable a non-existent modifier").disabled_at = Some(world.next_time);
-//                    all_modifiers.modifiers_by_disabled_at.entry(world.next_time).or_insert_with(|| Vec::new()).push(index);
                 }
                 ModifierReferenceType::Archetype => { warn!("it makes no sense to attempt to disable a modifier archetype") }
                 ModifierReferenceType::Sentinel => { warn!("removing a sentinel reference is a no-op") }
@@ -421,6 +439,13 @@ impl World {
             }
         };
 
+        let clone_into_func = |world: &mut World, from : Entity, to: Entity| {
+            let from_data = world.view().data::<T>(from).clone();
+            world.attach_data(to, from_data);
+        };
+
+
+        let eff_registration_time = if self.initialized { self.next_time } else { 0 };
         self.modifier_application_by_type.insert(TypeId::of::<T>(), ModifiersApplication {
             disable_func: (disable_func),
             reset_func: (reset_func),
@@ -429,10 +454,14 @@ impl World {
             remove_entity_func,
             bootstrap_entity_func,
             register_func,
-            registered_at: self.next_time,
+            registered_at: eff_registration_time,
+            clone_into_func,
+            apply_modifier_archetype_func: World::apply_modifier_archetype_typed::<T>
         });
 
-        self.add_event(DataRegistered);
+        if self.initialized {
+            self.add_event(DataRegistered);
+        }
     }
 
     /// Returns a view of this world that will be kept continuously up to date
@@ -472,6 +501,17 @@ impl World {
         self.update_view_to_time_intern(&mut new_view, at_time, true);
 
         new_view
+    }
+
+    pub fn clone_entity(&mut self, entity : Entity) -> Entity {
+        let new_entity = self.create_entity();
+        let clone_funcs = self.modifier_application_by_type.values().map(|m| m.clone_into_func).collect_vec();
+        for clone_func in clone_funcs {
+            (clone_func)(self, entity, new_entity);
+        }
+        self.attach_data(new_entity, EntityMetadata { cloned_from : Some(new_entity) });
+        self.add_entity(new_entity);
+        new_entity
     }
 
     pub fn update_view_to_time(&self, view: &mut WorldView, at_time: GameEventClock) {
@@ -628,24 +668,66 @@ impl World {
         index.index.insert(key, entity);
     }
 
-    pub fn modify<T: EntityData, S: Into<Option<Str>>>(&mut self, entity: Entity, modifier: Box<Modifier<T>>, description: S) -> ModifierReference {
+
+    pub fn modify<T: EntityData>(&mut self, entity: Entity, modifier: Box<Modifier<T>>) -> ModifierReference {
+        self.add_modifier(entity, modifier, None)
+    }
+
+    pub fn modify_with_desc<T: EntityData, S: OptionalStringArg>(&mut self, entity: Entity, modifier: Box<Modifier<T>>, description: S) -> ModifierReference {
         self.add_modifier(entity, modifier, description)
     }
-    pub fn modify_world<T: EntityData, S: Into<Option<Str>>>(&mut self, modifier: Box<Modifier<T>>, description: S) -> ModifierReference {
+    pub fn modify_world<T: EntityData, S: OptionalStringArg>(&mut self, modifier: Box<Modifier<T>>, description: S) -> ModifierReference {
         self.add_world_modifier(modifier, description)
     }
 
-    pub fn add_modifier<T: EntityData, S: Into<Option<Str>>>(&mut self, entity: Entity, modifier: Box<Modifier<T>>, description: S) -> ModifierReference {
+    pub fn apply_modifier_archetype<S: OptionalStringArg>(&mut self, entity: Entity, modifier_ref : ModifierReference, description: S) -> ModifierReference {
+        let description : Option<String> = description.into_string_opt();
+        for apply_arch in self.modifier_application_by_type.values().map(|m| m.apply_modifier_archetype_func).collect_vec() {
+            if let Some(mod_ref) = (apply_arch)(self, entity, modifier_ref.clone(), description.clone()) {
+                return mod_ref;
+            }
+        }
+        warn!("Unable to apply modifier archetype, ref was {:?}", modifier_ref);
+        ModifierReference::sentinel()
+    }
+
+    fn apply_modifier_archetype_typed<T : EntityData>(world : &mut World, entity: Entity, modifier_ref : ModifierReference, description: Option<String>) -> Option<ModifierReference> {
+        let mut modifier_to_add: Option<Rc<Modifier<T>>> = None;
+        let all_modifiers: &mut ModifiersContainer<T> = world.modifiers.get_mut::<ModifiersContainer<T>>();
+        let ModifierReference(modifier_clock, modifier_type, index) = modifier_ref;
+        match modifier_type {
+            ModifierReferenceType::Archetype => {
+                // grab the modifier at the index the reference points to
+                if let Some(modifier_at_index) = all_modifiers.modifier_archetypes.get(index) {
+                    // check to see if this is the correct type (there's one modifier at that index in every T, potentially) by looking at the global modifier clock
+                    if modifier_at_index.modifier_index == modifier_clock {
+                        let modifier : Rc<Modifier<T>> = modifier_at_index.modifier.clone();
+                        modifier_to_add = Some(modifier);
+                    }
+                }
+            },
+            _ => warn!("Cannot apply a non-archetype modifier reference as an archetype")
+        }
+
+        if let Some(modifier_to_add) = modifier_to_add {
+            Some(world.add_modifier(entity, modifier_to_add, description))
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn add_modifier<T: EntityData, S: OptionalStringArg, RMT: Into<Rc<Modifier<T>>>>(&mut self, entity: Entity, modifier: RMT, description: S) -> ModifierReference {
         let all_modifiers: &mut ModifiersContainer<T> = self.modifiers.get_mut::<ModifiersContainer<T>>();
+        let modifier = modifier.into();
         if modifier.modifier_type() == ModifierType::Dynamic {
             let index = all_modifiers.dynamic_modifiers.len();
             all_modifiers.dynamic_modifiers.push(ModifierContainer {
-                modifier: modifier.into(),
+                modifier,
                 applied_at: self.next_time,
                 disabled_at: None,
                 modifier_index: self.total_dynamic_modifier_count,
                 entity,
-                description: description.into().map(|s| String::from(s)),
+                description: description.into_string_opt(),
             });
             all_modifiers.dynamic_entity_set.insert(entity);
             self.total_dynamic_modifier_count += 1;
@@ -653,17 +735,25 @@ impl World {
         } else {
             let index = all_modifiers.modifiers.len();
             all_modifiers.modifiers.push(ModifierContainer {
-                modifier: modifier.into(),
+                modifier,
                 applied_at: self.next_time,
                 disabled_at: None,
                 modifier_index: self.total_modifier_count,
                 entity,
-                description: description.into().map(|s| String::from(s)),
+                description: description.into_string_opt(),
             });
             trace!("Creating modifier with count {}, incrementing", self.total_modifier_count);
             self.total_modifier_count += 1;
             ModifierReference(self.total_modifier_count - 1, ModifierReferenceType::Permanent, index)
         }
+    }
+
+    #[must_use]
+    pub fn register_modifier_archetype<T: EntityData,RMT: Into<Rc<Modifier<T>>>>(&mut self, modifier: RMT) -> ModifierReference {
+        let all_modifiers: &mut ModifiersContainer<T> = self.modifiers.get_mut::<ModifiersContainer<T>>();
+        let clock = self.total_modifier_archetype_count;
+        self.total_modifier_archetype_count += 1;
+        all_modifiers.register_modifier_archetype(modifier.into(), clock)
     }
 
     pub fn disable_modifier(&mut self, modifier_ref: ModifierReference) {
@@ -674,9 +764,9 @@ impl World {
 //        (application_capabilities.disable_func)(self, modifier_ref);
     }
 
-    pub fn add_world_modifier<T: EntityData, S: Into<Option<Str>>>(&mut self, modifier: Box<Modifier<T>>, description: S) -> ModifierReference {
+    pub fn add_world_modifier<T: EntityData, S: OptionalStringArg>(&mut self, modifier: Box<Modifier<T>>, description: S) -> ModifierReference {
         let tmp = self.self_entity;
-        self.add_modifier::<T, Option<Str>>(tmp, modifier, description.into())
+        self.add_modifier(tmp, modifier, description.into_string_opt())
     }
 
 //    pub fn add_constant_modifier<T: EntityData, CM: ConstantModifier<T> + 'static>(&mut self, entity: Entity, constant_modifier: CM) {

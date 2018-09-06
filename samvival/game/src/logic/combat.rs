@@ -1,3 +1,4 @@
+use common::prelude::ExtendedCollection;
 use game::world::World;
 use game::world::WorldView;
 use game::Entity;
@@ -32,6 +33,7 @@ use data::entities::combat::CombatData;
 use cgmath::InnerSpace;
 use common::hex::CartVec;
 use game::reflect::*;
+use logic::breakdown::Breakdown;
 use prelude::*;
 
 pub enum StrikeIndex {
@@ -54,31 +56,6 @@ impl AttackBreakdown {
     pub fn add_counter(&mut self, counter: StrikeBreakdown) {
         self.counters.push(counter);
         self.ordering.push(StrikeIndex::Counter(self.counters.len() - 1));
-    }
-}
-
-#[derive(Default)]
-pub struct Breakdown<T: Default> {
-    pub total: T,
-    pub components: Vec<(String, String)>,
-}
-
-impl<T: Default> Breakdown<T> where T: ops::Add<Output=T> + Copy + ToStringWithSign {
-    pub fn add_field<S1: Into<String>, E: EntityData, U: ToStringWithSign + Clone>(&mut self, net_value: T, logs: &FieldLogs<E>, field: &'static Field<E, U>, descriptor: S1) {
-        self.total = self.total + net_value;
-        let base_value = (field.getter)(&logs.base_value);
-        let base_value_str = base_value.to_string_with_sign();
-        self.components.push((base_value_str, format!("base {}", descriptor.into())));
-        for field_mod in logs.modifications_for(field) {
-            let mut modification_str = field_mod.modification.to_string();
-            modification_str.retain(|c| !c.is_whitespace());
-            self.components.push((modification_str, field_mod.description.clone().unwrap_or_else(||String::from(""))))
-        }
-    }
-
-    pub fn add<S1: Into<String>>(&mut self, value: T, descriptor: S1) {
-        self.total = self.total + value;
-        self.components.push((value.to_string_with_sign(), descriptor.into()));
     }
 }
 
@@ -322,8 +299,8 @@ pub fn handle_attack(world: &mut World, attacker: Entity, defender_ref: Entity, 
             i if i <= 1 => Skill::Melee,
             _ => Skill::Ranged
         };
-        world.modify(attacker, SkillData::skill_xp.add_to_key(attack_skill_type, 1), None);
-        world.modify(attacker, CharacterData::stamina.reduce_by(Sext::of(1)), None);
+        world.modify_with_desc(attacker, SkillData::skill_xp.add_to_key(attack_skill_type, 1), None);
+        world.modify_with_desc(attacker, CharacterData::stamina.reduce_by(Sext::of(1)), None);
 
         world.end_event(GameEvent::Attack { attacker: attacker, defender: defender_ref });
 
@@ -366,10 +343,6 @@ pub fn handle_strike(world: &mut World, attacker_ref: Entity, primary_defender: 
     let attacker = view.character(attacker_ref);
     let attacker_combat = view.combat(attacker_ref);
     let attacker_skills = view.skills(attacker_ref);
-
-    // reduce the actions available to the attacker by the cost of the attack, regardless of how the attack goes
-    world.add_modifier(attacker_ref, CharacterData::action_points.reduce_by(strike.ap_cost_total() as i32), "attack");
-
 
     let mut strike_results = HashMap::new();
 
@@ -422,7 +395,10 @@ pub fn handle_strike(world: &mut World, attacker_ref: Entity, primary_defender: 
             }
         }
 
-        if strike_results.non_empty() {
+        if !strike_results.is_empty() {
+            // reduce the actions available to the attacker by the cost of the attack, regardless of how the attack goes
+            world.modify_with_desc(attacker_ref, CharacterData::action_points.reduce_by(strike.ap_cost_total() as i32), "attack");
+
             let defenders = strike.per_target_breakdowns.map(|t| t.target);
             let strike_event = GameEvent::Strike {
                 attacker : attacker_ref,
@@ -437,7 +413,7 @@ pub fn handle_strike(world: &mut World, attacker_ref: Entity, primary_defender: 
                     logic::character::apply_damage_to_character(world, *target, strike_result.damage_done as u32, &strike_result.damage_types);
                 }
             }
-            world.modify(attacker_ref, MovementData::moves.set_to(Sext::of(0)), None);
+            world.modify_with_desc(attacker_ref, MovementData::moves.set_to(Sext::of(0)), None);
 
             world.end_event(strike_event);
         }

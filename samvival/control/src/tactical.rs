@@ -307,9 +307,9 @@ impl TacticalMode {
         let character_refs = world_view.entities_with_data::<CharacterData>();
 
         for (cref, cdat) in character_refs {
-            world.modify(*cref, MovementData::moves.set_to(Sext::of(0)), None);
-            world.modify(*cref, CharacterData::action_points.reset(), None);
-            world.modify(*cref, CharacterData::stamina.recover_by(cdat.stamina_recovery), None);
+            world.modify_with_desc(*cref, MovementData::moves.set_to(Sext::of(0)), None);
+            world.modify_with_desc(*cref, CharacterData::action_points.reset(), None);
+            world.modify_with_desc(*cref, CharacterData::stamina.recover_by(cdat.stamina_recovery), None);
         }
 
         let turn_number = current_turn + 1;

@@ -309,13 +309,13 @@ impl TacticalGui {
                     },
                     TacticalEvents::AttackSelected(attack_ref) => {
                         println!("Attack selected");
-                        world.modify(selected, CombatData::active_attack.set_to(attack_ref.clone()), "attack selected");
+                        world.modify_with_desc(selected, CombatData::active_attack.set_to(attack_ref.clone()), "attack selected");
                         world.add_event(GameEvent::SelectedAttackChanged { entity : selected, attack_ref : attack_ref.clone() });
                     },
                     TacticalEvents::CounterattackSelected(attack_ref) => {
                         println!("Counter selected");
                         if logic::combat::is_valid_counter_attack(world, selected, attack_ref) {
-                            world.modify(selected, CombatData::active_counterattack.set_to(attack_ref.clone()), "counter-attack selected");
+                            world.modify_with_desc(selected, CombatData::active_counterattack.set_to(attack_ref.clone()), "counter-attack selected");
                             world.add_event(GameEvent::SelectedCounterattackChanged { entity : selected, attack_ref : attack_ref.clone() });
                         } else {
                             self.messages_display.add_message(Message::new("Only melee attacks can be used as counter-attacks, reach and ranged cannot."));
@@ -323,7 +323,7 @@ impl TacticalGui {
                     },
                     TacticalEvents::ReactionSelected(reaction_type) => {
                         println!("Selected reaction type : {:?}", reaction_type);
-                        world.modify(selected, ActionData::active_reaction.set_to(reaction_type.clone()), "reaction selected");
+                        world.modify_with_desc(selected, ActionData::active_reaction.set_to(reaction_type.clone()), "reaction selected");
                         world.add_event(GameEvent::SelectedReactionChanged { entity : selected, reaction_type : reaction_type.clone() });
                     },
                     TacticalEvents::ItemTransferRequested { item , from, to } => {
@@ -341,7 +341,7 @@ impl TacticalGui {
                                         logic::item::unequip_item(world, *item, *from, true);
                                     }
                                     logic::item::remove_item_from_inventory(world, *item, *from);
-                                    logic::item::put_item_in_inventory(world, *item, *single_to);
+                                    logic::item::put_item_in_inventory(world, *item, *single_to, false);
                                 } else {
                                     error!("Could not transfer, item no longer in source");
                                 }

@@ -46,10 +46,7 @@ pub fn character_archetypes() -> ArchetypeLibrary {
                     verb: None,
                     attack_type: AttackType::Melee,
                     ap_cost: 3,
-                    damage_dice: DicePool {
-                        die: 1,
-                        count: 1,
-                    },
+                    damage_dice: DicePool::of(1,1),
                     damage_bonus: 0,
                     to_hit_bonus: 0,
                     primary_damage_type: DamageType::Bludgeoning,
@@ -84,10 +81,7 @@ pub fn character_archetypes() -> ArchetypeLibrary {
                     vec![&taxonomy::attacks::NaturalAttack, &taxonomy::attacks::BludgeoningAttack, &taxonomy::attacks::MeleeAttack],
                     Attack {
                         name: strf("slam"),
-                        damage_dice: DicePool {
-                            count: 1,
-                            die: 4,
-                        },
+                        damage_dice: DicePool::of(1,4),
                         ..Default::default()
                     })],
             ..Default::default()

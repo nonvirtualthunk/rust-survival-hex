@@ -14,7 +14,7 @@ use logic;
 
 /// should be called after a character has taken damage
 pub fn apply_damage_to_character(world : &mut World, character : Entity, damage_amount : u32, damage_types : &[DamageType]) {
-    world.modify(character, CharacterData::health.reduce_by(damage_amount as i32), "attack damage");
+    world.modify_with_desc(character, CharacterData::health.reduce_by(damage_amount as i32), "attack damage");
 
     world.add_event(GameEvent::DamageTaken { entity : character, damage_taken : damage_amount, damage_types : Vec::from(damage_types) });
 

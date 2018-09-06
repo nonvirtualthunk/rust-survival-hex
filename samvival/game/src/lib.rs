@@ -35,6 +35,7 @@ extern crate ron;
 
 extern crate num;
 extern crate cgmath;
+extern crate winit;
 
 pub mod world_util;
 

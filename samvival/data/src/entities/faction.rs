@@ -7,7 +7,7 @@ use common::Color;
 use common::reflect::*;
 use game::entity;
 
-#[derive(Clone, Default, Debug, Serialize, Deserialize, PrintFields)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, Fields)]
 pub struct FactionData {
     pub name : String,
     pub color : Color,

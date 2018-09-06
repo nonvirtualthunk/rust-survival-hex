@@ -84,6 +84,11 @@ impl EntityBuilder {
         self
     }
 
+    pub fn without<T: EntityData>(mut self) -> Self {
+        self.initializations_by_type_id.remove(&TypeId::of::<T>());
+        self
+    }
+
     pub fn with_creator<T: EntityData, F : Fn(&mut World) -> T + 'static>(mut self, new_data_func: F) -> Self {
         self.initializations_by_type_id.insert(TypeId::of::<T>(), Rc::new(move |world: &mut World, entity: Entity| {
             let new_data = (new_data_func)(world);
@@ -107,9 +112,17 @@ use super::entity;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-#[derive(Clone,Debug,Default,Serialize, Deserialize, PrintFields)]
+#[derive(Clone,Debug,Default,Serialize, Deserialize, Fields)]
 pub struct DebugData {
     pub name : String
 }
 impl DebugData { pub const name : Field < DebugData , String > = Field :: new ( stringify ! ( name ) , | t | & t . name , | t | & mut t . name , | t , v | { t . name = v ; } ) ; }
 impl EntityData for DebugData {}
+
+
+
+#[derive(Clone,Debug,Default,Serialize, Deserialize, Fields)]
+pub struct EntityMetadata {
+    pub cloned_from : Option<Entity>
+}
+impl EntityData for EntityMetadata {}

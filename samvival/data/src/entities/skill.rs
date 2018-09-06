@@ -5,7 +5,7 @@ use enum_map::EnumMap;
 use std::collections::HashMap;
 use game::entity;
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PrintFields)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, Fields)]
 pub struct SkillData {
     pub skill_bonuses: HashMap<Skill, i32>,
     pub skill_xp : HashMap<Skill, i32>
@@ -23,19 +23,8 @@ impl SkillDataStore for WorldView {
 }
 
 impl SkillData {
-    pub fn skill_level(&self, skill : Skill) -> i32 {
-        self.skill_bonuses.get(&skill).unwrap_or(&0) + Skill::level_for_xp(self.cur_skill_xp(skill))
-    }
     pub fn cur_skill_xp(&self, skill : Skill) -> i32 {
         *self.skill_xp.get(&skill).unwrap_or(&0)
-    }
-
-    pub fn skill_levels(&self) -> Vec<(Skill, i32)> {
-        let mut res = Vec::new();
-        for (skill,xp) in &self.skill_xp {
-            res.push((*skill, self.skill_level(*skill)));
-        }
-        res
     }
 }
 
@@ -51,7 +40,11 @@ pub enum Skill {
     MountainSurvival = 3,
     ForestSurvival = 4,
     FireMagic = 5,
-    IceMagic = 6
+    IceMagic = 6,
+    Farming = 7,
+    Axe = 8,
+    Spear = 9,
+    Sword = 10,
 }
 
 impl Skill {
@@ -76,7 +69,7 @@ pub struct SkillInfo {
     pub skill_type : Skill
 }
 
-static SKILL_INFO : [SkillInfo ; 7] = [
+static SKILL_INFO : [SkillInfo ; 11] = [
     SkillInfo {
         name : "Dodge",
         skill_type : Skill::Dodge
@@ -104,7 +97,23 @@ static SKILL_INFO : [SkillInfo ; 7] = [
     SkillInfo {
         name : "Ice Magic",
         skill_type : Skill::IceMagic
-    }
+    },
+    SkillInfo {
+        name : "Farming",
+        skill_type : Skill::Farming
+    },
+    SkillInfo {
+        name : "Axe",
+        skill_type : Skill::Axe
+    },
+    SkillInfo {
+        name : "Spear",
+        skill_type : Skill::Spear
+    },
+    SkillInfo {
+        name : "Sword",
+        skill_type : Skill::Sword
+    },
 ];
 
 pub fn skill_info(for_skill : Skill) -> &'static SkillInfo {

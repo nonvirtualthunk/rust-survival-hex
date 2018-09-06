@@ -10,6 +10,7 @@
 #![feature(extern_prelude)]
 #![feature(const_fn)]
 #![feature(type_ascription)]
+#![feature(const_vec_new)]
 
 extern crate arx_common as common;
 extern crate either;
@@ -31,6 +32,7 @@ extern crate noise;
 #[macro_use] extern crate serde_derive;
 #[macro_use] extern crate serde;
 extern crate ron;
+extern crate regex;
 
 extern crate num;
 extern crate cgmath;

@@ -2,8 +2,8 @@ use prelude::CharacterData;
 use entity_util::position_of;
 use logic;
 use prelude::IdentityData;
-use data::entities::selectors::EntitySelectors;
-use data::entities::selectors::EntitySelectors::*;
+use data::entities::selectors::EntitySelector;
+use data::entities::selectors::EntitySelector::*;
 use data::entities::*;
 use game::prelude::*;
 
@@ -13,7 +13,7 @@ pub trait SelectorMatches {
 
 
 use common::ExtendedCollection;
-impl SelectorMatches for EntitySelectors {
+impl SelectorMatches for EntitySelector {
     fn matches(&self, world: &WorldView, entity: Entity) -> bool {
         match self {
             IsCharacter => world.has_data::<CharacterData>(entity),
@@ -38,13 +38,14 @@ impl SelectorMatches for EntitySelectors {
             HasStamina(stam) => world.data_opt::<CharacterData>(entity).map(|c| c.stamina.cur_value() >= *stam).unwrap_or(false),
             HasAP(ap) => world.data_opt::<CharacterData>(entity).map(|c| c.action_points.cur_value() >= *ap).unwrap_or(false),
             HasEquipmentKind(taxon) => {
-                let sub_selector = EntitySelectors::IsA(taxon.clone());
+                let sub_selector = EntitySelector::IsA(taxon.clone());
                 world.data_opt::<EquipmentData>(entity).map(|ed| ed.equipped.iter().any(|eq| sub_selector.matches(world, *eq))).unwrap_or(false)
             },
             HasAttackKind(taxon) => {
-                let sub_selector = EntitySelectors::IsA(taxon.clone());
+                let sub_selector = EntitySelector::IsA(taxon.clone());
                 logic::combat::possible_attack_refs(world, entity).iter().any(|eq| sub_selector.matches(world, eq.attack_entity))
             },
+            HasSkillLevel(skill, level) => logic::skill::skill_level(world, entity, *skill) >= *level,
             IsA(taxon) => world.data_opt::<IdentityData>(entity).filter(|i| i.kinds.any_match(|k| k.is_a(&taxon))).is_some(),
             And(a,b) => a.matches(world, entity) && b.matches(world, entity),
             Or(a,b) => a.matches(world, entity) || b.matches(world, entity),
