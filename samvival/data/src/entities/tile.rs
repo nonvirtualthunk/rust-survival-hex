@@ -11,19 +11,43 @@ use common::string::IStr;
 use entities::effects::*;
 use entities::EntitySelector;
 use game::DicePool;
+use game::EntityIndex;
+use game::DataView;
+use std::collections::HashMap;
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize, Fields)]
 pub struct TileData {
-    pub main_terrain_name: String,
-    pub secondary_terrain_name: Option<String>,
+    pub name_modifiers: Vec<String>,
+    pub position: AxialCoord,
+    pub occupied_by: Option<Entity>,
+}
+impl EntityData for TileData {}
+
+#[derive(Clone, Default, Debug, Serialize, Deserialize, Fields)]
+pub struct TerrainData {
+    pub fertility: i8,
+    pub cover: i8,
+    pub elevation: i8,
     pub position: AxialCoord,
     pub move_cost: Sext,
-    pub cover: i8,
     pub occupied_by: Option<Entity>,
-    pub elevation: i8,
+    pub harvestables: HashMap<String, Entity>,
+    pub kind : Taxon,
+}
+impl EntityData for TerrainData {
+    fn nested_entities(&self) -> Vec<Entity> { self.harvestables.values().cloned().collect_vec() }
 }
 
-impl EntityData for TileData {}
+#[derive(Clone, Default, Debug, Serialize, Deserialize, Fields)]
+pub struct VegetationData {
+    pub cover: i8,
+    pub move_cost: Sext,
+    pub harvestables: HashMap<String, Entity>,
+    pub kind : Taxon,
+}
+impl EntityData for VegetationData {
+    fn nested_entities(&self) -> Vec<Entity> { self.harvestables.values().cloned().collect_vec() }
+}
 
 
 pub trait TileStore {
@@ -31,6 +55,8 @@ pub trait TileStore {
     fn tile_opt(&self, coord: AxialCoord) -> Option<&TileData>;
     fn tile_ent(&self, coord: AxialCoord) -> TileEntity;
     fn tile_ent_opt(&self, coord: AxialCoord) -> Option<TileEntity>;
+    fn terrain(&self, coord: AxialCoord) -> &TerrainData;
+    fn vegetation(&self, coord: AxialCoord) -> &VegetationData;
 }
 
 impl TileStore for WorldView {
@@ -43,20 +69,32 @@ impl TileStore for WorldView {
         self.entity_by_key(&coord).map(|e| self.data::<TileData>(e))
     }
 
+    fn terrain(&self, coord: AxialCoord) -> &TerrainData {
+        let tile_ent = self.entity_by_key(&coord).expect("Tile is expected to exist");
+        self.data::<TerrainData>(tile_ent)
+    }
+    fn vegetation(&self, coord: AxialCoord) -> &VegetationData {
+        let tile_ent = self.entity_by_key(&coord).expect("Tile is expected to exist");
+        self.data::<VegetationData>(tile_ent)
+    }
+
     fn tile_ent(&self, coord: AxialCoord) -> TileEntity {
         self.tile_ent_opt(coord).expect("tile is expected to exist")
     }
 
     fn tile_ent_opt(&self, coord: AxialCoord) -> Option<TileEntity> {
         if let Some(entity) = self.entity_by_key(&coord) {
-            Some(TileEntity { entity, data: self.data::<TileData>(entity), harvest_data: self.data_opt::<HarvestableData>(entity) })
+            Some(TileEntity { entity, data: self.data::<TileData>(entity) })
         } else {
             None
         }
     }
 }
 
-pub struct TileEntity<'a> { pub entity: Entity, pub data: &'a TileData, pub harvest_data: Option<&'a HarvestableData> }
+pub struct TileEntity<'a> {
+    pub entity: Entity,
+    pub data: &'a TileData,
+}
 
 impl<'a> Deref for TileEntity<'a> {
     type Target = TileData;
@@ -66,13 +104,6 @@ impl<'a> Deref for TileEntity<'a> {
     }
 }
 
-
-#[derive(Default, Clone, Debug, Serialize, Deserialize, Fields)]
-pub struct HarvestableData {
-    pub harvestables: HashMap<String, Entity>
-}
-
-impl EntityData for HarvestableData {}
 
 pub trait IntoHarvestable {
     fn harvestable_data<'a>(&'a self, world: &'a WorldView) -> &'a Harvestable;
@@ -88,21 +119,49 @@ impl IntoHarvestable for Entity {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, Fields)]
+pub struct RenewRate {
+    pub fertility_dependent : bool,
+    pub season_multipliers : HashMap<Season, f32>,
+    pub rate : Sext
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum DepletionBehavior {
+    None, // do nothing when depleted
+    Remove, // remove this harvestable when it is depleted
+    RemoveLayer, // remove the entire layer this harvestable comes from (i.e. chopping down a forest)
+    Custom(Vec<EffectReference>)
+}
+impl Default for DepletionBehavior { fn default() -> Self { DepletionBehavior::None } }
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ToolUse {
+    None, // does not use a tool
+    Required, // must have a tool in order to harvest at all
+    DifficultWithout { amount_limit : Option<i32>, ap_increase : Option<i32> }, // difficult to gather without a tool,
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, Fields)]
 pub struct Harvestable {
     pub ap_per_harvest: i32,
+    // if provided, indicates that this harvestable should have an effect on the name
+    // of a tile that contains it
+    pub name_modifiers: Vec<String>,
     pub amount: Reduceable<Sext>,
     pub dice_amount_per_harvest: DicePool,
     pub fixed_amount_per_harvest: i32,
-    pub renew_rate: Option<Sext>,
+    pub renew_rate: Option<RenewRate>,
     pub resource: Entity,
-    pub on_depletion_effects: Vec<EffectReference>,
+    pub on_depletion: DepletionBehavior,
     pub action_name: String,
     pub tool: EntitySelector,
-    pub requires_tool: bool,
+    pub tool_use: ToolUse,
     pub skills_used: Vec<Skill>,
     pub character_requirements: EntitySelector,
+}
+impl Harvestable {
+    pub fn requires_tool(&self) -> bool { self.tool_use == ToolUse::Required }
 }
 
 impl EntityData for Harvestable {}
@@ -111,20 +170,48 @@ impl Default for Harvestable {
     fn default() -> Self {
         Harvestable {
             amount: Reduceable::new(Sext::of(0)),
+            name_modifiers: Vec::new(),
             ap_per_harvest: 1,
-            dice_amount_per_harvest: DicePool::of(1, 1),
+            dice_amount_per_harvest: DicePool::none(),
             fixed_amount_per_harvest: 0,
             renew_rate: None,
             resource: Entity::sentinel(),
-            on_depletion_effects: Vec::new(),
+            on_depletion: DepletionBehavior::None,
             action_name: strf("Sentinel"),
-            tool: EntitySelector::Any,
-            requires_tool: false,
+            tool: EntitySelector::None,
+            tool_use: ToolUse::None,
             skills_used: Vec::new(),
             character_requirements: EntitySelector::Any,
         }
     }
 }
+
+
+pub struct TileAccessor<'a> {
+    index : &'a EntityIndex<AxialCoord>,
+    tiles : DataView<'a, TileData>,
+    terrain : DataView<'a, TerrainData>,
+    vegetation : DataView<'a, VegetationData>,
+}
+
+impl <'a> TileAccessor<'a> {
+    pub fn new(from : &'a WorldView) -> TileAccessor<'a> {
+        TileAccessor {
+            index : from.entity_index::<AxialCoord>(),
+            tiles : from.all_data_of_type::<TileData>(),
+            terrain : from.all_data_of_type::<TerrainData>(),
+            vegetation : from.all_data_of_type::<VegetationData>(),
+        }
+    }
+    pub fn tile_opt(&self, pos : AxialCoord) -> Option<TileEntity> {
+        self.index.get(&pos).map(|entity| TileEntity { entity : *entity, data : self.tiles.data(*entity) })
+    }
+    pub fn terrain(&'a self, ent : &TileEntity) -> &'a TerrainData { self.terrain.data(ent.entity) }
+    pub fn terrain_at(&'a self, pos : AxialCoord) -> &'a TerrainData { self.index.get(&pos).map(|ent| self.terrain.data(*ent)).unwrap_or(self.terrain.sentinel()) }
+    pub fn vegetation(&'a self, ent : &TileEntity) -> &'a VegetationData { self.vegetation.data(ent.entity) }
+    pub fn vegetation_opt(&'a self, ent : &TileEntity) -> Option<&'a VegetationData> { self.vegetation.data_opt(ent.entity) }
+}
+
 //impl Harvestable {
 //    pub fn simple<S : Into<String>>(action_name: S, amount : i32, renew_rate : Option<Sext>, resource : Entity,
 //                                    on_depletion : Option<EffectReference>, tool : EntitySelector, requires_tool : bool,
@@ -148,8 +235,10 @@ pub struct ConstantResources {
     pub straw: Entity,
     pub wood: Entity,
     pub iron: Entity,
-    pub stone: Entity,
+    pub quarried_stone: Entity,
+    pub loose_stone: Entity,
     pub fruit: Entity,
+    pub dirt: Entity,
 }
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize, Fields)]
@@ -177,7 +266,11 @@ pub struct Material {
     pub ductile: bool,
     pub cordable: bool,
     pub magnetic: bool,
-    pub stack_limit: i32,
+    // Quality measures are relative to what their other stats would normally indicate, so
+    // they are an after-the-fact modifier, not the core determinator of how good something made
+    // from this will be
+    pub item_quality: i32, // centered at 0, -8 is very bad quality, +8 is very good quality
+    pub building_quality: i32, // as above
 
 }
 
@@ -187,7 +280,6 @@ impl EntityData for Material {}
 use entities::common_entities::taxonomy;
 use entities::common_entities::taxon;
 use entities::common_entities::taxon_vec;
-use std::collections::HashMap;
 use game::World;
 use game::EntityBuilder;
 use entities::common_entities::IdentityData;
@@ -207,6 +299,8 @@ use entities::combat::create_attack;
 use entities::combat::Attack;
 use entities::combat::DamageType;
 use entities::combat::AttackType;
+use entities::item::ToolData;
+use entities::time::Season;
 //impl Modifier<Resources> for InitResourcesModifier {
 //    fn modify(&self, data: &mut Resources, world: &WorldView) {
 //        *data = self.resources.clone()
@@ -257,9 +351,9 @@ impl Resources {
                                           ap_cost: 4,
                                           ..Default::default()
                                       })],
-                    tool_speed_bonus: 1,
                     ..Default::default()
                 })
+                .with(ToolData { tool_speed_bonus: 1, ..Default::default() })
                 .with(IdentityData::of_kinds(vec![
                     &taxonomy::resources::Wood,
                     &taxonomy::tools::Rod,
@@ -275,7 +369,6 @@ impl Resources {
                     density: 6,
                     ductile: true,
                     magnetic: true,
-                    stack_limit: 3,
                     ..Default::default()
                 })
                 .with(ItemData { stack_limit: 3, ..Default::default() })
@@ -283,15 +376,43 @@ impl Resources {
                 .create(world);
         }
 
-        if main.stone.is_sentinel() {
-            main.stone = EntityBuilder::new()
+        if main.quarried_stone.is_sentinel() {
+            main.quarried_stone = EntityBuilder::new()
                 .with(Material {
                     hardness: 6,
                     density: 5,
+                    item_quality : 1,
+                    building_quality : 1,
                     ..Default::default()
                 })
                 .with(ItemData { stack_limit: 1, ..Default::default() })
-                .with(IdentityData::of_kind(&taxonomy::resources::Stone))
+                .with(IdentityData::of_kind(&taxonomy::resources::QuarriedStone))
+                .create(world);
+        }
+
+        if main.loose_stone.is_sentinel() {
+            main.loose_stone = EntityBuilder::new()
+                .with(Material {
+                    hardness: 6,
+                    density: 5,
+                    item_quality: 0, // loose rocks are ok for making itmes out of
+                    building_quality: -4, // but they're not very good for making buildings
+                    ..Default::default()
+                })
+                .with(ItemData { stack_limit: 3, ..Default::default() })
+                .with(IdentityData::of_kind(&taxonomy::resources::LooseStone))
+                .create(world)
+        }
+
+        if main.dirt.is_sentinel() {
+            main.dirt = EntityBuilder::new()
+                .with(Material {
+                    density: 3,
+                    hardness: 3,
+                    ..Default::default()
+                })
+                .with(ItemData { stack_limit: 2, ..Default::default() })
+                .with(IdentityData::of_kind(&taxonomy::resources::Dirt))
                 .create(world);
         }
 

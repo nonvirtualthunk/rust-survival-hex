@@ -40,6 +40,10 @@ version = "0.1.0"
 path = "samvival/game"
 version = "0.1.0"
 
+[dependencies.samvival_ai]
+path = "samvival/ai"
+version = "0.1.0"
+
 [dependencies.arx_graphics]
 path = "arx_graphics"
 version = "0.1.0"

@@ -18,6 +18,12 @@ type EntityId = usize;
 #[derive(Clone, Copy, Debug, Ord, PartialOrd, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub struct Entity(pub EntityId);
 
+//#[derive(Clone, Copy, Debug, Ord, PartialOrd, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+//pub struct TypedEntity<T : EntityData>(Entity);
+//impl <T: EntityData> TypedEntity<T> {
+//    pub fn resolve(&self, world: &WorldView) -> T { world.data::<T>(self.0) }
+//}
+
 impl fmt::Display for Entity {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Ent({})", self.0)
@@ -83,6 +89,11 @@ impl EntityBuilder {
         }));
         self
     }
+    pub fn with_opt<T: EntityData>(self, new_data_opt : Option<T>) -> Self {
+        if let Some(new_data) = new_data_opt {
+            self.with(new_data)
+        } else { self }
+    }
 
     pub fn without<T: EntityData>(mut self) -> Self {
         self.initializations_by_type_id.remove(&TypeId::of::<T>());
@@ -126,3 +137,4 @@ pub struct EntityMetadata {
     pub cloned_from : Option<Entity>
 }
 impl EntityData for EntityMetadata {}
+impl EntityMetadata { pub const cloned_from : Field < EntityMetadata , Option < Entity > > = Field :: new ( stringify ! ( cloned_from ) , | t | & t . cloned_from , | t | & mut t . cloned_from , | t , v | { t . cloned_from = v ; } ) ; }

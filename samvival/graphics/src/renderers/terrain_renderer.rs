@@ -7,6 +7,7 @@ use game::entities::*;
 
 use game::core::GameEventClock;
 
+use heck::SnakeCase;
 
 use common::hex::CubeCoord;
 use common::hex::CartVec;
@@ -40,6 +41,8 @@ impl TerrainRenderer {
             let corner = AxialCoord::from_cart_coord(CartVec::new(bounds.min_x(), bounds.min_y())).as_cube_coord();
             let dist = corner.distance(&center) as i32;
 
+            let accessor = TileAccessor::new(world);
+
 //            for q in map_data.min_tile_bound.q..map_data.max_tile_bound.q + 1 {
 //                for r in map_data.min_tile_bound.r..map_data.max_tile_bound.r + 1 {
             for x in -dist ..= dist {
@@ -55,14 +58,16 @@ impl TerrainRenderer {
                             } else {
                                 Color::greyscale(0.5)
                             };
-                            if let Some(t) = world.tile_opt(pos) {
-                                let quad = Quad::new(format!("terrain/{}", t.main_terrain_name), cartesian_pos.0)
+                            if let Some(t) = accessor.tile_opt(pos) {
+                                let terrain = accessor.terrain(&t);
+                                let vegetation = accessor.vegetation_opt(&t);
+                                let quad = Quad::new(format!("terrain/{}", terrain.kind.name().to_snake_case()), cartesian_pos.0)
                                     .centered()
                                     .color(color);
                                 quads.push(quad);
 
-                                if let Some(secondary_name) = &t.secondary_terrain_name {
-                                    let quad = Quad::new(format!("terrain/{}", secondary_name), cartesian_pos.0)
+                                if let Some(vegetation) = vegetation {
+                                    let quad = Quad::new(format!("terrain/{}", vegetation.kind.name().to_snake_case()), cartesian_pos.0)
                                         .centered()
                                         .color(color);
                                     over_quads.push(quad);

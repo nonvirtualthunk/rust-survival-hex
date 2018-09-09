@@ -9,7 +9,7 @@ use common::prelude::*;
 use std::ops::Deref;
 use noisy_float::types::R32;
 use entities::common_entities::PositionData;
-use entities::common_entities::ActionData;
+use entities::actions::ActionData;
 use entities::time::TimeOfDay;
 use entities::movement::MovementData;
 use game::entity;

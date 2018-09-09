@@ -30,7 +30,7 @@ use anymap::AnyMap;
 use std::collections::VecDeque;
 //use anymap::any::Any;
 
-use piston_window::MouseButton;
+use events::MouseButton;
 use piston_window::GenericEvent;
 use events::EventPosition;
 use piston_window;

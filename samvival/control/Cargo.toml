@@ -44,6 +44,10 @@ version = "0.1.0"
 path = "../gui"
 version = "0.1.0"
 
+[dependencies.samvival_ai]
+path = "../ai"
+version = "0.1.0"
+
 [dependencies.arx_gui_macros]
 path = "../../arx_gui_macros"
 version = "0.1.0"

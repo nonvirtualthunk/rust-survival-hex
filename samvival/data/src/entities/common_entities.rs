@@ -73,6 +73,8 @@ impl IdentityData {
         }
     }
 
+    pub fn set_kind<T : Into<Taxon>>(&mut self, kind : T) { self.kinds = vec![kind.into()] }
+
     pub fn effective_name(&self) -> &str {
         self.name.as_ref().map(|n| &**n).unwrap_or_else(|| self.main_kind().name())
     }
@@ -99,6 +101,11 @@ pub enum Taxon {
     RuntimeTaxon { name : Arc<str>, parents : [Option<&'static Taxon>;4] },
     ConstTaxonRef { reference : &'static Taxon },
 }
+impl Default for Taxon {
+    fn default() -> Self {
+        Taxon::ConstTaxonRef { reference : & taxonomy::Unknown }
+    }
+}
 
 impl PartialEq<Taxon> for Taxon {
     fn eq(&self, other: & Taxon) -> bool {
@@ -124,6 +131,9 @@ impl From<&'static Taxon> for Taxon {
 //pub type Taxon = &'static Taxon;
 
 impl Taxon {
+    pub fn of(tax : &'static Taxon) -> Taxon {
+        Taxon::ConstTaxonRef { reference : tax }
+    }
     pub fn name(&self) -> &str {
         match self {
             Taxon::ConstTaxon { name, .. } => name,
@@ -396,11 +406,15 @@ pub mod taxonomy {
         use super::*;
         pub static SharpTool : Taxon = taxon("bladed tool", &Tool);
 
+        pub static MiningTool : Taxon = taxon("mining tool", &Tool);
+
         pub static Rod : Taxon = taxon("rod", &Tool);
 
         pub static ToolAxe : Taxon = taxon2("tool axe", &Tool, &Axe);
+        pub static Pickaxe : Taxon = taxon("pickaxe", &MiningTool);
         pub static Scythe : Taxon = taxon("scythe", &SharpTool);
         pub static Hammer : Taxon = taxon("Hammer", &Tool);
+        pub static Shovel : Taxon = taxon("shovel", &Tool);
     }
 
     pub static Armor : Taxon = taxon("armor", &Item);
@@ -481,8 +495,32 @@ pub mod taxonomy {
         pub static Wood : Taxon = taxon2("wood", &PlantResource, &Material);
 
         pub static Stone : Taxon = taxon2("stone", &Mineral, &Material);
+        pub static QuarriedStone : Taxon = taxon("quarried stone", &Stone);
+        pub static LooseStone : Taxon = taxon("loose stone", &Stone);
+
+        pub static Dirt : Taxon = taxon("dirt", &Material);
         pub static Iron : Taxon = taxon2("iron", &Metal, &Material);
     }
+
+
+    pub static Terrain : Taxon = root_taxon("terrain");
+
+    pub mod terrain {
+        use super::*;
+        pub static Plains : Taxon = taxon("plains", &Terrain);
+        pub static Hills : Taxon = taxon("hills", &Terrain);
+        pub static Mountains : Taxon = taxon("mountains", &Mountains);
+    }
+
+    pub static Vegetation : Taxon = root_taxon("vegetation");
+    pub mod vegetation {
+        use super::*;
+        pub static Grassland : Taxon = taxon("grassland", &Vegetation);
+        pub static Forest : Taxon = taxon("forest", &Vegetation);
+        pub static PineForest : Taxon = taxon("pine forest", &Forest);
+        pub static DeciduousForest : Taxon = taxon("deciduous forest", &Forest);
+    }
+
 
     lazy_static! {
         static ref CONST_TAXONS: Mutex<HashMap<String, &'static Taxon>> = Mutex::new(HashMap::new());
@@ -521,6 +559,21 @@ pub struct ModifierTrackingData {
 }
 impl EntityData for ModifierTrackingData {
 
+}
+
+
+pub trait LookupSignifier {
+    fn signifier(&self, entity : Entity) -> String;
+}
+
+impl LookupSignifier for WorldView {
+    fn signifier(&self, entity: Entity) -> String {
+        if let Some(identity) = self.data_opt::<IdentityData>(entity) {
+            identity.name.clone().unwrap_or_else(||String::from(identity.main_kind().name()))
+        } else {
+            format!("Entity({})", entity.0)
+        }
+    }
 }
 
 

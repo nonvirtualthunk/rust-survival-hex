@@ -85,13 +85,11 @@ pub fn hexes_in_range(world_view : &WorldView, mover : Entity, range : Sext) -> 
 //    }
 //    println!("Initial move cost map building took {:?}", Instant::now().duration_since(start));
 
-
-    let tile_index = world_view.entity_index::<AxialCoord>();
-
+    let tile_accessor = TileAccessor::new(world_view);
     flood_search(start_position, range.as_f64(), move |from, to| {
-        let cost = if let Some(tile) = tile_index.get(&to).and_then(|t| world_view.data_opt::<TileData>(*t)) {
+        let cost = if let Some(tile) = tile_accessor.tile_opt(*to) {
             if tile.occupied_by.is_none() {
-                tile.move_cost.as_f32()
+                tile_accessor.terrain(&tile).move_cost.as_f32() + tile_accessor.vegetation(&tile).move_cost.as_f32()
             } else { 10000.0 }
         } else { 10000.0 };
         cost as f64
@@ -128,7 +126,8 @@ pub fn hexes_reachable_by_character_this_turn_default(world_view: &WorldView, mo
 pub fn path_to(world_view: &WorldView, mover : Entity, to : AxialCoord) -> Option<(Vec<AxialCoord>, f64)> {
     let mover_c = world_view.character(mover);
     let from = mover_c.position.hex;
-    astar(&from, |c| c.neighbors_vec().into_iter().map(|c| (c, r32(move_cost_to_f32(world_view, &mover_c, &c) as f32))), |c| c.distance(&to), |c| *c == to)
+    let accessor = TileAccessor::new(world_view);
+    astar(&from, |c| c.neighbors_vec().into_iter().map(|c| (c, r32(move_cost_to_f32(&accessor, &mover_c, &c) as f32))), |c| c.distance(&to), |c| *c == to)
         .map(|(vec, cost)| (vec, cost.raw() as f64))
 }
 
@@ -151,8 +150,9 @@ pub fn portion_of_path_traversable_this_turn(view : &WorldView, mover : Entity, 
     let mut ap_remaining = character.action_points.cur_value();
     if let Some(start) = path.first() { ret.push(*start) }
 
+    let accessor = TileAccessor::new(view);
     for hex in path.iter().skip(1) {
-        let hex_cost = move_cost_to(view, mover, hex);
+        let hex_cost = move_cost_to(&accessor, mover, hex);
         while hex_cost > moves && ap_remaining > 0 {
             ap_remaining -= 1;
             moves += character.movement.move_speed;
@@ -170,7 +170,8 @@ pub fn portion_of_path_traversable_this_turn(view : &WorldView, mover : Entity, 
 
 
 pub fn hex_ap_cost(world : &WorldView, mover : Entity, hex : AxialCoord) -> u32 {
-    let hex_cost = move_cost_to(world, mover, &hex);
+    let accessor = TileAccessor::new(world);
+    let hex_cost = move_cost_to(&accessor, mover, &hex);
     ap_cost_for_move_cost(world, mover, hex_cost)
 }
 
@@ -195,7 +196,7 @@ pub fn handle_move(world : &mut World, mover : Entity, path : &[AxialCoord]) {
         let hex = *hex;
         if hex != start_pos {
             let hex_ent = view.entity_by_key(&hex).expect("hex must exist");
-            let hex_cost = view.tile(hex).move_cost;
+            let hex_cost = view.terrain(hex).move_cost + view.vegetation(hex).move_cost;
             // how many ap must be changed to move points in order to enter the given hex
             let ap_required = movement::hex_ap_cost(world.view(), mover, hex) as i32;
             if ap_required <= view.character(mover).action_points.cur_value() {
@@ -248,7 +249,8 @@ pub fn remove_entity_from_world(world: &mut World, entity : Entity) {
 
 pub fn path(world : &WorldView, mover : Entity, from: AxialCoord, to: AxialCoord) -> Option<(Vec<AxialCoord>, R32)> {
     let mover = world.character(mover);
-    astar(&from, |c| c.neighbors_vec().into_iter().map(|c| (c, r32(move_cost_to_f32(world, &mover, &c)))), |c| c.distance(&to), |c| *c == to)
+    let accessor = TileAccessor::new(world);
+    astar(&from, |c| c.neighbors_vec().into_iter().map(|c| (c, r32(move_cost_to_f32(&accessor, &mover, &c)))), |c| c.distance(&to), |c| *c == to)
 }
 
 pub fn path_any_v(world : &WorldView, mover : Entity, from: AxialCoord, to: &Vec<AxialCoord>, heuristical_center : AxialCoord) -> Option<(Vec<AxialCoord>, R32)> {
@@ -259,14 +261,15 @@ pub fn path_any_v(world : &WorldView, mover : Entity, from: AxialCoord, to: &Vec
 
 pub fn path_any(world : &WorldView, mover : Entity, from: AxialCoord, to: &HashSet<AxialCoord>, heuristical_center : AxialCoord) -> Option<(Vec<AxialCoord>, R32)> {
     let mover = world.character(mover);
-    astar(&from, |c| c.neighbors_vec().into_iter().map(|c| (c, r32(move_cost_to_f32(world, &mover, &c)))), |c| c.distance(&heuristical_center), |c| to.contains(c))
+    let accessor = TileAccessor::new(world);
+    astar(&from, |c| c.neighbors_vec().into_iter().map(|c| (c, r32(move_cost_to_f32(&accessor, &mover, &c)))), |c| c.distance(&heuristical_center), |c| to.contains(c))
 }
 
 
-pub fn move_cost_to(world : &WorldView, mover : Entity, to : &AxialCoord) -> Sext {
-    if let Some(tile) = world.tile_opt(*to) {
+pub fn move_cost_to(accessor : &TileAccessor, mover : Entity, to : &AxialCoord) -> Sext {
+    if let Some(tile) = accessor.tile_opt(*to) {
         if tile.occupied_by.is_none() {
-            tile.move_cost
+            accessor.vegetation(&tile).move_cost + accessor.terrain(&tile).move_cost
         } else {
             Sext::of(100000)
         }
@@ -275,10 +278,10 @@ pub fn move_cost_to(world : &WorldView, mover : Entity, to : &AxialCoord) -> Sex
     }
 }
 
-pub fn move_cost_to_f32(world: &WorldView, mover : &Character, to: &AxialCoord) -> f32 {
-    if let Some(tile) = world.tile_opt(*to) {
+pub fn move_cost_to_f32(accessor : &TileAccessor , mover : &Character, to: &AxialCoord) -> f32 {
+    if let Some(tile) = accessor.tile_opt(*to) {
         if tile.occupied_by.is_none() {
-            tile.move_cost.as_f32()
+            (accessor.vegetation(&tile).move_cost + accessor.terrain(&tile).move_cost).as_f32()
         } else {
             10000000.0
         }

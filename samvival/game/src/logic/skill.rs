@@ -3,6 +3,7 @@ use prelude::*;
 
 use entities::SkillData;
 use entities::Skill;
+use data::entities::common_entities::LookupSignifier;
 
 pub fn skill_level(view : &WorldView, entity : Entity, skill : Skill) -> i32 {
     if let Some(skill_data) = view.data_opt::<SkillData>(entity) {

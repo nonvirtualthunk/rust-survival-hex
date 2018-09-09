@@ -22,6 +22,7 @@ extern crate arx_graphics as graphics;
 extern crate rusttype;
 extern crate pretty_env_logger;
 #[macro_use] extern crate log;
+extern crate heck;
 
 //pub mod core;
 //pub use core::*;

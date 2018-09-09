@@ -9,6 +9,11 @@ use std::fmt::Formatter;
 use std::u64;
 use std::fmt::Debug;
 use common::prelude::ExtendedCollection;
+use serde::Serialize;
+use serde::Deserialize;
+use serde::Serializer;
+use serde::Deserializer;
+use serde::de::Visitor;
 
 //use num;
 
@@ -73,11 +78,30 @@ impl<T: ReduceableType> Reduceable<T> {
 }
 
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum DicePool {
     Single { die : u32, count : u32 },
     Compound(Vec<DicePool>),
     None
+}
+
+impl Serialize for DicePool {
+    fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error> where S: Serializer {
+        serializer.serialize_str(self.to_d20_string().as_str())
+    }
+}
+impl <'de> Deserialize<'de> for DicePool {
+    fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error> where D: Deserializer<'de> {
+        struct DicePoolVisitor;
+        impl <'de> Visitor<'de> for DicePoolVisitor {
+            type Value = DicePool;
+            fn expecting(&self, formatter: &mut Formatter) -> Result<(), Error> {write!(formatter,"XdY")}
+
+            fn visit_str<E>(self, v: &str) -> Result<DicePool, E> where E: serde::de::Error { match DicePool::from_str(v) { Some(dp) => Ok(dp), None => Err(E::custom("Could not parse dice pool")) } }
+            fn visit_string<E>(self, v: String) -> Result<DicePool, E> where E: serde::de::Error { match DicePool::from_str(v) { Some(dp) => Ok(dp), None => Err(E::custom("Could not parse dice pool")) } }
+        }
+        deserializer.deserialize_str(DicePoolVisitor)
+    }
 }
 
 impl Default for DicePool { fn default() -> Self { DicePool::none() } }
@@ -85,6 +109,15 @@ impl Default for DicePool { fn default() -> Self { DicePool::none() } }
 impl Display for DicePool {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         write!(f, "{}", self.to_d20_string())
+    }
+}
+impl ::common::ToStringWithSign for DicePool {
+    fn to_string_with_sign(&self) -> String {
+        format!("+ {}", self.to_d20_string())
+    }
+
+    fn sign_str(&self) -> &'static str {
+        "+"
     }
 }
 
@@ -101,16 +134,27 @@ impl DicePool {
 
     pub fn from_str<S: Into<String>>(string: S) -> Option<DicePool> {
         let string = string.into();
-        let parts = string.split("d").collect_vec();
-        if parts.len() != 2 {
-            None
-        } else {
-            let count: Result<u32, _> = parts[0].parse::<u32>();
-            let die: Result<u32, _> = parts[1].parse::<u32>();
-            if count.is_ok() && die.is_ok() {
-                Some(DicePool::of(count.unwrap(), die.unwrap()))
+        if string == "none" {
+            Some(DicePool::none())
+        } else if string.contains("+") {
+            let sub_dice_iter = string.split("+").map(|s| DicePool::from_str(s));
+            if sub_dice_iter.clone().all(|d| d.is_some()) {
+                Some(DicePool::Compound(sub_dice_iter.flat_map(|i| i).collect_vec()))
             } else {
                 None
+            }
+        } else {
+            let parts = string.split("d").collect_vec();
+            if parts.len() != 2 {
+                None
+            } else {
+                let count: Result<u32, _> = parts[0].parse::<u32>();
+                let die: Result<u32, _> = parts[1].parse::<u32>();
+                if count.is_ok() && die.is_ok() {
+                    Some(DicePool::of(count.unwrap(), die.unwrap()))
+                } else {
+                    None
+                }
             }
         }
     }
@@ -158,7 +202,7 @@ impl DicePool {
         match self {
             DicePool::Single { die, count } => *count,
             DicePool::Compound(pools) => pools.iter().map(|p| p.min_roll()).sum(),
-            DicePool::None => { 0.0f32 }
+            DicePool::None => { 0  }
         }
     }
 
@@ -166,7 +210,7 @@ impl DicePool {
         match self {
             DicePool::Single { die, count } => die * count,
             DicePool::Compound(pools) => pools.iter().map(|p| p.max_roll()).sum(),
-            DicePool::None => { 0.0f32 }
+            DicePool::None => { 0 }
         }
     }
 
@@ -183,10 +227,14 @@ impl ::std::ops::Add<DicePool> for DicePool {
     type Output = DicePool;
 
     fn add(self, rhs: DicePool) -> DicePool {
-        match self {
-            DicePool::Compound(pools) => DicePool::Compound(pools.extended_by(vec![rhs])),
-            DicePool::Single { .. } => DicePool::Compound(vec![self, rhs]),
-            DicePool::None => rhs,
+        if let DicePool::None = rhs {
+            self
+        } else {
+            match self {
+                DicePool::Compound(pools) => DicePool::Compound(pools.extended_by(vec![rhs])),
+                DicePool::Single { .. } => DicePool::Compound(vec![self, rhs]),
+                DicePool::None => rhs,
+            }
         }
     }
 }

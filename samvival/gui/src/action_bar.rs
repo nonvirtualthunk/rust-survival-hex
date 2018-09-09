@@ -18,9 +18,10 @@ use graphics::FontSize;
 #[derive(PartialEq, Clone, Debug, Hash)]
 pub enum PlayerActionType {
     MoveAndAttack(MovementTypeRef, AttackRef),
+    Harvest,
     InteractWithInventory,
     Move(MovementTypeRef),
-    Wait
+    Wait,
 }
 
 impl PlayerActionType {
@@ -30,6 +31,7 @@ impl PlayerActionType {
             PlayerActionType::InteractWithInventory => String::from("Open Inventory"),
             PlayerActionType::Move(move_ref) => move_ref.resolve(world).map(|mt| mt.name.capitalized()).unwrap_or_else(|| String::from("Unknown move type")),
             PlayerActionType::Wait => String::from("Wait"),
+            PlayerActionType::Harvest => String::from("Harvest"),
         }
     }
     pub fn description(&self, world : &WorldView, character : Entity) -> String {
@@ -38,6 +40,7 @@ impl PlayerActionType {
             PlayerActionType::InteractWithInventory => format!("Transfer items from your inventory to or from another. Can be used to drop items on the ground or pick them up."),
             PlayerActionType::Move(move_ref) => format!("{} across terrain to another location", move_ref.resolve(world).map(|m| m.name.as_str()).unwrap_or("move")),
             PlayerActionType::Wait => format!("Do nothing for the moment"),
+            PlayerActionType::Harvest => format!("Harvest resources from a nearby hex."),
         }
     }
     pub fn icon(&self, world : &WorldView, character : Entity) -> String {
@@ -45,7 +48,8 @@ impl PlayerActionType {
             PlayerActionType::MoveAndAttack(move_ref, attack_ref) => format!("ui/attack_icon"),
             PlayerActionType::InteractWithInventory => format!("ui/interact_with_inventory_icon"),
             PlayerActionType::Move(move_ref) => format!("ui/move_icon"),
-            PlayerActionType::Wait => format!("ui/clock_icon")
+            PlayerActionType::Wait => format!("ui/clock_icon"),
+            PlayerActionType::Harvest => format!("ui/harvest_icon"),
         }
     }
 }

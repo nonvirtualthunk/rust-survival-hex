@@ -39,7 +39,7 @@ pub fn test_basic_equip_and_select_attack() {
 
         // give the character a spear, now that should be part of the attacks
         let spear = weapon_archetypes().with_name("longspear").create(world);
-        logic::item::put_item_in_inventory(world, spear, character, false);
+        logic::item::put_item_in_inventory(world, spear, character);
         logic::item::equip_item(world, spear, character, true);
 
         { // the spear should now also be included in the possible attacks
@@ -83,7 +83,7 @@ pub fn test_derived_attack() {
 
         // give the character a spear, now that should be part of the attacks
         let spear = weapon_archetypes().with_name("longspear").create(world);
-        logic::item::put_item_in_inventory(world, spear, character, false);
+        logic::item::put_item_in_inventory(world, spear, character);
         logic::item::equip_item(world, spear, character, true);
 
 

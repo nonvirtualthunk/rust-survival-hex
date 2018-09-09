@@ -38,3 +38,5 @@ pub use entities::visibility::*;
 pub use entities::movement::*;
 pub use entities::selectors::*;
 pub use entities::effects::*;
+pub use entities::actions::*;
+pub use entities::reactions::*;

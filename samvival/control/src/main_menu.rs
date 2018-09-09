@@ -15,6 +15,7 @@ use common::prelude::strf;
 use game::World;
 use game::universe::WorldRef;
 use game::scenario::test_scenarios::FirstEverScenario;
+use graphics::GraphicsResources;
 
 #[derive(Default)]
 pub struct MainMenu {
@@ -72,7 +73,7 @@ impl GameMode for MainMenu {
 
     fn update(&mut self, universe: &mut Universe, dt: f64, event_bus: &mut EventBus<GameModeEvent>) {}
 
-    fn update_gui(&mut self, universe: &mut Universe, ui: &mut GUI, frame_id: Option<Wid>, event_bus: &mut EventBus<GameModeEvent>) {
+    fn update_gui(&mut self, universe: &mut Universe, gsrc : &mut GraphicsResources, ui: &mut GUI, frame_id: Option<Wid>, event_bus: &mut EventBus<GameModeEvent>) {
         for event in ui.events_for(&self.menu) {
             if let UIEvent::WidgetEvent { event: WidgetEvent::ButtonClicked(button), .. } = event {
                 if button == &self.load_button.id() {

@@ -168,6 +168,54 @@ pub fn weapon_archetypes() -> ArchetypeLibrary {
         .with(IdentityData::of_kind(taxon("longspear", &taxonomy::weapons::Spear))),
     );
 
+    archetypes_by_name.insert(strf("hatchet"), EntityBuilder::new()
+        .with_creator(|world| ItemData {
+            attacks: vec![
+                create_attack(world, "chop", vec![&SlashingAttack], Attack {
+                    name: strf("chop"),
+                    verb: None,
+                    attack_type: AttackType::Melee,
+                    ap_cost: 4,
+                    damage_dice: DicePool::of(1, 4),
+                    damage_bonus: 2,
+                    to_hit_bonus: 0,
+                    primary_damage_type: DamageType::Slashing,
+                    ..Default::default()
+                })],
+            ..Default::default()
+        })
+        .with(ToolData {
+            tool_harvest_fixed_bonus : 1,
+            tool_speed_bonus : 1,
+            tool_harvest_dice_bonus : DicePool::none()
+        })
+        .with(IdentityData::of_kind(taxon("hatchet", &taxonomy::tools::ToolAxe))),
+    );
+
+
+    archetypes_by_name.insert(strf("pickaxe"), EntityBuilder::new()
+        .with_creator(|world| ItemData {
+            attacks: vec![
+                create_attack(world, "stab", vec![&StabbingAttack, &ImprovisedAttack], Attack {
+                    name: strf("stab"),
+                    verb: None,
+                    attack_type: AttackType::Melee,
+                    ap_cost: 8,
+                    damage_dice: DicePool::of(1, 10),
+                    damage_bonus: 1,
+                    to_hit_bonus: 0,
+                    primary_damage_type: DamageType::Piercing,
+                    ..Default::default()
+                })],
+            ..Default::default()
+        })
+        .with(ToolData {
+            tool_harvest_fixed_bonus : 0,
+            tool_speed_bonus : 1,
+            tool_harvest_dice_bonus : DicePool::of(1,2)
+        })
+        .with(IdentityData::of_kind(taxon("pickaxe", &taxonomy::tools::Pickaxe))),
+    );
 
     let default = EntityBuilder::new()
         .with_creator(|world| ItemData {

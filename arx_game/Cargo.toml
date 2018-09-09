@@ -31,6 +31,7 @@ serde_derive = "*"
 serde = { version = "*", features = ["rc"] }
 string-interner = { version = "0.7.0", features = ["serde"] }
 ron = "*"
+multimap = "*"
 
 [dependencies.arx_common]
 path = "../arx_common"

@@ -7,7 +7,7 @@ pub mod characters;
 pub use archetypes::characters::character_archetypes;
 
 pub mod tiles;
-pub use archetypes::tiles::tile_archetypes;
+//pub use archetypes::tiles::tile_archetypes;
 
 use game::EntityBuilder;
 use std::collections::HashMap;

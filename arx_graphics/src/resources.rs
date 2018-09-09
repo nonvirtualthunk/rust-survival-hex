@@ -72,6 +72,9 @@ impl GraphicsAssets {
         cur_dir.pop();
         cur_dir.pop();
         cur_dir.pop();
+        if cur_dir.ends_with("target") {
+            cur_dir.pop();
+        }
         let assets_path = find_folder::SearchFolder {
             start: cur_dir,
             direction: find_folder::Search::Kids(6),
@@ -335,7 +338,7 @@ impl GraphicsAssets {
         if self.images.contains_key(&identifier) {
             self.images.get(&identifier).unwrap()
         } else {
-            let img = GraphicsAssets::read_image(&self.assets_path, identifier.clone());
+            let img = GraphicsAssets::read_image(&self.texture_path, identifier.clone());
             self.images.insert(identifier.clone(), img);
             self.images.get(&identifier).unwrap()
         }

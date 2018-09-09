@@ -10,6 +10,7 @@ use entities::common_entities::Taxon;
 use entities::inventory::InventoryData;
 use entities::item::ItemData;
 use entities::skill::Skill;
+use entities::common_entities::LookupSignifier;
 
 #[derive(PartialEq,Eq,Clone,Debug,Serialize,Deserialize)]
 pub enum EntitySelector {
@@ -30,7 +31,8 @@ pub enum EntitySelector {
     Any,
     HasStamina(Sext),
     HasAP(i32),
-    HasSkillLevel(Skill, i32)
+    HasSkillLevel(Skill, i32),
+    None
 }
 
 impl EntitySelector {
@@ -53,4 +55,26 @@ impl EntitySelector {
     pub fn or(self, other : EntitySelector) -> EntitySelector {
         EntitySelector::Or(box self, box other)
     }
+
+    pub fn article_string(&self, view: &WorldView) -> String {
+        use common::language::*;
+        match self {
+            EntitySelector::IsA(taxon) => prefix_with_indefinite_article(taxon.name()),
+            EntitySelector::Is(ent) => view.signifier(*ent),
+            EntitySelector::Friend { of } => format!("a friend of {}", view.signifier(*of)),
+            EntitySelector::Enemy { of } => format!("an enemy of {}", view.signifier(*of)),
+            EntitySelector::IsCharacter => format!("a character"),
+            EntitySelector::HasInventory => format!("something with an inventory"),
+            EntitySelector::HasEquipmentKind(taxon) => prefix_with_indefinite_article(taxon.name()),
+            EntitySelector::Any => format!("anything"),
+            _ => format!("{:?}",self)
+        }
+    }
+
+//    pub fn as_vec(&self) -> Vec<EntitySelector> {
+//        match self {
+//            And(a, b) => a.as_vec().extended_by(b.as_vec()),
+//            Or(a, b) => a.as_vec().extended_by(b.as_vec()),
+//        }
+//    }
 }

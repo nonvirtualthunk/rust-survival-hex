@@ -1,8 +1,5 @@
-#![feature(box_syntax)]
 #![allow(unused_imports)]
 #![allow(unused_variables)]
-#![feature(get_type_id)]
-#![feature(core_intrinsics)]
 #![allow(where_clauses_object_safety)]
 #![allow(dead_code)]
 #![allow(non_upper_case_globals)]
@@ -10,8 +7,12 @@
 #![feature(extern_prelude)]
 #![feature(const_fn)]
 #![feature(type_ascription)]
+#![feature(get_type_id)]
+#![feature(core_intrinsics)]
+#![feature(box_syntax)]
+#![feature(nll)]
 
-extern crate arx_common as common;
+#[macro_use] extern crate arx_common as common;
 extern crate samvival_data as data;
 extern crate either;
 #[macro_use] extern crate enum_map;
@@ -35,7 +36,6 @@ extern crate ron;
 
 extern crate num;
 extern crate cgmath;
-extern crate winit;
 
 pub mod world_util;
 

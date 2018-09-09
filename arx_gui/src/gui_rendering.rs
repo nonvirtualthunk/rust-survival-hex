@@ -18,7 +18,7 @@ use gui::WidgetContext;
 use gui::WidgetStatePlaceholder;
 use piston_window;
 use piston_window::GenericEvent;
-use piston_window::MouseButton;
+use events::MouseButton;
 use piston_window::Viewport;
 use std::any::TypeId;
 use std::collections::HashMap;
@@ -144,7 +144,15 @@ impl GUI {
                                 let dim = self.pixel_dim_axis_to_gui(dims[axis]);
                                 trace!(target: "gui_redraw", "Calculated derived dim for text[size {:?}] {} of {:?}", *font_size, text.replace('\n', "\\n"), dim);
                                 dim
-                            }
+                            },
+                            WidgetType::Image { image } => {
+                                let img = g.image(image.clone());
+                                if axis == 0 {
+                                    self.pixel_dim_axis_to_gui(img.width() as f32)
+                                } else {
+                                    self.pixel_dim_axis_to_gui(img.height() as f32)
+                                }
+                            },
                             other => {
                                 trace!(target: "gui_redraw", "Widget had derived size, but non-derivable widget type {:?}", other);
                                 0.0
@@ -264,7 +272,14 @@ impl GUI {
                                     .offset(inner_pixel_offset - v2(0.0, effective_internal_dim.y))
                                     .wrap_to(wrap_dist)
                             );
-                        }
+                        },
+                        WidgetType::Image { ref image } => {
+                            internal_state.draw_list.add_quad(
+                                Quad::new(image.clone(), inner_pixel_offset - v2(0.0, effective_internal_dim.y))
+                                    .color(widget.color)
+                                    .size(effective_internal_dim)
+                            );
+                        },
                         WidgetType::Window { ref image, ref segment } => {
                             let color_multiplier = match internal_state.widget_state {
                                 WidgetState::Button { pressed } if pressed => Color::new(0.5, 0.5, 0.54, 1.0),

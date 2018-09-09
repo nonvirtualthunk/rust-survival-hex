@@ -12,7 +12,9 @@ use std::hash::Hasher;
 use entities::selectors::EntitySelector;
 use entities::movement::MovementTypeRef;
 use entities::combat::AttackRef;
-
+use entities::reactions::ReactionTypeRef;
+use game::entity;
+use game::EntityData;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Action {

@@ -9,7 +9,7 @@ use game::entities::combat::AttackRef;
 use state::ControlContext;
 use control_events::TacticalEvents;
 use common::hex::AxialCoord;
-
+use game::logic::breakdown::Breakdown;
 
 pub struct AttackDescriptionsWidget {
     attack_list: ListWidget<AttackDescriptionWidget>

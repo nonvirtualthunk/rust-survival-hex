@@ -30,7 +30,7 @@ pub fn in_testbed<F : Fn(&mut World, Testbed)>(func : F) {
 pub fn in_custom_testbed<F : Fn(&mut World, Testbed)>(config : TestbedConfig, func : F) {
     let mut world = create_world();
 
-    for tile in terrain::generator::generate(config.map_radius) {
+    for tile in terrain::generator::generate(&mut world, config.map_radius) {
         let tile = tile.with(DebugData { name : strf("world tile") }).create(&mut world);
         let pos = world.data::<TileData>(tile).position;
         world.index_entity(tile, pos);

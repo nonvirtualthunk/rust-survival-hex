@@ -24,6 +24,7 @@ itertools = "0.7.3"
 rusttype = { version = "0.6.2", features = ["gpu_cache"] }
 log = "*"
 pretty_env_logger = "*"
+heck = "0.3.0"
 
 [dependencies.arx_common]
 path = "../../arx_common"

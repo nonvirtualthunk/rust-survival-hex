@@ -13,6 +13,7 @@ pub struct GameState {
     pub player_faction: Entity,
     pub hovered_hex_coord: AxialCoord,
     pub animating: bool,
+    pub player_faction_active: bool,
     pub mouse_pixel_pos: Vec2f,
     pub mouse_game_pos: Vec2f,
     pub mouse_cart_vec: CartVec

@@ -1,4 +1,3 @@
-use piston_window::MouseButton;
 use piston_window::Key;
 use piston_window::GenericEvent;
 use piston_window::Button;
@@ -12,6 +11,45 @@ use widgets::Wid;
 use std::fmt::Debug;
 use std::rc::Rc;
 use std::any::Any;
+
+/// Represent a mouse button. (hoisted from piston)
+#[derive(Copy, Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Debug)]
+pub enum MouseButton {
+    /// Unknown mouse button.
+    Unknown,
+    /// Left mouse button.
+    Left,
+    /// Right mouse button.
+    Right,
+    /// Middle mouse button.
+    Middle,
+    /// Extra mouse button number 1.
+    X1,
+    /// Extra mouse button number 2.
+    X2,
+    /// Mouse button number 6.
+    Button6,
+    /// Mouse button number 7.
+    Button7,
+    /// Mouse button number 8.
+    Button8,
+}
+impl MouseButton {
+    fn from_piston(button : &::piston_window::MouseButton) -> MouseButton {
+        match button {
+            ::piston_window::MouseButton::Unknown => MouseButton::Unknown,
+            ::piston_window::MouseButton::Left => MouseButton::Left,
+            ::piston_window::MouseButton::Right => MouseButton::Right,
+            ::piston_window::MouseButton::Middle => MouseButton::Middle,
+            ::piston_window::MouseButton::X1 => MouseButton::X1,
+            ::piston_window::MouseButton::X2 => MouseButton::X2,
+            ::piston_window::MouseButton::Button6 => MouseButton::Button6,
+            ::piston_window::MouseButton::Button7 => MouseButton::Button7,
+            ::piston_window::MouseButton::Button8 => MouseButton::Button8,
+        }
+    }
+}
+
 
 #[derive(Clone, Debug)]
 pub struct EventPosition {
@@ -208,7 +246,7 @@ impl UIEvent {
             let v = current_mouse_pos;
             match button {
                 Button::Keyboard(key) => return Some(UIEvent::KeyPress { key }),
-                Button::Mouse(button) => return Some(UIEvent::MousePress { pos : EventPosition::absolute(v, current_mouse_pixel_pos), button }),
+                Button::Mouse(button) => return Some(UIEvent::MousePress { pos : EventPosition::absolute(v, current_mouse_pixel_pos), button : MouseButton::from_piston(&button)}),
                 _ => return None
             }
         }
@@ -217,7 +255,7 @@ impl UIEvent {
             let v = current_mouse_pos;
             match button {
                 Button::Keyboard(key) => return Some(UIEvent::KeyRelease { key }),
-                Button::Mouse(button) => return Some(UIEvent::MouseRelease { pos : EventPosition::absolute(v, current_mouse_pixel_pos), button }),
+                Button::Mouse(button) => return Some(UIEvent::MouseRelease { pos : EventPosition::absolute(v, current_mouse_pixel_pos), button : MouseButton::from_piston(&button)}),
                 _ => return None
             }
         }

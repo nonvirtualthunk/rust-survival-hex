@@ -240,92 +240,23 @@ impl TacticalMode {
         *self.event_start_times.get(gec as usize).unwrap()
     }
 
-    fn ai_action(&mut self, ai_ref: &Entity, cdata: &CharacterData, world: &mut World, world_view: &WorldView, _all_characters: &Vec<Entity>) {
-        let ai = world_view.character(*ai_ref);
-
-        if ai.movement.move_speed == Sext::of(0) {
-
-        } else {
-            let closest_enemy = world_view.entities_with_data::<CharacterData>().iter()
-                .filter(|&(_, c)| c.is_alive())
-                .filter(|&(cref, _)| is_enemy(world_view, *ai_ref, *cref))
-                .min_by_key(|t| world_view.data::<PositionData>(*t.0).hex.distance(&ai.position.hex));
-
-            if let Some(closest) = closest_enemy {
-                let enemy_ref: &Entity = closest.0;
-                let enemy_data = world_view.character(*closest.0);
-
-                if enemy_data.position.distance(&ai.position) >= r32(1.5) {
-                    if let Some(path) = logic::movement::path_any_v(world_view, *ai_ref, ai.position.hex, &enemy_data.position.hex.neighbors_vec(), enemy_data.position.hex) {
-                        movement::handle_move(world, *ai_ref, path.0.as_slice())
-                    } else {
-                        println!("No move towards closest enemy, stalling");
-                    }
-                }
-
-                if enemy_data.position.distance(&ai.position) < r32(1.5) {
-                    let all_possible_attacks = possible_attack_refs(world_view, *ai_ref);
-                    if let Some(attack) = all_possible_attacks.first() {
-                        logic::combat::handle_attack(world, *ai_ref, *enemy_ref, attack);
-                    }
-                }
-            } else {
-                if let Some(path) = logic::movement::path(world_view, *ai_ref, ai.position.hex, ai.position.hex.neighbor(0)) {
-                    logic::movement::handle_move(world, *ai_ref, path.0.as_slice());
-                }
-            }
-        }
-    }
-
     fn end_turn(&mut self, world: &mut World) {
         let world_view = world.view();
         let current_turn = world_view.world_data::<TurnData>().turn_number;
 
-        let mut prev_faction = self.player_faction;
+        while world_view.world_data::<TurnData>().active_faction != self.player_faction {
+            logic::turn::end_faction_turn(world);
 
-        for (faction, faction_data) in world_view.entities_with_data::<FactionData>() {
-            if faction != &self.player_faction {
-                world.modify_world(TurnData::active_faction.set_to(*faction), None);
-                world.end_event(GameEvent::FactionTurn { turn_number : current_turn, faction : prev_faction });
-                world.start_event(GameEvent::FactionTurn { turn_number : current_turn, faction : *faction });
-
-                prev_faction = *faction;
-
-                let character_refs: Vec<Entity> = world.view().entities_with_data::<CharacterData>().keys().cloned().collect::<Vec<Entity>>();
-
-                for (cref, cur_data) in world_view.entities_with_data::<CharacterData>() {
-                    let allegiance = world_view.data::<AllegianceData>(*cref);
-                    if &allegiance.faction == faction && cur_data.is_alive() {
-                        // these are enemies, now we get to decide what they want to do
-                        self.ai_action(&cref, &cur_data, world, world_view, &character_refs);
-                    }
-                }
+            let newly_active_faction = world_view.world_data::<TurnData>().active_faction;
+            let newly_active_faction_data = world_view.data::<FactionData>(newly_active_faction);
+            if ! newly_active_faction_data.player_faction {
+                ::ai::ai::take_ai_actions(world, newly_active_faction);
             }
         }
 
-        // recompute the character set, some may have been created, hypothetically
-        let character_refs = world_view.entities_with_data::<CharacterData>();
-
-        for (cref, cdat) in character_refs {
-            world.modify_with_desc(*cref, MovementData::moves.set_to(Sext::of(0)), None);
-            world.modify_with_desc(*cref, CharacterData::action_points.reset(), None);
-            world.modify_with_desc(*cref, CharacterData::stamina.recover_by(cdat.stamina_recovery), None);
-        }
-
-        let turn_number = current_turn + 1;
-        world.modify_world(TurnData::turn_number.set_to(turn_number), None);
-
-        world.add_event(GameEvent::TurnStart { turn_number });
-
-        // back to the player's turn
-        world.modify_world(TurnData::active_faction.set_to(self.player_faction), None);
-        world.end_event(GameEvent::FactionTurn { turn_number : current_turn, faction : prev_faction });
-        world.start_event(GameEvent::FactionTurn { turn_number : current_turn, faction : self.player_faction });
-
         let mut living_enemy = false;
         let mut living_ally = false;
-        for cref in character_refs.keys() {
-            let char_data = world_view.data::<CharacterData>(*cref);
+        for (cref,char_data) in world_view.entities_with_data::<CharacterData>() {
             if char_data.is_alive() {
                 let allegiance = world_view.data::<AllegianceData>(*cref);
                 if allegiance.faction != self.player_faction {
@@ -382,51 +313,6 @@ impl TacticalMode {
         }
     }
 
-    fn create_move_ui_draw_list(&mut self, world_in: &mut World, game_state : &GameState) -> DrawList {
-        let is_animating = !self.at_latest_event(world_in);
-        if is_animating {
-            DrawList::none()
-        } else {
-            if let Some(hovered_tile) = self.hovered_tile(world_in.view()) {
-                let world_view = world_in.view();
-                let hovered_hex = hovered_tile.position;
-
-                let mut draw_list = DrawList::of_quad(Quad::new_cart(String::from("ui/hoverHex"), hovered_hex.as_cart_vec()).centered());
-
-                if let Some(selected) = self.selected_character {
-                    let sel_c = world_in.view().character(selected);
-
-                    if let Some(hovered_occupant) = hovered_tile.occupied_by {
-                        if logic::faction::is_enemy(world_view, hovered_occupant, selected) {
-                            if let Some(attack_ref) = logic::combat::primary_attack_ref(world_view, selected) {
-                                let path = logic::combat::path_to_attack(world_view, selected, hovered_occupant, &attack_ref, game_state.mouse_cart_vec()).map(|t| t.0)
-                                    .or_else(|| logic::movement::path_adjacent_to(world_view, selected, hovered_occupant).map(|t| t.0));
-//                                    .map(|path| logic::movement::portion_of_path_traversable_this_turn(world_view, selected, &path));
-
-                                if let Some(path) = path {
-                                    for hex in path {
-                                        draw_list = draw_list.with_quad(Quad::new_cart(String::from("ui/feet"), hex.as_cart_vec()).centered());
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        if let Some(path_result) = logic::movement::path(world_view, selected, sel_c.position.hex, hovered_hex) {
-                            let path = path_result.0;
-                            for hex in path {
-                                draw_list = draw_list.with_quad(Quad::new_cart(String::from("ui/feet"), hex.as_cart_vec()).centered());
-                            }
-                        }
-                    }
-                }
-
-                draw_list
-            } else {
-                DrawList::none()
-            }
-        }
-    }
-
     fn hovered_tile<'a, 'b>(&'a self, world: &'b WorldView) -> Option<TileEntity<'b>> {
         let hovered_hex = AxialCoord::from_cartesian(&self.mouse_game_pos(), self.tile_radius);
         world.tile_ent_opt(hovered_hex)
@@ -445,7 +331,8 @@ impl TacticalMode {
             animating: !self.at_latest_event(world),
             mouse_pixel_pos: self.mouse_pos,
             mouse_game_pos,
-            mouse_cart_vec: CartVec::new(mouse_game_pos.x / self.tile_radius, mouse_game_pos.y / self.tile_radius)
+            mouse_cart_vec: CartVec::new(mouse_game_pos.x / self.tile_radius, mouse_game_pos.y / self.tile_radius),
+            player_faction_active: self.display_world_view.world_data::<TurnData>().active_faction == self.player_faction,
         }
     }
 
@@ -462,7 +349,7 @@ impl GameMode for TacticalMode {
     fn enter(&mut self, gui: &mut GUI, universe: &mut Universe, event_bus: &mut EventBus<GameModeEvent>) {
         let world = self.active_world(universe);
 
-        self.player_faction = *world.view().entities_with_data::<FactionData>().iter().find(|(ent,faction_data)| faction_data.player_faction).unwrap().0;
+        self.player_faction = *world.view().entities_with_data::<FactionData>().find(|(ent,faction_data)| faction_data.player_faction).unwrap().0;
 
         let dec = if self.start_at_beginning {
             world.events::<GameEvent>().find(|e| e.is_ended() && (if let GameEvent::WorldStart = e.event { true } else { false })).map(|e| e.occurred_at).unwrap_or(0)
@@ -488,10 +375,10 @@ impl GameMode for TacticalMode {
         self.camera.position = self.camera.position + self.camera.move_delta * (dt as f32) * self.camera.move_speed;
     }
 
-    fn update_gui(&mut self, universe: &mut Universe, ui: &mut GUI, frame_id: Option<Wid>, event_bus: &mut EventBus<GameModeEvent>) {
+    fn update_gui(&mut self, universe: &mut Universe, gsrc : &mut GraphicsResources, ui: &mut GUI, frame_id: Option<Wid>, event_bus: &mut EventBus<GameModeEvent>) {
         let world = self.active_world(universe);
         let game_state = self.current_game_state(world);
-        self.gui.update_gui(world, &self.display_world_view, ui, frame_id, game_state, event_bus);
+        self.gui.update_gui(world, &self.display_world_view, gsrc, ui, frame_id, game_state, event_bus);
     }
 
     fn draw(&mut self, universe: &mut Universe, g: &mut GraphicsWrapper, event_bus: &mut EventBus<GameModeEvent>) {
@@ -551,13 +438,9 @@ impl GameMode for TacticalMode {
 
         let ui_draw_list = self.gui.draw(world_view, self.current_game_state(world_in));
 
-        // draw list for hover hex and foot icons
-//        let movement_ui_draw_list = self.create_move_ui_draw_list(world_in, &self.current_game_state(world_in));
-
         self.render_draw_list(terrain_draw_list, g);
         self.render_draw_list(item_draw_list, g);
         self.render_draw_list(ui_draw_list, g);
-//        self.render_draw_list(movement_ui_draw_list, g);
         self.render_draw_list(unit_draw_list, g);
         self.render_draw_list(anim_draw_list, g);
 
@@ -582,6 +465,22 @@ impl GameMode for TacticalMode {
                     let display_world_view = &self.display_world_view;
                     let main_world_view = world.view();
 //                    let world_view = world.view_at_time(self.display_event_clock);
+
+                    let found = character_at(display_world_view, clicked_coord);
+                    match self.selected_character {
+                        Some(cur_sel) => {
+                            if let Some((found_char, found_data)) = found {
+
+                            } else {
+
+                            }
+                        },
+                        None => {
+                            if let Some((found_char, _)) = found {
+                                self.selected_character = Some(found_char);
+                            }
+                        }
+                    }
 
                     let found = character_at(display_world_view, clicked_coord);
                     if let Some((found_ref, target_data)) = found {
@@ -730,7 +629,7 @@ impl GameMode for TacticalMode {
 impl TacticalMode {
     fn select_next_character(&mut self, world : &World) {
         let world_view = world.view();
-        let mut player_characters : Vec<Entity> = world_view.entities_with_data::<CharacterData>().iter()
+        let mut player_characters : Vec<Entity> = world_view.entities_with_data::<CharacterData>()
             .filter(|(k,v)| world_view.data::<AllegianceData>(**k).faction == self.player_faction)
             .map(|(k,v)| *k)
             .sorted();

@@ -45,6 +45,7 @@ pub enum Skill {
     Axe = 8,
     Spear = 9,
     Sword = 10,
+    Mining = 11,
 }
 
 impl Skill {
@@ -69,7 +70,7 @@ pub struct SkillInfo {
     pub skill_type : Skill
 }
 
-static SKILL_INFO : [SkillInfo ; 11] = [
+static SKILL_INFO : [SkillInfo ; 12] = [
     SkillInfo {
         name : "Dodge",
         skill_type : Skill::Dodge
@@ -114,6 +115,10 @@ static SKILL_INFO : [SkillInfo ; 11] = [
         name : "Sword",
         skill_type : Skill::Sword
     },
+    SkillInfo {
+        name : "Mining",
+        skill_type : Skill::Mining
+    }
 ];
 
 pub fn skill_info(for_skill : Skill) -> &'static SkillInfo {

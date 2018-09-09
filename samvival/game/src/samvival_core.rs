@@ -42,6 +42,12 @@ pub fn register_world_data(world : &mut World) {
     world.register::<DerivedAttackData>();
     world.register::<MovementType>();
     world.register::<VisibilityComputor>();
+    world.register::<ToolData>();
+    world.register::<StackData>();
+    world.register::<Harvestable>();
+    world.register::<VegetationData>();
+    world.register::<TerrainData>();
+    world.register::<Material>();
 
     register_custom_ability_data(world);
     // -------- world data ---------------
@@ -49,9 +55,16 @@ pub fn register_world_data(world : &mut World) {
     world.register::<TurnData>();
     world.register::<TimeData>();
     world.register::<VisibilityData>();
+    world.register::<Effects>();
+    world.register::<Resources>();
 
     println!("Registering axial coord index");
     world.register_index::<AxialCoord>();
 
     world.register_event_type::<GameEvent>();
+}
+
+pub fn initialize_world(world : &mut World) {
+    Resources::init_resources(world);
+    Effects::init_effects(world);
 }

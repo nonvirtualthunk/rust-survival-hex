@@ -54,6 +54,8 @@ use gui::escape_menu::*;
 use std::fs::File;
 use gui::state::ControlContext;
 use gui::control_events::GameModeEvent;
+use gui::harvest_detail_widget::HarvestSummaryWidget;
+use graphics::GraphicsResources;
 
 #[derive(PartialEq,Clone,Copy)]
 pub enum AuxiliaryWindows {
@@ -72,6 +74,7 @@ pub struct TacticalGui {
     targeting_draw_list : DrawList,
     last_targeting_info : Option<(GameState, PlayerActionType)>,
     attack_details_widget : AttackDetailsWidget,
+    harvest_summary_widget : HarvestSummaryWidget,
     messages_display : MessagesDisplay,
     inventory_widget: inventory_widget::InventoryDisplay,
     open_auxiliary_windows : Vec<AuxiliaryWindows>,
@@ -119,6 +122,7 @@ impl TacticalGui {
             targeting_draw_list : DrawList::none(),
             last_targeting_info : None,
             attack_details_widget : AttackDetailsWidget::new().draw_layer_for_all(GUILayer::Overlay),
+            harvest_summary_widget : HarvestSummaryWidget::new(),
             messages_display : MessagesDisplay::new(gui, &main_area),
             inventory_widget : inventory_widget::InventoryDisplay::new(strf("Character Inventory"), &main_area),
             open_auxiliary_windows: Vec::new(),
@@ -232,7 +236,7 @@ impl TacticalGui {
 //    }
 
 
-    pub fn update_gui(&mut self, world: &mut World, world_view : &WorldView, gui: &mut GUI, frame_id: Option<Wid>, game_state: GameState, game_mode_event_bus : &mut EventBus<GameModeEvent>) {
+    pub fn update_gui(&mut self, world: &mut World, world_view : &WorldView, gsrc : &mut GraphicsResources, gui: &mut GUI, frame_id: Option<Wid>, game_state: GameState, game_mode_event_bus : &mut EventBus<GameModeEvent>) {
 //        let world_view = world.view_at_time(game_state.display_event_clock);
 
         self.messages_display.update(gui);
@@ -252,6 +256,7 @@ impl TacticalGui {
                     }
                 }
                 actions.push(PlayerActionType::InteractWithInventory);
+                actions.push(PlayerActionType::Harvest);
                 actions.push(PlayerActionType::Wait);
 
                 self.action_bar.update(gui, world_view, actions, &game_state, &mut control);
@@ -264,8 +269,14 @@ impl TacticalGui {
                 self.reaction_bar.set_showing(false).reapply(gui);
             }
 
-            if let PlayerActionType::MoveAndAttack(_, attack_ref) = self.action_bar.selected_action_for(&world_view, selected) {
-                update_move_and_attack_widgets(&mut self.attack_details_widget, world, &world_view, gui, &game_state, selected, attack_ref);
+            match self.action_bar.selected_action_for(&world_view, selected) {
+                PlayerActionType::MoveAndAttack(_, attack_ref) => {
+                    update_move_and_attack_widgets(&mut self.attack_details_widget, world, &world_view, gui, &game_state, selected, attack_ref);
+                },
+                PlayerActionType::Harvest => {
+                    self.harvest_summary_widget.update(gui, world, world.view(), gsrc, game_state.mouse_pixel_pos, selected, game_state.hovered_hex_coord, false);
+                },
+                _ => ()
             }
 
 
@@ -341,7 +352,7 @@ impl TacticalGui {
                                         logic::item::unequip_item(world, *item, *from, true);
                                     }
                                     logic::item::remove_item_from_inventory(world, *item, *from);
-                                    logic::item::put_item_in_inventory(world, *item, *single_to, false);
+                                    logic::item::put_item_in_inventory(world, *item, *single_to);
                                 } else {
                                     error!("Could not transfer, item no longer in source");
                                 }

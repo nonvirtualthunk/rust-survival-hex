@@ -15,7 +15,7 @@ use graphics::FontIdentifier;
 use graphics::ImageIdentifier;
 use gui::*;
 use piston_window::keyboard;
-use piston_window::MouseButton;
+use events::MouseButton;
 use std::any::Any;
 use std::any::TypeId;
 use std::cell::RefCell;
@@ -158,6 +158,7 @@ pub enum TextWrap {
 pub enum WidgetType {
     Text { text: String, font: Option<FontIdentifier>, font_size: FontSize, wrap: Option<TextWrap> },
     Window { image: Option<String>, segment: ImageSegmentation },
+    Image { image: String }
 }
 
 impl WidgetType {
@@ -171,7 +172,7 @@ impl WidgetType {
         WidgetType::Window { image: None, segment: ImageSegmentation::None }
     }
     pub fn image<S>(image: S) -> WidgetType where S: Into<String> {
-        WidgetType::Window { image: Some(image.into()), segment: ImageSegmentation::None }
+        WidgetType::Image { image: image.into() }
     }
 
     pub fn set_text<S>(&mut self, text_in: S) where S: Into<String> {
@@ -183,6 +184,12 @@ impl WidgetType {
     pub fn set_text_wrap(&mut self, wrap_in : Option<TextWrap>) {
         match self {
             WidgetType::Text { ref mut wrap, .. } => *wrap = wrap_in,
+            _ => ()
+        }
+    }
+    pub fn set_image<S : Into<String>>(&mut self, new_image : S) {
+        match self {
+            WidgetType::Image { ref mut image } => *image = new_image.into(),
             _ => ()
         }
     }
@@ -425,6 +432,7 @@ impl Widget {
 
     pub fn image<S>(image: S, color: Color, border_width: u8) -> Widget where S: Into<String> {
         Widget::new(WidgetType::image(image))
+            .size(Sizing::Derived, Sizing::Derived)
             .color(color)
             .border(Border { color: Color::black(), width: border_width, sides: BorderSides::all() })
     }

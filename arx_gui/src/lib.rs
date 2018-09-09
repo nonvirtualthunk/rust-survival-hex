@@ -53,7 +53,7 @@ pub use events::*;
 pub mod widget_delegation;
 pub use widget_delegation::*;
 
-pub use piston_window::MouseButton;
+pub use events::MouseButton;
 pub use piston_window::Key;
 
 pub mod prelude;

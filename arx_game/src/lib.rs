@@ -33,6 +33,7 @@ extern crate backtrace;
 #[macro_use] extern crate serde_derive;
 extern crate ron;
 #[macro_use] extern crate serde;
+extern crate multimap;
 
 extern crate num;
 

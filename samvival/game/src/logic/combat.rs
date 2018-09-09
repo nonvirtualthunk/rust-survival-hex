@@ -82,7 +82,7 @@ impl StrikeTargetBreakdown {
 //        let dice_count : i32 = self.dice_count_components.iter().map(|c| c.0).sum();
 //        let die : i32 = self.die_components.iter().map(|c| c.0).sum();
 //        DicePool::of(dice_count.as_u32_or_0(), die.as_u32_or_0())
-        self.damage_dice_components.iter().map(|dd| dd.0)
+        self.damage_dice_components.iter().map(|dd| dd.0.clone())
     }
 }
 
@@ -246,6 +246,8 @@ pub fn compute_strike_breakdown(world: &World, view: &WorldView, attacker_ref: E
 
         let _attacker_tile: &TileData = view.tile(attacker.position.hex);
         let defender_tile: &TileData = view.tile(defender.position.hex);
+        let defender_terrain: &TerrainData = view.terrain(defender.position.hex);
+        let defender_vegetation: &VegetationData = view.vegetation(defender.position.hex);
 
         match attack.attack_type {
             AttackType::Melee | AttackType::Reach => {
@@ -261,11 +263,12 @@ pub fn compute_strike_breakdown(world: &World, view: &WorldView, attacker_ref: E
 
         target_breakdown.to_hit_components.add(attack.to_hit_bonus, "weapon accuracy");
 
-        target_breakdown.to_miss_components.add(defender_tile.cover as i32, "terrain defense");
+        target_breakdown.to_miss_components.add(defender_terrain.cover as i32, "terrain cover");
+        target_breakdown.to_miss_components.add(defender_vegetation.cover as i32, "vegetation cover");
 
     //    ret.dice_count_components.push((attack.damage_dice.count as i32, "weapon dice"));
     //    ret.die_components.push((attack.damage_dice.die as i32, "weapon die size"));
-        target_breakdown.damage_dice_components.push((attack.damage_dice, "base weapon damage"));
+        target_breakdown.damage_dice_components.push((attack.damage_dice.clone(), "base weapon damage"));
 
 
         match attack.range {

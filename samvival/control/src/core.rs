@@ -40,7 +40,7 @@ use std::fs::File;
 pub trait GameMode {
     fn enter(&mut self, gui: &mut GUI, universe: &mut Universe, event_bus: &mut EventBus<GameModeEvent>);
     fn update(&mut self, universe: &mut Universe, dt: f64, event_bus: &mut EventBus<GameModeEvent>);
-    fn update_gui(&mut self, universe: &mut Universe, ui: &mut GUI, frame_id: Option<Wid>, event_bus: &mut EventBus<GameModeEvent>);
+    fn update_gui(&mut self, universe: &mut Universe, gsrc : &mut GraphicsResources, ui: &mut GUI, frame_id: Option<Wid>, event_bus: &mut EventBus<GameModeEvent>);
     fn draw(&mut self, universe: &mut Universe, g: &mut GraphicsWrapper, event_bus: &mut EventBus<GameModeEvent>);
     fn on_event<'a, 'b>(&'a mut self, universe: &mut Universe, ui: &'b mut GUI, event: &UIEvent, event_bus: &mut EventBus<GameModeEvent>);
     fn handle_event(&mut self, universe: &mut Universe, gui: &mut GUI, event: &UIEvent, event_bus: &mut EventBus<GameModeEvent>);
@@ -91,7 +91,7 @@ impl Game {
 
     pub fn init_world() -> (World, Entity) {
         let world = FirstEverScenario {}.initialize_scenario_world();
-        let player_faction = world.view().entities_with_data::<FactionData>().iter().find(|(ent, faction_data)| faction_data.player_faction).unwrap();
+        let player_faction = world.view().entities_with_data::<FactionData>().find(|(ent, faction_data)| faction_data.player_faction).unwrap();
 
         (world, *player_faction.0)
     }
@@ -102,7 +102,7 @@ impl Game {
     pub fn on_update(&mut self, upd: UpdateArgs) {
         self.active_mode.update(&mut self.state.universe, upd.dt, &mut self.event_bus);
 
-        self.active_mode.update_gui(&mut self.state.universe, &mut self.gui, None, &mut self.event_bus);
+        self.active_mode.update_gui(&mut self.state.universe, &mut self.resources, &mut self.gui, None, &mut self.event_bus);
 
         self.gui.reset_events();
 
@@ -135,8 +135,9 @@ impl Game {
                             self.state = game_state;
                             // TODO: Once we have non-tactical worlds, this will get...different
                             for world in &mut self.state.universe.worlds {
-                                register_world_data(world);
+                                ::game::samvival_core::register_world_data(world);
                                 world.initialize_loaded_world();
+                                ::game::samvival_core::initialize_world(world);
                             }
                             self.gui = GUI::new();
                             let tactical_mode = TacticalMode::new(&mut self.gui, self.state.active_world.expect("Loaded with no active world, which is weird"), false);

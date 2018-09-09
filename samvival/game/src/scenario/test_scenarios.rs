@@ -21,8 +21,9 @@ impl Scenario for FirstEverScenario {
         let mut raw_world = create_world();
         {
             let world = &mut raw_world;
+            ::samvival_core::initialize_world(world);
 
-            for tile in terrain::generator::generate(70) {
+            for tile in terrain::generator::generate(world, 70) {
                 let tile = tile.with(DebugData { name: strf("world tile") }).create(world);
                 let pos = world.data::<TileData>(tile).position;
                 world.index_entity(tile, pos);
@@ -116,6 +117,31 @@ impl Scenario for FirstEverScenario {
                 }).create(world);
 
             world.modify_with_desc(spearman, CombatData::special_attacks.append(special_attack), None);
+
+
+            let peasant = char_base("axflar")
+                .with(CharacterData {
+                    sprite: String::from("human/peasant"),
+                    name: String::from("Peasant"),
+                    health: Reduceable::new(45),
+                    action_points: Reduceable::new(8),
+                    ..Default::default()
+                })
+                .with(AllegianceData { faction: player_faction })
+                .with(ActionData {
+                    active_reaction: ReactionTypeRef::Defend,
+                    ..Default::default()
+                })
+                .with(DebugData { name: strf("peasant") })
+                .create(world);
+
+            let hatchet = weapon_archetypes.with_name("hatchet").create(world);
+            logic::item::equip_item(world, hatchet, peasant, true);
+
+            let pickaxe = weapon_archetypes.with_name("pickaxe").create(world);
+            logic::item::equip_item(world, pickaxe, peasant, true);
+
+            logic::movement::place_entity_in_world(world, peasant, AxialCoord::new(1, -2));
 
 
             let monster_base = character_archetypes.with_name("mud monster").clone()

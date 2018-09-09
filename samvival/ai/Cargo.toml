@@ -1,0 +1,46 @@
+[package]
+name = "samvival_ai"
+version = "0.1.0"
+authors = ["Sam Bock <nonvirtualthunk@gmail.com>"]
+
+[lib]
+name = "samvival_ai"
+
+[dependencies]
+find_folder = "*"
+cgmath = "*"
+lazy_static = "*"
+rand = "0.4"
+noisy_float = "*"
+pathfinding = "*"
+spectral = "*"
+log = "*"
+pretty_env_logger = "*"
+derive_more = "0.11.0"
+num = "0.2.0"
+itertools = "0.7.3"
+noise = "*"
+state = { version = "0.4", features = ["const_fn"] }
+#erased-serde = "*"
+#serde_derive = "*"
+#serde = { version = "*", features = ["rc"] }
+#ron = "*"
+
+[dependencies.arx_common]
+path = "../../arx_common"
+version = "0.1.0"
+
+[dependencies.samvival_game]
+path = "../game"
+version = "0.1.0"
+
+[dependencies.arx_macros]
+path = "../../arx_macros"
+version = "0.1.0"
+
+[dependencies.samvival_data]
+path = "../data"
+version = "0.1.0"
+
+[dependencies.vecmath]
+git = "https://github.com/PistonDevelopers/vecmath"

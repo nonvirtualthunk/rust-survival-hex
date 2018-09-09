@@ -42,11 +42,31 @@ impl Default for TimeOfDay {
     }
 }
 
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Season {
+    Spring,
+    Summer,
+    Autumn,
+    Winter,
+}
+impl Default for Season {
+    fn default() -> Self {
+        Season::Spring
+    }
+}
+
+
 #[derive(Clone, Debug, Fields, Serialize, Deserialize)]
 pub struct TimeData {
     pub moments_since_world_start : u32,
-    pub moments_by_time_of_day : HashMap<TimeOfDay, u32>,
+    pub moments_per_time_of_day: HashMap<TimeOfDay, u32>,
+    pub days_per_season: HashMap<Season, u32>,
     pub moments_since_day_start : u32
+}
+
+impl TimeData {
+
 }
 
 impl Default for TimeData {
@@ -57,10 +77,18 @@ impl Default for TimeData {
         durations.insert(TimeOfDay::Daylight, 6);
         durations.insert(TimeOfDay::Night, 6);
 
+        let days_per_season = [
+            (Season::Spring, 6u32),
+            (Season::Summer, 6u32),
+            (Season::Autumn, 6u32),
+            (Season::Winter, 6u32)
+        ].iter().cloned().collect();
+
         TimeData {
             moments_since_world_start : 0,
             moments_since_day_start : 0,
-            moments_by_time_of_day : durations
+            moments_per_time_of_day: durations,
+            days_per_season
         }
     }
 }

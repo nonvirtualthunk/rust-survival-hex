@@ -16,6 +16,8 @@ use common::ExtendedCollection;
 impl SelectorMatches for EntitySelector {
     fn matches(&self, world: &WorldView, entity: Entity) -> bool {
         match self {
+            Is(other_entity) => &entity == other_entity,
+            IsEquivalentTo(other_entity) => { warn!("IsEquivalentTo selector not fully defined yet"); &entity == other_entity },
             IsCharacter => world.has_data::<CharacterData>(entity),
             IsTile => world.has_data::<TileData>(entity),
             Friend { of } =>
@@ -49,7 +51,8 @@ impl SelectorMatches for EntitySelector {
             IsA(taxon) => world.data_opt::<IdentityData>(entity).filter(|i| i.kinds.any_match(|k| k.is_a(&taxon))).is_some(),
             And(a,b) => a.matches(world, entity) && b.matches(world, entity),
             Or(a,b) => a.matches(world, entity) || b.matches(world, entity),
-            Any => true
+            Any => true,
+            None => true,
         }
     }
 }

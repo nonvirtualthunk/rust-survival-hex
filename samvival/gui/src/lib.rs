@@ -55,6 +55,7 @@ pub use gui::*;
 
 pub mod escape_menu;
 
+pub mod harvest_detail_widget;
 
 use std::fs::File;
 pub fn open_save_file(create: bool) -> Option<File> {

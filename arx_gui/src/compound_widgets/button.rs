@@ -10,7 +10,7 @@ use graphics::ImageIdentifier;
 use gui::*;
 use itertools::Itertools;
 use piston_window::keyboard;
-use piston_window::MouseButton;
+use events::MouseButton;
 use std::any::Any;
 use std::any::TypeId;
 use std::collections::HashMap;

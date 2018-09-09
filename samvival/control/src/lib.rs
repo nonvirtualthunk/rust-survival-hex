@@ -20,6 +20,7 @@ extern crate vecmath;
 extern crate arx_common as common;
 extern crate samvival_game as game;
 extern crate samvival_graphics as graphics;
+extern crate samvival_ai as ai;
 extern crate pathfinding;
 extern crate interpolation;
 extern crate noisy_float;

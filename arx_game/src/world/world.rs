@@ -49,6 +49,7 @@ use serde::de::SeqAccess;
 use serde::de;
 use serde::de::MapAccess;
 use entity::EntityMetadata;
+use multimap::MultiMap;
 
 pub struct ModifiersApplication {
     disable_func: fn(&mut World, ModifierReference),
@@ -76,7 +77,7 @@ pub enum ModifierReferenceType {
 }
 
 /// (cross-type modifier clock, reference type, within-type index)
-#[derive(Debug, Clone, Serialize, Deserialize, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Copy, PartialEq, Eq, Hash)]
 pub struct ModifierReference(pub(crate) usize, pub(crate) ModifierReferenceType, pub(crate) usize);
 
 impl ModifierReference {
@@ -99,6 +100,8 @@ impl ModifierReference {
 #[derive(Serialize, Deserialize)]
 pub struct World {
     pub(crate) entities: Vec<EntityContainer>,
+    pub(crate) copy_on_write_entities: HashMap<Entity, Entity>,
+    pub(crate) copy_on_write_entities_by_source: MultiMap<Entity, Entity>,
     pub self_entity: Entity,
     pub data: MultiTypeContainer,
     pub modifiers: MultiTypeContainer,
@@ -120,25 +123,6 @@ pub struct World {
     pub initialized: bool
 }
 
-pub trait OptionalStringArg {
-    fn into_string_opt(self) -> Option<String>;
-}
-impl OptionalStringArg for &'static str {
-    fn into_string_opt(self) -> Option<String> {
-        Some(String::from(self))
-    }
-}
-impl OptionalStringArg for Option<String> {
-    fn into_string_opt(self) -> Option<String> {
-        self
-    }
-}
-impl OptionalStringArg for String {
-    fn into_string_opt(self) -> Option<String> {
-        Some(self)
-    }
-}
-
 
 impl World {
     pub fn new() -> World {
@@ -146,6 +130,8 @@ impl World {
 
         let mut world = World {
             entities: vec![],
+            copy_on_write_entities: HashMap::new(),
+            copy_on_write_entities_by_source: MultiMap::new(),
             self_entity: self_ent,
             data: MultiTypeContainer::new(),
             modifiers: MultiTypeContainer::new(),
@@ -156,6 +142,8 @@ impl World {
             events: MultiTypeEventContainer::new(),
             view: UnsafeCell::new(WorldView {
                 entities: vec![],
+                copy_on_write_entities_by_source: MultiMap::new(),
+                copy_on_write_entities: HashMap::new(),
                 entity_set: HashSet::new(),
                 self_entity: self_ent,
                 constant_data: MultiTypeContainer::new(),
@@ -395,7 +383,9 @@ impl World {
                                     //.entry(wrapper.entity.0).or_insert(T::default()).clone(),
                                     .entry(wrapper.entity)
                                     .or_insert_with(|| {
-                                        if is_dynamic {
+                                        if let Some(cow_source) = world.copy_on_write_entities.get(&wrapper.entity) {
+                                            world.raw_data::<T>(*cow_source).clone()
+                                        } else if is_dynamic {
                                             constant_data.get::<DataContainer<T>>().storage
                                                 .get(&wrapper.entity).expect("dynamic modifier could not pull baseline constant data to work from").clone()
                                         } else {
@@ -407,7 +397,13 @@ impl World {
                                     //.entry(wrapper.entity).or_insert(T::default()).clone()
 //                                    .get(&wrapper.entity).unwrap_or_else(|| panic!(format!("Could not retrieve constant data for modified entity {}", wrapper.entity))).clone()
                                     .entry(wrapper.entity)
-                                    .or_insert_with(|| { world.raw_data::<T>(wrapper.entity).clone() })
+                                    .or_insert_with(|| {
+                                        if let Some(cow_source) = world.copy_on_write_entities.get(&wrapper.entity) {
+                                            world.raw_data::<T>(*cow_source).clone()
+                                        } else {
+                                            world.raw_data::<T>(wrapper.entity).clone()
+                                        }
+                                    })
                                     .clone(),
                             };
 
@@ -479,6 +475,8 @@ impl World {
         let mut new_view = WorldView {
             entity_set,
             entities,
+            copy_on_write_entities_by_source: self.copy_on_write_entities_by_source.clone(),
+            copy_on_write_entities: self.copy_on_write_entities.clone(),
             self_entity: self.self_entity,
             constant_data: self.data.clone(),
             effective_data: self.data.clone(),
@@ -830,7 +828,7 @@ impl World {
     }
 
     pub fn ensure_data<T: EntityData>(&mut self, entity: Entity) {
-        if !self.has_data::<T>(entity) {
+        if self.raw_data_opt::<T>(entity).is_none() {
             self.attach_data::<T>(entity, T::default());
         }
     }
@@ -858,6 +856,13 @@ impl World {
         Entity(id)
     }
 
+    pub fn create_cow_clone_of(&mut self, other : Entity) -> Entity {
+        let new_entity = self.create_entity();
+        self.copy_on_write_entities.insert(new_entity, other);
+        self.copy_on_write_entities_by_source.insert(other, new_entity);
+        new_entity
+    }
+
 
     pub fn random_seed(&self, extra: usize) -> Vec<usize> {
         vec![extra, self.next_time as usize]
@@ -870,10 +875,12 @@ impl World {
     }
 
     pub fn raw_data<T: EntityData>(&self, entity: Entity) -> &T {
-        self.raw_data_opt::<T>(entity).unwrap_or_else(|| panic!(format!("Attempted to get raw data of type {:?}, but entity {:?} had none", unsafe { std::intrinsics::type_name::<T>() }, entity)))
+        self.raw_data_opt::<T>(entity)
+            .unwrap_or_else(|| panic!(format!("Attempted to get raw data of type {:?}, but entity {:?} had none", unsafe { std::intrinsics::type_name::<T>() }, entity)))
     }
     pub fn raw_data_opt<T: EntityData>(&self, entity: Entity) -> Option<&T> {
         self.data.get::<DataContainer<T>>().storage.get(&entity)
+            .or_else(|| self.copy_on_write_entities.get(&entity).and_then(|cow_source| self.raw_data_opt::<T>(*cow_source)))
     }
 
     pub fn world_data_mut<T: EntityData>(&mut self) -> &T {

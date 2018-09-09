@@ -34,6 +34,9 @@ pub enum GameEvent {
     ReactionEffectApplied { entity : Entity },
     ActionTaken { entity : Entity, action : Action },
     EntityHarvested { harvester : Entity, harvested : Entity, amount : i32 },
+
+
+    EffectRegistered,
     Default
 }
 impl Default for GameEvent {

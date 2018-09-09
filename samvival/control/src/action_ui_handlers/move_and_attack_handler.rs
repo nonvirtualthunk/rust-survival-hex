@@ -13,6 +13,12 @@ use game::entities::Character;
 use game::entities::Visibility;
 use gui::attack_descriptions::AttackDetailsWidget;
 
+#[derive(Default)]
+struct MoveAndAttackHandler {
+    attack_details_widget : AttackDetailsWidget
+}
+
+
 pub fn draw_move_and_attack_overlay(view: &WorldView, game_state: &GameState, attack_ref: AttackRef) -> DrawList {
     if let Some(selected) = game_state.selected_character {
         if let Some(movement_type) = logic::movement::default_movement_type(view, selected) {

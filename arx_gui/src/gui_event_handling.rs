@@ -17,7 +17,7 @@ use widgets::Wid;
 use gui::WidgetStatePlaceholder;
 use piston_window;
 use piston_window::GenericEvent;
-use piston_window::MouseButton;
+use events::MouseButton;
 use piston_window::Viewport;
 use std::any::TypeId;
 use std::collections::HashMap;

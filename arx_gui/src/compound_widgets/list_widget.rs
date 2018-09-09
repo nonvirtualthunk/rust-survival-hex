@@ -10,7 +10,7 @@ use graphics::ImageIdentifier;
 use gui::*;
 use itertools::Itertools;
 use piston_window::keyboard;
-use piston_window::MouseButton;
+use events::MouseButton;
 use std::any::Any;
 use std::any::TypeId;
 use std::collections::HashMap;
@@ -110,11 +110,11 @@ impl<T: Default + WidgetContainer> ListWidget<T> {
         self.update(gui, &[], |t, u: &i32| {})
     }
 
-    pub fn update<U, F: Fn(&mut T, &U)>(&mut self, gui: &mut GUI, data: &[U], func: F) -> &mut Self {
+    pub fn update<U, F: FnMut(&mut T, &U)>(&mut self, gui: &mut GUI, data: &[U], mut func: F) -> &mut Self {
         self.update_with_row(gui, data, move |t : &mut T, u : &U, _ : &Widget| { func(t,u) })
     }
 
-    pub fn update_with_row<U, F: Fn(&mut T, &U, &Widget)>(&mut self, gui: &mut GUI, data: &[U], func: F) -> &mut Self {
+    pub fn update_with_row<U, F: FnMut(&mut T, &U, &Widget)>(&mut self, gui: &mut GUI, data: &[U], mut func: F) -> &mut Self {
         let draw_layer = self.as_widget_immut().draw_layer;
 
         // make sure the body exists. Todo: only actually need to do this the first time

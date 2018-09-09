@@ -42,8 +42,7 @@ impl InventoryDataStore for WorldView {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, Fields)]
 pub struct StackData {
-    pub stack_of : Entity,
-    pub stack_size : i32,
+    pub entities : Vec<Entity>,
     pub stack_limit : i32,
 }
 impl EntityData for StackData {}

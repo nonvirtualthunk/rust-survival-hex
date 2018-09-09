@@ -16,6 +16,7 @@ use data::entities::faction::FactionData;
 use data::entities::tile::TileStore;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use entities::TileAccessor;
 
 
 //pub struct
@@ -120,7 +121,9 @@ impl VisibilityComputor {
 
         visible_hexes.insert(center);
 
-        let start_elevation = world.tile_opt(center).map(|t| t.elevation).unwrap_or(0);
+        let accessor = TileAccessor::new(world);
+
+        let start_elevation = accessor.terrain_at(center).elevation;
 
         let max_r = observer.vision_range_at_time(TimeOfDay::Daylight) + 1;
 
@@ -137,13 +140,14 @@ impl VisibilityComputor {
                 let point = center_f + delta * pcnt;
                 let hex = CubeCoord::rounded(point.x, point.y, point.z).as_axial_coord();
 
-                if let Some(tile) = world.tile_opt(hex) {
-                    let elevation = tile.elevation;
+                if let Some(tile) = accessor.tile_opt(hex) {
+                    let terrain = accessor.terrain(&tile);
+                    let elevation = terrain.elevation;
 
                     if max_intervening_elevation > start_elevation && elevation < max_intervening_elevation {
                         visibility_remaining = -1;
                     } else if elevation >= start_elevation {
-                        let obstruction = tile.cover;
+                        let obstruction = terrain.cover + accessor.vegetation(&tile).cover;
                         visibility_remaining -= 1 + obstruction as i32;
                     }
                     max_intervening_elevation = max_intervening_elevation.max(elevation);
