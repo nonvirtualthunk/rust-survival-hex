@@ -133,6 +133,7 @@ impl Game {
                         use ron;
                         if let Ok(game_state) = ron::de::from_reader(buf_reader) {
                             self.state = game_state;
+                            taxonomy::register();
                             // TODO: Once we have non-tactical worlds, this will get...different
                             for world in &mut self.state.universe.worlds {
                                 ::game::samvival_core::register_world_data(world);

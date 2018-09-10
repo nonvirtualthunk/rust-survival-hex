@@ -48,6 +48,7 @@ use gui::action_bar::ActionBar;
 use gui::reaction_bar::ReactionBar;
 use gui::character_info::CharacterInfoWidget;
 use gui::state::GameState;
+use gui::state::KeyGameState;
 use gui::action_bar::PlayerActionType;
 use gui::inventory_widget;
 use gui::escape_menu::*;
@@ -56,6 +57,9 @@ use gui::state::ControlContext;
 use gui::control_events::GameModeEvent;
 use gui::harvest_detail_widget::HarvestSummaryWidget;
 use graphics::GraphicsResources;
+use action_ui_handlers::player_action_handler::PlayerActionHandler;
+use action_ui_handlers::harvest_handler::HarvestHandler;
+use game::logic::item;
 
 #[derive(PartialEq,Clone,Copy)]
 pub enum AuxiliaryWindows {
@@ -72,14 +76,12 @@ pub struct TacticalGui {
     event_bus_handle : ConsumerHandle,
     character_info_widget : CharacterInfoWidget,
     targeting_draw_list : DrawList,
-    last_targeting_info : Option<(GameState, PlayerActionType)>,
-    attack_details_widget : AttackDetailsWidget,
-    harvest_summary_widget : HarvestSummaryWidget,
+    last_targeting_info : Option<(KeyGameState, PlayerActionType)>,
     messages_display : MessagesDisplay,
     inventory_widget: inventory_widget::InventoryDisplay,
     open_auxiliary_windows : Vec<AuxiliaryWindows>,
     escape_menu : EscapeMenu,
-
+    player_action_handlers : Vec<Box<PlayerActionHandler>>,
 }
 
 
@@ -111,6 +113,11 @@ impl TacticalGui {
         let event_bus = EventBus::new();
         let event_bus_handle = event_bus.register_consumer(true);
 
+        let player_action_handlers : Vec<Box<PlayerActionHandler>> = vec![
+            MoveAndAttackHandler::new(),
+            HarvestHandler::new(),
+        ];
+
         TacticalGui {
             victory_widget,
             defeat_widget,
@@ -121,13 +128,20 @@ impl TacticalGui {
             reaction_bar : ReactionBar::new(gui, &main_area),
             targeting_draw_list : DrawList::none(),
             last_targeting_info : None,
-            attack_details_widget : AttackDetailsWidget::new().draw_layer_for_all(GUILayer::Overlay),
-            harvest_summary_widget : HarvestSummaryWidget::new(),
             messages_display : MessagesDisplay::new(gui, &main_area),
             inventory_widget : inventory_widget::InventoryDisplay::new(strf("Character Inventory"), &main_area),
             open_auxiliary_windows: Vec::new(),
             escape_menu : EscapeMenu::new(gui, &main_area),
             main_area,
+            player_action_handlers,
+        }
+    }
+
+    pub fn selected_player_action(&self, view : &WorldView, game_state : &GameState) -> PlayerActionType {
+        if let Some(selected) = game_state.selected_character {
+            self.action_bar.selected_action_for(view, selected)
+        } else {
+            PlayerActionType::None
         }
     }
 
@@ -143,7 +157,7 @@ impl TacticalGui {
             let action_type = self.action_bar.selected_action_for(view, selected);
 
             if let Some((last_state, last_action_type)) = self.last_targeting_info.as_ref() {
-                if last_state == game_state && last_action_type == &action_type {
+                if last_state == &game_state.key_state() && last_action_type == &action_type {
                     return self.targeting_draw_list.clone()
                 }
             }
@@ -152,29 +166,12 @@ impl TacticalGui {
 
             let visibility = view.world_data::<VisibilityData>().visibility_for(game_state.player_faction);
 
+            let mut draw_list = DrawList::none();
+            for handler in &mut self.player_action_handlers {
+                draw_list.extend(handler.draw(view, game_state, &action_type));
+            }
 
-            let draw_list = if let PlayerActionType::MoveAndAttack(_,attack_ref) = &action_type {
-                move_and_attack_handler::draw_move_and_attack_overlay(view, &game_state, attack_ref.clone())
-            } else {
-                DrawList::none()
-//                let entity_selectors = (action_type.target)(selected, view);
-//                for selector in entity_selectors {
-//                    let EntitySelector(pieces) = selector;
-//                    if pieces.contains(&EntitySelectors::IsTile) {
-//                        let range_limiter = pieces.iter().find(|s| { if let EntitySelectors::InMoveRange {..} = s { true } else { false } });
-//                        if let Some(range_limit) = range_limiter {
-//                            // trim the selector down to remove the range limiter, we've pre-emptively taken care of that
-//                            let selector = EntitySelector(pieces.iter().cloned().filter(|s| if let EntitySelectors::InMoveRange {..} = s { false } else { true } ).collect_vec());
-//
-//                            draw_list = self.draw_boundary_at_hex_range(view, selected, current_position, range, draw_list, &selector);
-//                        } else {
-//                            warn!("Tile selector without range limiter, this should not generally be the case")
-//                        }
-//                    }
-//                }
-            };
-
-            self.last_targeting_info = Some((game_state.clone(), action_type.clone()));
+            self.last_targeting_info = Some((game_state.key_state(), action_type.clone()));
             self.targeting_draw_list = draw_list.clone();
 
             draw_list
@@ -236,10 +233,16 @@ impl TacticalGui {
 //    }
 
 
-    pub fn update_gui(&mut self, world: &mut World, world_view : &WorldView, gsrc : &mut GraphicsResources, gui: &mut GUI, frame_id: Option<Wid>, game_state: GameState, game_mode_event_bus : &mut EventBus<GameModeEvent>) {
-//        let world_view = world.view_at_time(game_state.display_event_clock);
+    pub fn handle_click(&mut self, world: &mut World, game_state : &GameState, button : MouseButton) -> bool {
+        let world_view = world.view();
+        let action = self.selected_player_action(world_view, game_state);
+        self.player_action_handlers.iter_mut().any(|pah| pah.handle_click(world, game_state, &action, button))
+    }
 
+    pub fn update_gui(&mut self, world: &mut World, world_view : &WorldView, gsrc : &mut GraphicsResources, gui: &mut GUI, frame_id: Option<Wid>, game_state: GameState, game_mode_event_bus : &mut EventBus<GameModeEvent>) {
         self.messages_display.update(gui);
+
+        let selected_action = self.selected_player_action(world_view, &game_state);
 
         if let Some(selected) = game_state.selected_character {
             let mut control = ControlContext { event_bus : &mut self.event_bus };
@@ -269,32 +272,26 @@ impl TacticalGui {
                 self.reaction_bar.set_showing(false).reapply(gui);
             }
 
-            match self.action_bar.selected_action_for(&world_view, selected) {
-                PlayerActionType::MoveAndAttack(_, attack_ref) => {
-                    update_move_and_attack_widgets(&mut self.attack_details_widget, world, &world_view, gui, &game_state, selected, attack_ref);
-                },
-                PlayerActionType::Harvest => {
-                    self.harvest_summary_widget.update(gui, world, world.view(), gsrc, game_state.mouse_pixel_pos, selected, game_state.hovered_hex_coord, false);
-                },
-                _ => ()
-            }
-
 
             let inv_data = world_view.data::<InventoryData>(selected);
             let items = &inv_data.items;
-            let main_inv = vec![InventoryDisplayData::new(items.clone(), "Character Inventory", vec![selected], true, inv_data.inventory_size)];
+            let destacked = item::items_in_inventory(world_view, selected);
+            let main_inv = vec![InventoryDisplayData::new(items.clone(), destacked, "Character Inventory", vec![selected], true, inv_data.inventory_size)];
 
             let mut ground_items = Vec::new();
             let mut ground_entities = Vec::new();
+            let mut destacked_ground_items = Vec::new();
+
             for ground_coord in vec![char.position.hex].extended_by(char.position.hex.neighbors_vec()) {
                 if let Some(ent) = world_view.tile_ent_opt(ground_coord) {
                     ground_entities.push(ent.entity);
                     if let Some(inv) = world_view.data_opt::<InventoryData>(ent.entity) {
                         ground_items.extend(inv.items.clone());
+                        destacked_ground_items.extend(item::items_in_inventory(world_view, ent.entity));
                     }
                 }
             }
-            let other_inv = vec![InventoryDisplayData::new(ground_items, "Ground", ground_entities, false, None)];
+            let other_inv = vec![InventoryDisplayData::new(ground_items, destacked_ground_items, "Ground", ground_entities, false, None)];
             self.inventory_widget.update(gui, world, main_inv, other_inv, &mut control);
         } else {
             self.main_area.set_width(Sizing::DeltaOfParent(0.ux())).reapply(gui);
@@ -302,9 +299,20 @@ impl TacticalGui {
             self.character_info_widget.set_showing(false).reapply(gui);
             self.action_bar.set_showing(false).reapply(gui);
             self.reaction_bar.set_showing(false).reapply(gui);
-            self.attack_details_widget.hide(gui);
             self.inventory_widget.set_showing(false).reapply(gui);
         }
+
+        if gui.moused_over_widget().map(|mow| gui.widget_and_all_ancestors(mow).contains(&self.character_info_widget.id())).unwrap_or(false) {
+            for handler in &mut self.player_action_handlers {
+                handler.hide_widgets(gui);
+            }
+        } else {
+            for handler in &mut self.player_action_handlers {
+                handler.update_widgets(gui, gsrc, world, world_view, &game_state, &selected_action);
+            }
+        }
+
+
 
         for event in gui.events_for(&self.main_area) {
             if let Some((tactical_event,_)) = event.as_custom_event::<TacticalEvents>() {
@@ -313,6 +321,7 @@ impl TacticalGui {
         }
 
         for event in self.event_bus.events_for(&mut self.event_bus_handle) {
+            let event : &TacticalEvents = event; // explicit typing so that IDEA can figure out what's going on
             if let Some(selected) = game_state.selected_character {
                 match event {
                     TacticalEvents::ActionSelected(action_type) => {
@@ -347,14 +356,8 @@ impl TacticalGui {
                                 to.first()
                             };
                             if let Some(single_to) = single_to {
-                                if logic::item::is_item_in_inventory_of(world, *item, *from) {
-                                    if logic::item::is_item_equipped_by(world, *item, *from) {
-                                        logic::item::unequip_item(world, *item, *from, true);
-                                    }
-                                    logic::item::remove_item_from_inventory(world, *item, *from);
-                                    logic::item::put_item_in_inventory(world, *item, *single_to);
-                                } else {
-                                    error!("Could not transfer, item no longer in source");
+                                if logic::item::transfer_item(world, *item, *from, *single_to) != logic::item::TransferResult::All {
+                                    warn!("Could not transfer all of the items from {} to {}", world.view().signifier(*from), world.view().signifier(*single_to));
                                 }
                             }
                         } else {

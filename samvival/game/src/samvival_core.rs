@@ -8,6 +8,8 @@ use logic::visibility::VisibilityComputor;
 pub fn create_world() -> World {
     let mut world = World::new();
 
+    taxonomy::register();
+
     register_world_data(&mut world);
 
     world.attach_world_data(MapData {

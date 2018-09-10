@@ -227,6 +227,11 @@ impl DrawList {
         self.text.append(&mut other.text);
     }
 
+    pub fn extend(&mut self, other: DrawList) {
+        self.quads.extend(other.quads);
+        self.text.extend(other.text);
+    }
+
     pub fn clear(&mut self) {
         self.quads.clear();
         self.text.clear();

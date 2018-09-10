@@ -30,7 +30,7 @@ pub struct WorldView {
     pub(crate) entity_set: HashSet<Entity>,
     pub(crate) self_entity : Entity,
     pub(crate) constant_data: MultiTypeContainer,
-    pub(crate) effective_data: MultiTypeContainer,
+    pub effective_data: MultiTypeContainer,
     pub(crate) overlay_data: MultiTypeContainer,
     pub current_time: GameEventClock,
     pub(crate) modifier_cursor: ModifierClock,

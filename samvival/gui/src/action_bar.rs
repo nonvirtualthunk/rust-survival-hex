@@ -22,6 +22,7 @@ pub enum PlayerActionType {
     InteractWithInventory,
     Move(MovementTypeRef),
     Wait,
+    None,
 }
 
 impl PlayerActionType {
@@ -32,6 +33,7 @@ impl PlayerActionType {
             PlayerActionType::Move(move_ref) => move_ref.resolve(world).map(|mt| mt.name.capitalized()).unwrap_or_else(|| String::from("Unknown move type")),
             PlayerActionType::Wait => String::from("Wait"),
             PlayerActionType::Harvest => String::from("Harvest"),
+            PlayerActionType::None => String::from("None"),
         }
     }
     pub fn description(&self, world : &WorldView, character : Entity) -> String {
@@ -41,6 +43,7 @@ impl PlayerActionType {
             PlayerActionType::Move(move_ref) => format!("{} across terrain to another location", move_ref.resolve(world).map(|m| m.name.as_str()).unwrap_or("move")),
             PlayerActionType::Wait => format!("Do nothing for the moment"),
             PlayerActionType::Harvest => format!("Harvest resources from a nearby hex."),
+            PlayerActionType::None => String::from("None"),
         }
     }
     pub fn icon(&self, world : &WorldView, character : Entity) -> String {
@@ -50,6 +53,7 @@ impl PlayerActionType {
             PlayerActionType::Move(move_ref) => format!("ui/move_icon"),
             PlayerActionType::Wait => format!("ui/clock_icon"),
             PlayerActionType::Harvest => format!("ui/harvest_icon"),
+            PlayerActionType::None => String::from("None"),
         }
     }
 }

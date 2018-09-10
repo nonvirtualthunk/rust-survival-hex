@@ -4,7 +4,7 @@ use common::hex::*;
 use game::prelude::*;
 use common::EventBus;
 
-#[derive(PartialEq, Clone)]
+#[derive(Clone)]
 pub struct GameState {
     pub display_event_clock: GameEventClock,
     pub selected_character: Option<Entity>,
@@ -20,6 +20,24 @@ pub struct GameState {
 }
 impl GameState {
     pub fn mouse_cart_vec(&self) -> CartVec { self.mouse_cart_vec }
+
+    pub fn key_state(&self) -> KeyGameState {
+        KeyGameState {
+            display_event_clock : self.display_event_clock,
+            selected_character : self.selected_character,
+            hovered_hex_coord : self.hovered_hex_coord,
+            animating : self.animating,
+        }
+    }
+}
+
+/// game state suitable for use as a key or for caching, only includes relevant, not-quickly-changing fields
+#[derive(PartialEq, Clone)]
+pub struct KeyGameState {
+    pub display_event_clock: GameEventClock,
+    pub selected_character: Option<Entity>,
+    pub hovered_hex_coord: AxialCoord,
+    pub animating: bool,
 }
 
 

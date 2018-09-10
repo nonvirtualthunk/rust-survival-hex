@@ -436,8 +436,9 @@ impl World {
         };
 
         let clone_into_func = |world: &mut World, from : Entity, to: Entity| {
-            let from_data = world.view().data::<T>(from).clone();
-            world.attach_data(to, from_data);
+            if let Some(data) = world.view().data_opt::<T>(from) {
+                world.attach_data(to, data.clone());
+            }
         };
 
 

@@ -12,10 +12,97 @@ use game::entities::PositionData;
 use game::entities::Character;
 use game::entities::Visibility;
 use gui::attack_descriptions::AttackDetailsWidget;
+use noisy_float::types::r64;
+use std::collections::HashMap;
+use action_ui_handlers::player_action_handler::PlayerActionHandler;
 
-#[derive(Default)]
-struct MoveAndAttackHandler {
+use gui::MouseButton;
+use gui::PlayerActionType;
+use gui::GUI;
+use gui::GUILayer;
+use gui::WidgetContainer;
+
+use game::prelude::*;
+
+use graphics::GraphicsResources;
+use graphics::prelude::*;
+
+
+pub(crate) struct MoveAndAttackHandler {
     attack_details_widget : AttackDetailsWidget
+}
+impl MoveAndAttackHandler {
+    pub(crate) fn new() -> Box<MoveAndAttackHandler> {
+        box MoveAndAttackHandler { attack_details_widget : AttackDetailsWidget::new().draw_layer_for_all(GUILayer::Overlay) }
+    }
+}
+
+impl PlayerActionHandler for MoveAndAttackHandler {
+    fn handle_click(&mut self, world: &mut World, game_state: &GameState, player_action: &PlayerActionType, button: MouseButton) -> bool {
+        if let PlayerActionType::MoveAndAttack(movement_ref, attack_ref) = player_action {
+            let view = world.view();
+            let cur_sel = game_state.selected_character.unwrap();
+            let sel_data = view.character(cur_sel);
+            if sel_data.allegiance.faction != game_state.player_faction { return false; }
+            let tile_opt = view.tile_opt(game_state.hovered_hex_coord);
+            if let Some(targeted) = tile_opt.and_then(|t| t.occupied_by) {
+                let target_data = view.character(targeted);
+
+                if target_data.allegiance.faction != game_state.player_faction {
+                    if let Some((path, cost)) = logic::combat::path_to_attack(view, cur_sel, targeted, attack_ref, game_state.mouse_cart_vec()) {
+                        if path.is_empty() {
+                            println!("no movement needed, attacking");
+                            logic::combat::handle_attack(world, cur_sel, targeted, &attack_ref);
+                        } else {
+                            logic::movement::handle_move(world, cur_sel, &path);
+                            if let Some(attack) = attack_ref.resolve(view, cur_sel) {
+                                if logic::combat::can_attack(view, cur_sel, targeted, &attack, None, None) {
+                                    println!("Can attack from new position, attacking");
+                                    logic::combat::handle_attack(world, cur_sel, targeted, &attack_ref);
+                                } else {
+                                    warn!("Could not attack from new position :(, but should have been");
+                                }
+                            }
+                        }
+                    } else {
+                        if let Some((path,cost)) = logic::movement::path_adjacent_to(world, cur_sel, targeted) {
+                            println!("Moving adjacent, no path to attack could be found");
+                            logic::movement::handle_move(world, cur_sel, &path);
+                        } else {
+                            println!("no adjacent to path");
+                        }
+                    }
+                    return true;
+                }
+            } else if let Some(tile) = tile_opt {
+                let start_pos = sel_data.position.hex;
+                if let Some((path, _)) = logic::movement::path(view, cur_sel, start_pos, game_state.hovered_hex_coord) {
+                    logic::movement::handle_move(world, cur_sel, path.as_slice());
+                }
+                return true;
+            }
+        }
+
+        false
+    }
+
+    fn draw(&mut self, world_view: &WorldView, game_state: &GameState, player_action: &PlayerActionType) -> DrawList {
+        if let PlayerActionType::MoveAndAttack(movement_ref, attack_ref) = player_action {
+            draw_move_and_attack_overlay(world_view, game_state, *attack_ref)
+        } else { DrawList::none() }
+    }
+
+    fn update_widgets(&mut self, gui: &mut GUI, grsrc: &mut GraphicsResources, world: &World, world_view: &WorldView, game_state: &GameState, player_action: &PlayerActionType) {
+        if let PlayerActionType::MoveAndAttack(movement_ref, attack_ref) = player_action {
+            update_move_and_attack_widgets(&mut self.attack_details_widget, world, world_view, gui, game_state, *attack_ref);
+        } else {
+            self.hide_widgets(gui);
+        }
+    }
+
+    fn hide_widgets(&mut self, gui: &mut GUI) {
+        self.attack_details_widget.hide(gui);
+    }
 }
 
 
@@ -194,37 +281,34 @@ fn targeted_character(view: &WorldView, game_state: &GameState, selected: Entity
     None
 }
 
-use gui::GUI;
-use noisy_float::types::r64;
-use std::collections::HashMap;
-
 pub fn update_move_and_attack_widgets(attack_details_widget: &mut AttackDetailsWidget,
                                       world: &World, view: &WorldView,
                                       gui: &mut GUI, game_state: &GameState,
-                                      selected: Entity, attack_ref: AttackRef) {
+                                      attack_ref: AttackRef) {
     use gui::*;
+    if let Some(selected) = game_state.selected_character {
+        if let Some(hovered_char) = targeted_character(view, game_state, selected) {
+            if let Some(attack) = attack_ref.resolve(view, selected) {
+                attack_details_widget.set_position(Positioning::constant((game_state.mouse_pixel_pos.x + 20.0).px()), Positioning::constant((game_state.mouse_pixel_pos.y + 20.0).px()));
+                attack_details_widget.set_showing(true);
 
-    if let Some(hovered_char) = targeted_character(view, game_state, selected) {
-        if let Some(attack) = attack_ref.resolve(view, selected) {
-            attack_details_widget.set_position(Positioning::constant((game_state.mouse_pixel_pos.x + 20.0).px()), Positioning::constant((game_state.mouse_pixel_pos.y + 20.0).px()));
-            attack_details_widget.set_showing(true);
+                let attack_from_and_cost = if logic::combat::can_attack(view, selected, hovered_char, &attack, None, None) {
+                    Some((view.data::<PositionData>(selected).hex, 0.0))
+                } else {
+                    let hexes = logic::movement::hexes_reachable_by_character_this_turn_default(view, selected);
+                    logic::combat::closest_attack_location_with_cost(view, hexes, selected, hovered_char, &attack, game_state.mouse_cart_vec())
+                };
 
-            let attack_from_and_cost = if logic::combat::can_attack(view, selected, hovered_char, &attack, None, None) {
-                Some((view.data::<PositionData>(selected).hex, 0.0))
-            } else {
-                let hexes = logic::movement::hexes_reachable_by_character_this_turn_default(view, selected);
-                logic::combat::closest_attack_location_with_cost(view, hexes, selected, hovered_char, &attack, game_state.mouse_cart_vec())
-            };
-
-            if let Some((attack_from, cost)) = attack_from_and_cost {
-                let current_ap = view.data::<CharacterData>(selected).action_points.cur_value();
-                let ap_remaining_after_move = (current_ap - logic::movement::ap_cost_for_move_cost(view, selected, Sext::of_rounded_up(cost)) as i32).max(0);
-                attack_details_widget.update(gui, world, view, selected, hovered_char, &attack_ref, Some(attack_from), ap_remaining_after_move);
-            } else {
-                attack_details_widget.update(gui, world, view, selected, hovered_char, &attack_ref, None, 0);
+                if let Some((attack_from, cost)) = attack_from_and_cost {
+                    let current_ap = view.data::<CharacterData>(selected).action_points.cur_value();
+                    let ap_remaining_after_move = (current_ap - logic::movement::ap_cost_for_move_cost(view, selected, Sext::of_rounded_up(cost)) as i32).max(0);
+                    attack_details_widget.update(gui, world, view, selected, hovered_char, &attack_ref, Some(attack_from), ap_remaining_after_move);
+                } else {
+                    attack_details_widget.update(gui, world, view, selected, hovered_char, &attack_ref, None, 0);
+                }
             }
+            return;
         }
-        return;
     }
     attack_details_widget.hide(gui);
 }

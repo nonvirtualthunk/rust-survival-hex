@@ -244,13 +244,17 @@ impl TacticalMode {
         let world_view = world.view();
         let current_turn = world_view.world_data::<TurnData>().turn_number;
 
-        while world_view.world_data::<TurnData>().active_faction != self.player_faction {
+
+        loop {
             logic::turn::end_faction_turn(world);
 
             let newly_active_faction = world_view.world_data::<TurnData>().active_faction;
             let newly_active_faction_data = world_view.data::<FactionData>(newly_active_faction);
             if ! newly_active_faction_data.player_faction {
                 ::ai::ai::take_ai_actions(world, newly_active_faction);
+            }
+            if world_view.world_data::<TurnData>().active_faction == self.player_faction {
+                break;
             }
         }
 
@@ -464,82 +468,22 @@ impl GameMode for TacticalMode {
                     self.update_world_view(world);
                     let display_world_view = &self.display_world_view;
                     let main_world_view = world.view();
-//                    let world_view = world.view_at_time(self.display_event_clock);
 
-                    let found = character_at(display_world_view, clicked_coord);
-                    match self.selected_character {
-                        Some(cur_sel) => {
+                    let game_state = self.current_game_state(world);
+                    if !game_state.animating && game_state.player_faction_active {
+                        if ! self.gui.handle_click(world, &game_state, *button) {
+                            let found = character_at(display_world_view, clicked_coord);
                             if let Some((found_char, found_data)) = found {
-
-                            } else {
-
-                            }
-                        },
-                        None => {
-                            if let Some((found_char, _)) = found {
-                                self.selected_character = Some(found_char);
-                            }
-                        }
-                    }
-
-                    let found = character_at(display_world_view, clicked_coord);
-                    if let Some((found_ref, target_data)) = found {
-                        match self.selected_character {
-                            Some(prev_sel) if prev_sel == found_ref => {
-                                self.gui.close_all_auxiliary_windows(gui);
-                                self.selected_character = None;
-                            },
-                            Some(cur_sel) => {
-                                let sel_data = main_world_view.character(cur_sel);
-                                if target_data.allegiance.faction != self.player_faction &&
-                                    sel_data.allegiance.faction == self.player_faction {
-                                    if let Some(attack_ref) = logic::combat::primary_attack_ref(main_world_view, cur_sel) {
-                                        if let Some((path, cost)) = logic::combat::path_to_attack(main_world_view, cur_sel, found_ref, &attack_ref, self.current_game_state(world).mouse_cart_vec()) {
-                                            if path.is_empty() {
-                                                println!("no movement needed, attacking");
-                                                logic::combat::handle_attack(world, cur_sel, found_ref, &attack_ref);
-                                            } else {
-                                                logic::movement::handle_move(world, cur_sel, &path);
-                                                if let Some(attack) = attack_ref.resolve(main_world_view, cur_sel) {
-                                                    if logic::combat::can_attack(main_world_view, cur_sel, found_ref, &attack, None, None) {
-                                                        println!("Can attack from new position, attacking");
-                                                        logic::combat::handle_attack(world, cur_sel, found_ref, &attack_ref);
-                                                    } else {
-                                                        warn!("Could not attack from new position :(, but should have been");
-                                                    }
-                                                }
-                                            }
-                                        } else {
-                                            if let Some((path,cost)) = logic::movement::path_adjacent_to(world, cur_sel, found_ref) {
-                                                println!("Moving adjacent, no path to attack could be found");
-                                                logic::movement::handle_move(world, cur_sel, &path);
-                                            } else {
-                                                println!("no adjacent to path");
-                                            }
+                                match self.selected_character {
+                                    Some(cur_sel) => {
+                                        if cur_sel == found_char {
+                                            self.gui.close_all_auxiliary_windows(gui);
+                                            self.selected_character = None;
+                                        } else if main_world_view.data::<AllegianceData>(cur_sel).faction == found_data.allegiance.faction {
+                                            self.selected_character = Some(found_char)
                                         }
-                                    } else {
-                                        warn!("Cannot attack, there are no attacks to use!");
-                                    }
-                                } else {
-                                    println!("Switching selected character");
-                                    self.selected_character = Some(found_ref);
-                                }
-                            }
-                            None => {
-                                println!("Switching selected character");
-                                self.selected_character = Some(found_ref);
-                            }
-                        }
-                    } else {
-                        if let Some(sel_c) = self.selected_character {
-                            if let Some(hovered_) = self.hovered_tile(world.view()) {
-                                let cur_sel_data = display_world_view.character(sel_c);
-                                if cur_sel_data.allegiance.faction == self.player_faction {
-                                    let start_pos = display_world_view.character(sel_c).position.hex;
-                                    if let Some(path_result) = logic::movement::path(display_world_view, sel_c, start_pos, clicked_coord) {
-                                        let path = path_result.0;
-                                        logic::movement::handle_move(world, sel_c, path.as_slice());
-                                    }
+                                    },
+                                    None => { self.selected_character = Some(found_char); }
                                 }
                             }
                         }
@@ -608,8 +552,8 @@ impl GameMode for TacticalMode {
                     },
                     Key::U => {
                         use std::io::Write;
-                        let bytes = bincode::serialize(&world).expect("couldn't deserialize");
-                        File::create(Path::new("/tmp/world.bin")).expect("couldn't create").write_all(&bytes).expect("couldn't write");
+                        let bytes = ron::ser::to_string_pretty(&world.view().effective_data, ron::ser::PrettyConfig::default()).expect("couldn't deserialize");
+                        File::create(Path::new("/tmp/view.ron")).expect("couldn't create").write_all(&bytes.as_bytes()).expect("couldn't write");
                     },
                     _ => ()
                 }

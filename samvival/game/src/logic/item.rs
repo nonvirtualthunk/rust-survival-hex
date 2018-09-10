@@ -15,35 +15,80 @@ use data::entities::inventory::*;
 use game::EntityMetadata;
 use prelude::*;
 use common::prelude::*;
+use data::entities::common_entities::LookupSignifier;
 
 /// clone_on_add is used when creating an item into an inventory that may be able to stack, in that case you don't
 /// want to clone-create the entity ahead of time, because then you pay the cost even if it stacks, rather you want
 /// to clone only if you have to create a new stack
 pub fn put_item_in_inventory(world: &mut World, item : Entity, inventory : Entity) -> bool {
     let view = world.view();
-    let inv_data = view.data::<InventoryData>(inventory);
-    let item_data = view.data::<ItemData>(item);
-
-    let stack_to_add_to = if item_data.stack_limit > 1 { inv_data.items.find(|i| can_stack_entity_in(view, *i, item)) } else { None };
-
-    if let Some(stack) = stack_to_add_to {
-        world.modify(item, ItemData::in_inventory_of.set_to(Some(inventory)));
-        world.modify(*stack, StackData::entities.append(item));
-        world.add_event(GameEvent::AddToInventory { item, to_inventory: inventory });
-        true
+    if let Some(stack) = view.data_opt::<StackData>(item) {
+        stack.entities.iter().all(|e| put_item_in_inventory(world, item, inventory))
     } else {
-        if inv_data.inventory_size.unwrap_or(1000000) > inv_data.items.len() as u32 {
-            let item_to_add = if item_data.stack_limit > 1 {
-                EntityBuilder::new().with(StackData { entities : vec![item], stack_limit : item_data.stack_limit }).create(world)
-            } else {
-                item
-            };
+        let inv_data = view.data::<InventoryData>(inventory);
+        let item_data = view.data::<ItemData>(item);
 
+        let stack_to_add_to = if item_data.stack_limit > 1 { inv_data.items.find(|i| can_stack_entity_in(view, *i, item)) } else { None };
+
+        if let Some(stack) = stack_to_add_to {
             world.modify(item, ItemData::in_inventory_of.set_to(Some(inventory)));
-            world.modify(inventory, InventoryData::items.append(item_to_add));
+            world.modify(*stack, StackData::entities.append(item));
             world.add_event(GameEvent::AddToInventory { item, to_inventory: inventory });
             true
-        } else { false }
+        } else {
+            let inv_limit = inv_data.inventory_size.unwrap_or(1000000);
+            if inv_limit > inv_data.items.len() as u32 {
+                let item_to_add = if item_data.stack_limit > 1 {
+                    EntityBuilder::new().with(StackData { entities : vec![item], stack_limit : item_data.stack_limit }).create(world)
+                } else {
+                    item
+                };
+
+                world.modify(item, ItemData::in_inventory_of.set_to(Some(inventory)));
+                world.modify(inventory, InventoryData::items.append(item_to_add));
+                world.add_event(GameEvent::AddToInventory { item, to_inventory: inventory });
+                true
+            } else {
+                trace!("Could not put in inventory of {}, inventory size was only {}", view.signifier(inventory), inv_limit);
+                false
+            }
+        }
+    }
+}
+
+#[derive(PartialEq,Debug)]
+pub enum TransferResult {
+    None,
+    Some,
+    All,
+}
+
+pub fn transfer_item(world: &mut World, item : Entity, from : Entity, to : Entity) -> TransferResult {
+    let view = world.view();
+    let items = match view.data_opt::<StackData>(item) {
+        Some(stack) => stack.entities.clone(),
+        None => vec![item],
+    };
+
+    let mut transferred = 0;
+    let total_possible = items.len();
+    for item in items {
+        if is_item_in_inventory_of(world, item, from) {
+            if put_item_in_inventory(world, item, to) {
+                remove_item_from_inventory(world, item, from);
+                transferred += 1;
+            }
+        } else {
+            warn!("Attempted to transfer {} from {} to {}, but was not in source inventory to transfer", view.signifier(item), view.signifier(from), view.signifier(to));
+        }
+    }
+
+    if transferred == 0 {
+        TransferResult::None
+    } else if transferred == total_possible {
+        TransferResult::All
+    } else {
+        TransferResult::Some
     }
 }
 
@@ -68,12 +113,19 @@ pub fn item_stacks_in_inventory(view: &WorldView, inventory : Entity) -> Vec<(En
         .collect_vec()
 }
 
+
+/// removes the item indicated from the inventory specified, if possible. Does not account for equipment
 pub fn remove_item_from_inventory(world: &mut World, item : Entity, inventory : Entity) {
     let view = world.view();
+
+    if is_item_equipped_by(view, item, inventory) {
+        unequip_item(world, item, inventory, true);
+    }
+
     let inv_data = view.data::<InventoryData>(inventory);
     if inv_data.items.contains(&item) {
-        world.modify_with_desc(item, ItemData::in_inventory_of.set_to(None), None);
-        world.modify_with_desc(inventory, InventoryData::items.remove(item), None);
+        if view.has_data::<ItemData>(item) { world.modify(item, ItemData::in_inventory_of.set_to(None)); }
+        world.modify(inventory, InventoryData::items.remove(item));
         world.add_event(GameEvent::RemoveFromInventory { item, from_inventory: inventory });
     } else {
         for (stack_ent, stack_d) in item_stacks_in_inventory(view, inventory) {
@@ -145,7 +197,11 @@ pub fn items_in_inventory(world: &WorldView, inventory : Entity) -> Vec<Entity> 
 }
 
 pub fn is_item_in_inventory_of(world: &WorldView, item : Entity, character : Entity) -> bool {
-    items_in_inventory(world, character).contains(&item)
+    if world.has_data::<StackData>(item) {
+        world.data::<InventoryData>(character).items.contains(&item)
+    } else {
+        items_in_inventory(world, character).contains(&item)
+    }
 }
 
 

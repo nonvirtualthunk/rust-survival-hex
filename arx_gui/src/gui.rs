@@ -190,6 +190,8 @@ impl GUI {
         }
     }
 
+    pub fn moused_over_widget(&self) -> Option<Wid> { self.moused_over_widget }
+
     pub fn mark_all_modified(&mut self) {
         for key in self.widget_reifications.keys() {
             self.modified_set.insert(*key);
@@ -494,6 +496,16 @@ impl GUI {
 
     pub(crate) fn child_widgets_of(&self, wid : Wid) -> Vec<&Widget> {
         self.widget_reification(wid).children.iter().map(|w| &self.widget_reification(*w).widget).collect_vec()
+    }
+
+    pub fn widget_and_all_ancestors(&self, wid : Wid) -> Vec<Wid> {
+        let mut wid = Some(wid);
+        let mut ret = Vec::new();
+        while wid.is_some() {
+            ret.push(wid.unwrap());
+            wid = self.widget_reification_opt(wid.unwrap()).and_then(|reif| reif.widget.parent_id);
+        }
+        ret
     }
 
     pub fn widget_state(&self, wid : Wid) -> &WidgetState {

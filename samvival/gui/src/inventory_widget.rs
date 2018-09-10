@@ -5,6 +5,7 @@ use common::Color;
 use game::prelude::*;
 use game::entities::IdentityData;
 use game::entities::EquipmentData;
+use game::entities::StackData;
 use gui::TabWidget;
 use state::ControlContext;
 use control_events::*;
@@ -31,14 +32,16 @@ impl DelegateToWidget for InventoryDisplay {
 pub struct InventoryDisplayData {
     pub name: String,
     pub items: Vec<Entity>,
+    pub destacked_items: Vec<Entity>,
     pub from_entities: Vec<Entity>,
     pub equippable: bool,
     pub size: Option<u32>
 }
 impl InventoryDisplayData {
-    pub fn new<S : Into<String>>(items : Vec<Entity>, name : S, from_entities : Vec<Entity>, equippable : bool, size : Option<u32>) -> InventoryDisplayData {
+    pub fn new<S : Into<String>>(items : Vec<Entity>, destacked_items: Vec<Entity>, name : S, from_entities : Vec<Entity>, equippable : bool, size : Option<u32>) -> InventoryDisplayData {
         InventoryDisplayData {
             items,
+            destacked_items,
             name : name.into(),
             from_entities,
             equippable,
@@ -156,7 +159,7 @@ struct InventoryDisplayWidget {
     last_selected : Option<Entity>
 }
 impl PartialEq<InventoryDisplayWidget> for InventoryDisplayWidget {
-    fn eq(&self, other: &'_ InventoryDisplayWidget) -> bool {
+    fn eq(&self, other: &InventoryDisplayWidget) -> bool {
         self.id() == other.id()
     }
 }
@@ -207,6 +210,7 @@ impl InventoryDisplayWidget {
             inventories : Vec::new(),
             placeholder_data : InventoryDisplayData {
                 items : Vec::new(),
+                destacked_items : Vec::new(),
                 name : String::from("sentinel"),
                 from_entities : Vec::new(),
                 equippable: false,
@@ -242,6 +246,7 @@ impl InventoryDisplayWidget {
                     .border_width(0)
                     .color(Color::clear())
                     .width(Sizing::match_parent())
+                    .height(Sizing::surround_children())
                     .parent(tab);
                 inventory_list.add_callback(move |ctxt : &mut WidgetContext, event : &UIEvent| {
                    if let UIEvent::WidgetEvent { event : WidgetEvent::ListItemClicked(index, button), .. } = event {
@@ -269,20 +274,28 @@ impl InventoryDisplayWidget {
                 let item_or_slot = inventory.items.iter().map(|i| Some(i)).chain(empty_slots).collect_vec();
                 inventory_list.update(gui, &item_or_slot, |widget, item_or_slot| {
                     if let Some(item) = item_or_slot {
-                        let item = *item;
-                        if let Some(ident) = world.data_opt::<IdentityData>(*item) {
-                            widget.name.set_showing(true).set_text(ident.effective_name());
+                        let raw_item : Entity = **item;
+
+                        let (item, count) = if let Some(stack_data) = world.data_opt::<StackData>(raw_item) {
+                            (stack_data.entities.first().cloned().unwrap_or(Entity::sentinel()), stack_data.entities.len())
+                        } else {
+                            (raw_item,1)
+                        };
+
+                        if let Some(ident) = world.data_opt::<IdentityData>(item) {
+                            let count_str = if count <= 1 { strf("") } else { format!("x{}", count) };
+                            let name_str = format!("{}{}", ident.effective_name().to_string().capitalized(), count_str);
+                            widget.name.set_showing(true).set_text(name_str);
                         } else {
                             widget.name.set_showing(true).set_text("unknown entity");
                         }
-                        widget.picked_up_indicator.set_showing(Some(*item) == selected_item);
+                        widget.picked_up_indicator.set_showing(Some(raw_item) == selected_item);
                         if equippable {
-                            let text = if all_equipped_items.contains(item) { "Unequip" } else { "Equip" };
+                            let text = if all_equipped_items.contains(&item) { "Unequip" } else { "Equip" };
 
-                            let item_copy = *item;
+                            let item_copy = item;
                             widget.equip_button.set_showing(true).set_text(text).clear_callbacks().add_callback(move |ctxt : &mut WidgetContext, event : &UIEvent| {
                                 if let UIEvent::WidgetEvent { event : WidgetEvent::ButtonClicked(_), .. } = event {
-                                    println!("Executing callback");
                                     ctxt.trigger_event(UIEvent::custom_event(InventoryItemToggleEquip { item : item_copy }, self_id));
                                 }
                             });

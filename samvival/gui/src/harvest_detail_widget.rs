@@ -69,8 +69,9 @@ impl HarvestableSummary {
         self.action_description.set_text(harvestable_data.action_name.capitalized());
 
 
-        let min_yield = (breakdown.dice_amount_harvested.total.min_roll() as i32 + breakdown.fixed_amount_harvested.total).min(breakdown.harvest_limit);
-        let max_yield = (breakdown.dice_amount_harvested.total.max_roll() as i32 + breakdown.fixed_amount_harvested.total).min(breakdown.harvest_limit);
+        let fixed_limit = breakdown.harvest_limit.min(breakdown.inventory_limit.unwrap_or(100000000));
+        let min_yield = (breakdown.dice_amount_harvested.total.min_roll() as i32 + breakdown.fixed_amount_harvested.total).min(fixed_limit);
+        let max_yield = (breakdown.dice_amount_harvested.total.max_roll() as i32 + breakdown.fixed_amount_harvested.total).min(fixed_limit);
 
 //        let combined_dice_str = breakdown.dice_amount_harvested.total.to_d20_string();
 //        let combined_fixed = match breakdown.fixed_amount_harvested.total {
@@ -79,8 +80,14 @@ impl HarvestableSummary {
 //        };
         let resource_name = resource_ident.effective_name();
 //        self.harvest_amount.set_text(format!("{}{} {}", combined_dice_str, combined_fixed, resource_name));
-        let yield_str = if min_yield == max_yield { format!("{}", min_yield) } else { format!("{}-{}", min_yield, max_yield) };
-        self.harvest_amount.set_text(format!("{} {}", yield_str, resource_name));
+        let harvest_str = if breakdown.inventory_limit == Some(0) {
+            strf("Not enough inventory space")
+        } else {
+            let yield_str = if min_yield == max_yield { format!("{}", min_yield) } else { format!("{}-{}", min_yield, max_yield) };
+            format!("{} {}", yield_str, resource_name)
+        };
+
+        self.harvest_amount.set_text(harvest_str);
         self.time.set_text(format!("{} AP", breakdown.ap_to_harvest.total));
     }
 }
