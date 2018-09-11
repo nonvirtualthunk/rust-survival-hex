@@ -36,8 +36,11 @@ extern crate regex;
 
 extern crate num;
 extern crate cgmath;
+extern crate multimap;
 
 pub mod entities;
 
 pub mod events;
 pub use events::*;
+
+pub mod archetype;

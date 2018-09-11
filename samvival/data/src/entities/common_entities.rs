@@ -225,6 +225,9 @@ impl <'de> Deserialize<'de> for Taxon {
                             parent_count += 1;
                         }
                     }
+                    if parent_count == 0 {
+                        warn!("Deserialized a runtime taxon without any parents, root taxons should not be created at runtime, this is likely a bug");
+                    }
                     Ok(Taxon::RuntimeTaxon { name : intern_string(&name), parents })
                 }
             }

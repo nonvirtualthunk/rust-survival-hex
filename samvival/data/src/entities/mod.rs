@@ -17,6 +17,7 @@ pub mod visibility;
 pub mod movement;
 pub mod selectors;
 pub mod effects;
+pub mod recipes;
 mod taxonomy_registration;
 
 pub mod fields;
@@ -40,3 +41,4 @@ pub use entities::selectors::*;
 pub use entities::effects::*;
 pub use entities::actions::*;
 pub use entities::reactions::*;
+pub use entities::recipes::*;
