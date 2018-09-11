@@ -33,7 +33,7 @@ pub enum GameEvent {
     SelectedReactionChanged { entity : Entity, reaction_type : ReactionTypeRef },
     ReactionEffectApplied { entity : Entity },
     ActionTaken { entity : Entity, action : Action },
-    EntityHarvested { harvester : Entity, harvested : Entity, amount : i32 },
+    EntityHarvested { harvester : Entity, harvestable : Entity, resource : Entity, amount : Option<i32> },
 
 
     EffectRegistered,

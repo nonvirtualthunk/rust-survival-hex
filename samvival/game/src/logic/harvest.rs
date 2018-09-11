@@ -122,6 +122,9 @@ pub fn compute_harvest_breakdown(world: &World, view: &WorldView, character : En
 }
 
 pub fn harvest(world: &mut World, character : Entity, from : AxialCoord, harvestable : Entity, preserve_renewable : bool, progress : Option<i32>) {
+    let harvestable_data = world.view().data::<Harvestable>(harvestable);
+    world.start_event(GameEvent::EntityHarvested { harvester : character, harvestable, amount : None, resource : harvestable_data.resource });
+
     if let Ok(breakdown) = compute_harvest_breakdown(world, world.view(), character, from, harvestable, preserve_renewable) {
         let cdata = world.view().data::<CharacterData>(character);
 
@@ -154,13 +157,16 @@ pub fn harvest(world: &mut World, character : Entity, from : AxialCoord, harvest
             let amount_harvested = (breakdown.dice_amount_harvested.total.roll(&mut rng).total_result as i32 + breakdown.fixed_amount_harvested.total)
                 .min(breakdown.harvest_limit)
                 .min(breakdown.inventory_limit.unwrap_or(1000000));
-            let harvestable_data = world.view().data::<Harvestable>(harvestable);
             world.modify(harvestable, Harvestable::amount.reduce_by(Sext::of(amount_harvested)));
+
+
 
             for i in 0 .. amount_harvested {
                 let new_entity = world.clone_entity(harvestable_data.resource);
                 logic::item::put_item_in_inventory(world, new_entity, character);
             }
+
+            world.end_event(GameEvent::EntityHarvested { harvester : character, harvestable, amount : Some(amount_harvested), resource : harvestable_data.resource });
 
             let completed_action = Action { action_type : action_type.clone(), ap : Progress::new(ap_required, ap_required) };
             if world.data::<ActionData>(character).active_action.is_some() { // clear the active action, if any

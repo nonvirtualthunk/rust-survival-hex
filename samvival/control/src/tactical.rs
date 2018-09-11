@@ -365,6 +365,7 @@ impl GameMode for TacticalMode {
 
         world.add_callback(|world, event| {
             logic::reaction::trigger_reactions_for_event(world, event);
+            logic::action::continue_ongoing_actions(world, event);
         });
 
         game::components::SpawningComponent::register(world);

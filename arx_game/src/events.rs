@@ -80,6 +80,7 @@ pub enum CoreEvent {
     EffectEnded,
     TimePassed,
     Recomputation,
+    Mark,
     EntityAdded(Entity),
     EntityRemoved(Entity),
     DataRegistered,
