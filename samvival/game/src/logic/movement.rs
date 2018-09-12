@@ -132,15 +132,12 @@ pub fn path_to(world_view: &WorldView, mover : Entity, to : AxialCoord) -> Optio
 }
 
 pub fn path_adjacent_to(world_view: &WorldView, mover : Entity, to : Entity) -> Option<(Vec<AxialCoord>, R32)> {
-    let mover_c = world_view.character(mover);
-    let from = mover_c.position.hex;
-    let (possibles, center) = if let Some(pos) = world_view.data_opt::<PositionData>(to) {
-        (pos.hex.neighbors_vec(), pos.hex)
-    } else {
-        warn!("path_adjacent_to called against a non-position-data entity");
-        (vec![], AxialCoord::new(0,0))
-    };
-    path_any(world_view, mover, from, &possibles.into_iter().collect(), center)
+    path_adjacent_to_hex(world_view, mover, position_of(world_view, to))
+}
+
+pub fn path_adjacent_to_hex(world_view: &WorldView, mover : Entity, to : AxialCoord) -> Option<(Vec<AxialCoord>, R32)> {
+    let from = position_of(world_view, mover);
+    path_any(world_view, mover, from, &to.neighbors_vec().into_iter().collect(), to)
 }
 
 pub fn portion_of_path_traversable_this_turn(view : &WorldView, mover : Entity, path : &Vec<AxialCoord>) -> Vec<AxialCoord> {
@@ -318,5 +315,16 @@ impl ResolveMovementType for MovementTypeRef {
         } else {
             None
         }
+    }
+}
+
+pub fn position_of(view : &WorldView, entity : Entity) -> AxialCoord {
+    if let Some(pos) = view.data_opt::<PositionData>(entity) {
+        pos.hex
+    } else if let Some(tile) = view.data_opt::<TileData>(entity) {
+        tile.position
+    } else {
+        warn!("Attempted to retrieve position of non-positioned entity {}, returning sentinel value", view.signifier(entity));
+        AxialCoord::default()
     }
 }

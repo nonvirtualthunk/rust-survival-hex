@@ -2,6 +2,7 @@ use common::prelude::*;
 
 use gui::GameState;
 use gui::MouseButton;
+use gui::Key;
 use gui::PlayerActionType;
 use gui::GUI;
 
@@ -14,6 +15,8 @@ use graphics::prelude::*;
 
 pub(crate) trait PlayerActionHandler {
     fn handle_click(&mut self, world : &mut World, game_state : &GameState, player_action: &PlayerActionType, button : MouseButton) -> bool;
+
+    fn handle_key_release(&mut self, world : &mut World, game_state : &GameState, player_action: &PlayerActionType, key : Key) -> bool { false }
 
     fn draw(&mut self, world_view : &WorldView, game_state : &GameState, player_action: &PlayerActionType) -> DrawList;
 

@@ -114,7 +114,8 @@ pub struct TextAnimationElement {
     pub duration: f64,
     pub blocking_duration: Option<f64>,
     pub position_interpolation : Interpolation<CartVec>,
-    pub color_interpolation : Interpolation<Color>
+    pub color_interpolation : Interpolation<Color>,
+    pub outline_color_interpolation : Option<Interpolation<Color>>,
 }
 
 impl TextAnimationElement {
@@ -125,7 +126,8 @@ impl TextAnimationElement {
             position_interpolation : Interpolation::constant(position),
             color_interpolation : Interpolation::constant(color),
             duration,
-            blocking_duration : None
+            blocking_duration : None,
+            outline_color_interpolation : None,
         }
     }
 
@@ -148,17 +150,26 @@ impl TextAnimationElement {
         self.blocking_duration = Some(blocking_duration);
         self
     }
+    pub fn with_outline_color(mut self, start : Color, end : Color, interpolation_type : InterpolationType) -> Self {
+        self.outline_color_interpolation = Some(Interpolation::new(start, end - start, interpolation_type, false));
+        self
+    }
 }
 
 
 impl AnimationElement for TextAnimationElement {
     fn draw(&self, _world_view: &mut WorldView, pcnt_elapsed: f64) -> DrawList {
         let pos = self.position_interpolation.interpolate(pcnt_elapsed);
-        DrawList::of_text(
+
+        let mut draw_list = DrawList::none();
+        draw_list.add_text(
             Text::new(self.text.clone(), self.text_size)
                 .offset(pos.0)
                 .color(self.color_interpolation.interpolate(pcnt_elapsed))
-                .centered(true,false))
+                .outline_color(self.outline_color_interpolation.clone().map(|c| c.interpolate(pcnt_elapsed)))
+                .centered(true,false));
+
+        draw_list
     }
 
 

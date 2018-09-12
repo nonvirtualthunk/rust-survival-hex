@@ -28,7 +28,10 @@ pub struct ArxFont {
 }
 impl ArxFont {
     pub fn point_size_for(&self, font_size : FontSize) -> u32 {
-        *self.font_info.sizing_overrides.get(&font_size).unwrap_or(&font_size.default_point_size())
+        match font_size {
+            FontSize::BasePlusPoints(base, pts) => self.point_size_for(FontSize::font_size_by_ordinal(base)) + pts as u32,
+            _ => *self.font_info.sizing_overrides.get(&font_size).unwrap_or(&font_size.default_point_size())
+        }
     }
 }
 

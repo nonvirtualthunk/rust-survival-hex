@@ -9,7 +9,7 @@ use std::fmt::Error;
 pub trait Interpolateable<T> : ops::Mul<f32, Output=T> + ops::Add<Output=T> + ops::Sub<Output=T> + Clone {}
 impl <T> Interpolateable<T> for T where T : ops::Mul<f32, Output=T> + ops::Add<Output=T> + ops::Sub<Output=T> + Clone {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Interpolation<T: Interpolateable<T>> {
     pub start : T,
     pub delta : T,
@@ -17,11 +17,12 @@ pub struct Interpolation<T: Interpolateable<T>> {
     pub circular : bool
 }
 
+#[derive(Clone)]
 pub enum InterpolationType {
     Linear,
     Exponential { power : f64 },
     Constant,
-    Custom { function : Box<Fn(f64) -> f64> }
+    Custom { function : fn(f64) -> f64 }
 }
 
 impl Debug for InterpolationType {
@@ -36,6 +37,12 @@ impl Debug for InterpolationType {
 }
 
 impl <T: Interpolateable<T>> Interpolation<T> {
+    pub fn new(start : T, delta : T, interpolation_type : InterpolationType, circular : bool) -> Interpolation<T> {
+        Interpolation {
+            start, delta, interpolation_type, circular
+        }
+    }
+
     pub fn interpolate(&self, fract : f64) -> T {
         match self.interpolation_type {
             InterpolationType::Constant => self.start.clone(),

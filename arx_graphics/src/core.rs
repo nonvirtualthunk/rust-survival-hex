@@ -89,9 +89,42 @@ pub enum FontSize {
     HeadingMajor,
     Large,
     ExtraLarge,
-    Points(u32)
+    Points(u32),
+    BasePlusPoints(u8, u16)
 }
 impl FontSize {
+
+    pub fn font_size_by_ordinal(ordinal : u8) -> FontSize {
+        use FontSize::*;
+        match ordinal {
+            0 => Small,
+            1 => Standard,
+            2 => HeadingMinor,
+            3 => HeadingMajor,
+            4 => Large,
+            5 => ExtraLarge,
+            _ => {
+                warn!("Invalid ordinal provided for font size {}", ordinal);
+                FontSize::Standard
+            },
+        }
+    }
+
+    pub fn ordinal(&self) -> u8 {
+        use FontSize::*;
+        match self {
+            Small => 0,
+            Standard => 1,
+            HeadingMinor => 2,
+            HeadingMajor => 3,
+            Large => 4,
+            ExtraLarge => 5,
+            _ => {
+                warn!("Only named font sizes can have an ordinal");
+                1
+            }
+        }
+    }
 
     pub fn default_point_size(&self) -> u32 {
         match self {
@@ -101,7 +134,29 @@ impl FontSize {
             FontSize::HeadingMajor => 16,
             FontSize::Large => 20,
             FontSize::ExtraLarge => 26,
-            FontSize::Points(pts) => *pts
+            FontSize::Points(pts) => *pts,
+            FontSize::BasePlusPoints(base, pts) => FontSize::font_size_by_ordinal(*base).default_point_size() + (*pts as u32),
+        }
+    }
+
+    pub fn next_larger(&self) -> FontSize {
+        match self {
+            FontSize::Small => FontSize::Standard,
+            FontSize::Standard => FontSize::HeadingMinor,
+            FontSize::HeadingMinor => FontSize::HeadingMajor,
+            FontSize::HeadingMajor => FontSize::Large,
+            FontSize::Large => FontSize::ExtraLarge,
+            FontSize::ExtraLarge => FontSize::ExtraLarge,
+            FontSize::Points(pts) => FontSize::Points(*pts + 2),
+            FontSize::BasePlusPoints(base, pts) => FontSize::BasePlusPoints(*base, *pts + 2)
+        }
+    }
+
+    pub fn plus_points(&self, plus_pts: u32) -> FontSize {
+        match self {
+            FontSize::BasePlusPoints(base, pts) => FontSize::BasePlusPoints(*base, (*pts as u32 + plus_pts) as u16),
+            FontSize::Points(pts) => FontSize::Points(*pts + plus_pts),
+            other => FontSize::BasePlusPoints(other.ordinal(), plus_pts as u16)
         }
     }
 }
@@ -112,6 +167,7 @@ pub struct Text {
     pub offset: Vec2f,
     pub size: FontSize,
     pub color: Color,
+    pub outline_color: Option<Color>,
     pub rounded: bool,
     pub centered_y: bool,
     pub centered_x: bool,
@@ -126,6 +182,7 @@ impl Clone for Text {
             offset: self.offset.clone(),
             size: self.size.clone(),
             color: self.color.clone(),
+            outline_color : self.outline_color.clone(),
             rounded: self.rounded,
             centered_y: self.centered_y,
             centered_x: self.centered_x,
@@ -145,12 +202,18 @@ impl Text {
             rounded: true,
             centered_y: false,
             centered_x: true,
-            wrap_to: 100000000.0
+            wrap_to: 100000000.0,
+            outline_color: None,
         }
     }
 
     pub fn color(mut self, color: Color) -> Self {
         self.color = color;
+        self
+    }
+
+    pub fn outline_color(mut self, color : Option<Color>) -> Self {
+        self.outline_color = color;
         self
     }
 
@@ -217,7 +280,7 @@ impl DrawList {
         self
     }
 
-    pub fn add_text(mut self, text: Text) -> Self {
+    pub fn add_text(&mut self, text: Text) -> &mut Self {
         self.text.push(text);
         self
     }
@@ -383,15 +446,18 @@ impl<'a, 'b : 'a> GraphicsWrapper<'a, 'b> {
         let dpi_factor = dpi_scale;
         let (tex_w, tex_h) = self.resources.font_texture.get_size();
 
+        let offset_x = if text.centered_x { layout_dims.x as f64 * -0.5 } else { 0.0 };
+        let offset_y = if text.centered_y { layout_dims.y as f64 * -0.5 } else { 0.0 };
+
         let rectangles = glyphs.into_iter()
             .filter_map(|g| glyph_cache.rect_for(cache_id, &g).ok().unwrap_or(None))
             .map(|(uv_rect, screen_rect)| {
                 let rectangle = {
                     let div_dpi_factor = |s| (s as f32 / dpi_factor as f32) as f64;
-                    let left = div_dpi_factor(screen_rect.min.x);
-                    let top = div_dpi_factor(screen_rect.min.y);
-                    let right = div_dpi_factor(screen_rect.max.x);
-                    let bottom = div_dpi_factor(screen_rect.max.y);
+                    let left = div_dpi_factor(screen_rect.min.x) + offset_x;
+                    let top = div_dpi_factor(screen_rect.min.y) + offset_y;
+                    let right = div_dpi_factor(screen_rect.max.x) + offset_x;
+                    let bottom = div_dpi_factor(screen_rect.max.y) + offset_y;
                     let w = right - left;
                     let h = bottom - top;
                     [left, top, w, h]
@@ -413,6 +479,24 @@ impl<'a, 'b : 'a> GraphicsWrapper<'a, 'b> {
         let offset_y = layout_dims.y as f64;
         let pos = [text.offset.x as f64 + offset_x, text.offset.y as f64 + offset_y];
         let transform = math::multiply(math::multiply(self.context.view, math::translate(pos)), math::scale(1.0, -1.0));
+
+        if let Some(outline_color) = text.outline_color {
+            for dx in -1 ..= 1 {
+                for dy in -1 ..= 1 {
+                    let outline_rects = glyph_rectangles.iter().cloned()
+                        .map(|(rect, src_rect)| {
+                            let new_rect = [rect[0] + dx as f64, rect[1] + dy as f64, rect[2], rect[3]];
+                            (new_rect, src_rect)
+                        }).collect_vec();
+                    image::draw_many(&outline_rects,
+                                     outline_color.0,
+                                     &self.resources.font_texture,
+                                     &self.draw_state,
+                                     transform,
+                                     self.graphics);
+                }
+            }
+        }
 
         image::draw_many(&glyph_rectangles,
                                           text.color.0,

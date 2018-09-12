@@ -25,18 +25,18 @@ impl DelegateToWidget for HarvestSummaryWidget {
 impl HarvestSummaryWidget {
     pub fn new() -> HarvestSummaryWidget {
         HarvestSummaryWidget {
-            harvestable_summaries : ListWidget::custom(Widget::div(), 1.ux()).surround_children()
+            harvestable_summaries: ListWidget::custom(Widget::div(), 1.ux()).surround_children()
         }
     }
 }
 
 #[derive(WidgetContainer, DelegateToWidget)]
 struct HarvestableSummary {
-    pub body : Widget,
-    pub resource_icon : Widget,
+    pub body: Widget,
+    pub resource_icon: Widget,
     pub action_description: Widget,
     pub harvest_amount: Widget,
-    pub time : Widget,
+    pub time: Widget,
 }
 
 impl Default for HarvestableSummary {
@@ -54,16 +54,15 @@ impl Default for HarvestableSummary {
             resource_icon,
             action_description,
             harvest_amount,
-            time
+            time,
         }
     }
 }
 
 impl HarvestableSummary {
-
-    pub fn update(&mut self, view : &WorldView, graphics: &mut GraphicsResources, breakdown : &HarvestBreakdown) {
+    pub fn update(&mut self, view: &WorldView, graphics: &mut GraphicsResources, breakdown: &HarvestBreakdown, greyed_out: bool) {
         let harvestable_data = view.data::<Harvestable>(breakdown.harvestable);
-        let resource_ident =  view.data::<IdentityData>(breakdown.resource);
+        let resource_ident = view.data::<IdentityData>(breakdown.resource);
         let resource_img = ItemRenderer::image_for(graphics, resource_ident.main_kind());
         self.resource_icon.set_widget_type(WidgetType::image(resource_img));
         self.action_description.set_text(harvestable_data.action_name.capitalized());
@@ -89,17 +88,29 @@ impl HarvestableSummary {
 
         self.harvest_amount.set_text(harvest_str);
         self.time.set_text(format!("{} AP", breakdown.ap_to_harvest.total));
+
+        let body_id = self.body.id();
+        self.for_all_widgets(|w: &mut Widget| {
+            if w.id() != body_id {
+                w.set_color(if greyed_out { Color::new(0.5, 0.5, 0.5, 1.0) } else {
+                    if let WidgetType::Text { .. } = w.widget_type {
+                        Color::black()
+                    } else {
+                        Color::white()
+                    }
+                });
+            }
+        })
     }
 }
 
 impl HarvestSummaryWidget {
-    pub fn update(&mut self, gui: &mut GUI, world: &World, view: &WorldView, gsrc : &mut GraphicsResources, pixel_pos : Vec2f, harvester: Entity, harvest_from: AxialCoord, preserve_renewable : bool) {
-
-        let harvest_breakdowns = harvest::harvestables_at(view, harvest_from).iter().flat_map(|harvestable|
+    pub fn update(&mut self, gui: &mut GUI, world: &World, view: &WorldView, gsrc: &mut GraphicsResources, pixel_pos: Vec2f, harvester: Entity, harvest_from: AxialCoord, preserve_renewable: bool, greyed_out: bool) {
+        let harvest_breakdowns = harvest::harvestables_sorted_by_desirability_at(view, harvester, harvest_from).iter().flat_map(|harvestable|
             harvest::compute_harvest_breakdown(world, view, harvester, harvest_from, *harvestable, preserve_renewable)).collect_vec();
         if !harvest_breakdowns.is_empty() {
             self.harvestable_summaries.update(gui, &harvest_breakdowns, |widget, breakdown| {
-                widget.update(view, gsrc, breakdown)
+                widget.update(view, gsrc, breakdown, greyed_out)
             });
 
             self.set_showing(true).set_position(Positioning::constant((pixel_pos.x + 20.0).px()), Positioning::constant(pixel_pos.y.px())).reapply(gui);

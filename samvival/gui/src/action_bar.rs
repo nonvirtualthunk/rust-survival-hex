@@ -180,4 +180,8 @@ impl ActionBar {
 
         PlayerActionType::Wait
     }
+
+    pub fn set_selected_action_for(&mut self, world_ : &World, character : Entity, action : PlayerActionType) {
+        self.selected_actions.insert(character, action);
+    }
 }

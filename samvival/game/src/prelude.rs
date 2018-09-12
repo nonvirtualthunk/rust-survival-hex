@@ -15,3 +15,4 @@ use std::borrow::Borrow;
 pub use logic::selection::SelectorMatches;
 pub use logic::combat::ResolveableAttackRef;
 pub use logic::movement::ResolveMovementType;
+pub use logic;

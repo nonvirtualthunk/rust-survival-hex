@@ -33,6 +33,7 @@ use std::f64::consts;
 use std::collections::HashMap;
 use serde::de::DeserializeOwned;
 use graphics::FontSize;
+use common::prelude::RichString;
 
 pub fn animation_elements_for_new_event(world_view: &WorldView, wrapper: &GameEventWrapper<GameEvent>, resources: &mut GraphicsResources) -> Vec<Box<AnimationElement>> {
     if wrapper.is_starting() {
@@ -46,6 +47,13 @@ pub fn animation_elements_for_new_event(world_view: &WorldView, wrapper: &GameEv
             GameEvent::DamageTaken { entity, damage_taken, .. } => {
                 animate_damage(world_view, entity, damage_taken)
             }
+            _ => vec![]
+        }
+    } else if wrapper.is_ended() {
+        match wrapper.event {
+            GameEvent::EntityHarvested { harvester, harvestable, resource, amount, harvested_from } => {
+                animate_harvest(world_view, harvester, harvestable, harvested_from, resource, amount)
+            },
             _ => vec![]
         }
     } else {
@@ -69,7 +77,10 @@ fn animate_move(world_view: &WorldView, character: Entity, from: AxialCoord, to:
 }
 
 fn animate_attack(world_view: &WorldView, attacker: Entity, defenders: &Vec<Entity>, attack: &Attack, strike_results: &HashMap<Entity, StrikeResult>, resources: &mut GraphicsResources) -> Vec<Box<AnimationElement>> {
-    if defenders.is_empty() { warn!("Animating attack with no defenders, how did this occur?");return Vec::new(); }
+    if defenders.is_empty() {
+        warn!("Animating attack with no defenders, how did this occur?");
+        return Vec::new();
+    }
     let defender = defenders[0];
 
     let attacker_data = world_view.character(attacker);
@@ -252,6 +263,38 @@ fn animate_damage(world_view: &WorldView, entity: Entity, damage_done: u32) -> V
     vec![box animation_group]
 }
 
+fn animate_harvest(world_view: &WorldView, harvester: Entity, harvestable: Entity, harvested_from : Entity, resource: Entity, amount: Option<i32>) -> Vec<Box<AnimationElement>> {
+    let move_duration = 1.0;
+
+    let harvested_pos = logic::movement::position_of(world_view, harvested_from).as_cart_vec();
+    let harvester_pos = logic::movement::position_of(world_view, harvester).as_cart_vec();
+    let main_delta : CartVec = (harvested_pos - harvester_pos).normalize_s() * 0.5;
+
+    let move_anim = EntityFieldAnimation::new(
+        harvester,
+        Interpolation::linear_from_delta(harvester_pos, main_delta * 0.5).circular(),
+        |data: &mut GraphicsData, new_value| { data.graphical_position = Some(new_value) },
+        move_duration,
+    );
+
+
+    let color = Color::black();
+
+    let resource_name = world_view.data::<IdentityData>(resource).effective_name();
+    let msg = format!("+ {} {}", amount.unwrap_or(0), resource_name.to_string().capitalized());
+    let text_anim = TextAnimationElement::new(msg, FontSize::ExtraLarge, harvested_pos + CartVec::new(0.0, 0.5), color, 3.0)
+        .with_delta(CartVec::new(0.0, 1.0), InterpolationType::Linear)
+        .with_end_color(color.with_a(0.0), InterpolationType::Linear)
+        .with_outline_color(Color::greyscale(0.7), Color::greyscale(0.7).with_a(0.0), InterpolationType::Linear)
+        .with_blocking_duration(0.0);
+
+
+    vec![
+        box move_anim,
+        box text_anim,
+    ]
+}
+
 struct EntityFieldAnimation<T: EntityData, F: Interpolateable<F>, S: Fn(&mut T, F)> {
     pub entity: Entity,
     pub interpolation: Interpolation<F>,
@@ -279,7 +322,7 @@ impl<T: EntityData, F: Interpolateable<F>, S: Fn(&mut T, F)> EntityFieldAnimatio
     }
 }
 
-impl<T: EntityData, F: Interpolateable<F>, S: Fn(&mut T, F)> AnimationElement for EntityFieldAnimation<T, F, S> where T : DeserializeOwned {
+impl<T: EntityData, F: Interpolateable<F>, S: Fn(&mut T, F)> AnimationElement for EntityFieldAnimation<T, F, S> where T: DeserializeOwned {
     fn draw(&self, view: &mut WorldView, pcnt_elapsed: f64) -> DrawList {
         if pcnt_elapsed > 1.0 || pcnt_elapsed < 0.0 {
             warn!("Unexpected, pcnt was more than 1: {}", pcnt_elapsed);

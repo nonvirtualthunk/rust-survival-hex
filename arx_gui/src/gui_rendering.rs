@@ -264,7 +264,7 @@ impl GUI {
                                 100000000.0
                             };
 
-                            internal_state.draw_list = internal_state.draw_list.add_text(
+                            internal_state.draw_list.add_text(
                                 Text::new(text.clone(), font_size)
                                     .color(widget.color)
                                     .font(font.unwrap_or(g.default_font))

@@ -21,19 +21,20 @@ use gui::PlayerActionType;
 use gui::GUI;
 use gui::GUILayer;
 use gui::WidgetContainer;
+use gui::KeyGameState;
 
 use game::prelude::*;
-
 use graphics::GraphicsResources;
-use graphics::prelude::*;
 
 
 pub(crate) struct MoveAndAttackHandler {
-    attack_details_widget : AttackDetailsWidget
+    attack_details_widget : AttackDetailsWidget,
+    last_strike_overlay : DrawList,
+    last_strike_overlay_key : Option<(GameEventClock,Entity)>
 }
 impl MoveAndAttackHandler {
     pub(crate) fn new() -> Box<MoveAndAttackHandler> {
-        box MoveAndAttackHandler { attack_details_widget : AttackDetailsWidget::new().draw_layer_for_all(GUILayer::Overlay) }
+        box MoveAndAttackHandler { attack_details_widget : AttackDetailsWidget::new().draw_layer_for_all(GUILayer::Overlay), last_strike_overlay : DrawList::none(), last_strike_overlay_key : None }
     }
 }
 
@@ -88,7 +89,7 @@ impl PlayerActionHandler for MoveAndAttackHandler {
 
     fn draw(&mut self, world_view: &WorldView, game_state: &GameState, player_action: &PlayerActionType) -> DrawList {
         if let PlayerActionType::MoveAndAttack(movement_ref, attack_ref) = player_action {
-            draw_move_and_attack_overlay(world_view, game_state, *attack_ref)
+            self.draw_move_and_attack_overlay(world_view, game_state, *attack_ref)
         } else { DrawList::none() }
     }
 
@@ -106,53 +107,63 @@ impl PlayerActionHandler for MoveAndAttackHandler {
 }
 
 
-pub fn draw_move_and_attack_overlay(view: &WorldView, game_state: &GameState, attack_ref: AttackRef) -> DrawList {
-    if let Some(selected) = game_state.selected_character {
-        if let Some(movement_type) = logic::movement::default_movement_type(view, selected) {
-            let cdata = view.character(selected);
-            // if it's not the player's turn, don't display UI
-            if view.world_data::<TurnData>().active_faction != cdata.allegiance.faction {
-                return DrawList::none();
-            }
-
-            let current_position = cdata.position.hex;
-
-            let visibility = view.world_data::<VisibilityData>().visibility_for(game_state.player_faction);
-
-            let hexes = logic::movement::hexes_reachable_by_character_this_turn(view, selected, movement_type);
-
-            let mut draw_list = DrawList::none();
-
-            if let Some(attack) = attack_ref.resolve(view, selected) {
-                draw_strike_boundaries(view, &cdata, visibility, &hexes, &mut draw_list, &attack);
-
-                let targeted_char = targeted_character(view, game_state, selected);
-
-                if targeted_char == None && ! game_state.animating {
-                    draw_in_range_markers(view, selected, visibility, &mut draw_list, &attack);
+impl MoveAndAttackHandler {
+    pub fn draw_move_and_attack_overlay(&mut self, view: &WorldView, game_state: &GameState, attack_ref: AttackRef) -> DrawList {
+        if let Some(selected) = game_state.selected_character {
+            if let Some(movement_type) = logic::movement::default_movement_type(view, selected) {
+                let cdata = view.character(selected);
+                // if it's not the player's turn, don't display UI
+                if view.world_data::<TurnData>().active_faction != cdata.allegiance.faction {
+                    return DrawList::none();
                 }
 
-                if let Some(hovered_char) = targeted_char {
-                    if ! game_state.animating {
-                        draw_attack_enemy_overlay(view, game_state, attack_ref, selected, &current_position, hexes, &mut draw_list, &attack, hovered_char)
+                let current_position = cdata.position.hex;
+
+                let visibility = view.world_data::<VisibilityData>().visibility_for(game_state.player_faction);
+
+                let hexes = logic::movement::hexes_reachable_by_character_this_turn(view, selected, movement_type);
+
+                let mut draw_list : DrawList = DrawList::none();
+
+                if let Some(attack) = attack_ref.resolve(view, selected) {
+                    let key_state = Some((game_state.display_event_clock, selected));
+                    if self.last_strike_overlay_key != key_state {
+                        let strike_overlay = draw_strike_boundaries(view, &cdata, visibility, &hexes, &attack);
+                        self.last_strike_overlay = strike_overlay.clone();
+                        self.last_strike_overlay_key = key_state;
+                        draw_list.extend(strike_overlay);
+                    } else {
+                        draw_list.extend(self.last_strike_overlay.clone());
                     }
-                } else if let Some(hovered_tile) = view.tile_opt(game_state.hovered_hex_coord) {
-                    if let Some((path, cost)) = logic::movement::path_to(view, selected, hovered_tile.position) {
-                        for hex in path {
-                            draw_list = draw_list.with_quad(Quad::new_cart(String::from("ui/feet"), hex.as_cart_vec()).centered());
+
+                    let targeted_char = targeted_character(view, game_state, selected);
+
+                    if targeted_char == None && ! game_state.animating {
+                        draw_in_range_markers(view, selected, visibility, &mut draw_list, &attack);
+                    }
+
+                    if let Some(hovered_char) = targeted_char {
+                        if ! game_state.animating {
+                            draw_attack_enemy_overlay(view, game_state, attack_ref, selected, &current_position, hexes, &mut draw_list, &attack, hovered_char)
+                        }
+                    } else if let Some(hovered_tile) = view.tile_opt(game_state.hovered_hex_coord) {
+                        if let Some((path, cost)) = logic::movement::path_to(view, selected, hovered_tile.position) {
+                            for hex in path {
+                                draw_list.add_quad(Quad::new_cart(String::from("ui/feet"), hex.as_cart_vec()).centered());
+                            }
                         }
                     }
+                } else {
+                    warn!("No attack possible, whatsoever, for entity {}", selected);
                 }
-            } else {
-                warn!("No attack possible, whatsoever, for entity {}", selected);
-            }
 
-            draw_list
+                draw_list
+            } else {
+                DrawList::none()
+            }
         } else {
             DrawList::none()
         }
-    } else {
-        DrawList::none()
     }
 }
 
@@ -223,7 +234,8 @@ fn draw_in_range_markers(view: &WorldView, selected: Entity, visibility: &Visibi
     }
 }
 
-fn draw_strike_boundaries(view: &WorldView, cdata: &Character, visibility: &Visibility, hexes: &HashMap<AxialCoord, f64>, draw_list: &mut DrawList, attack: &Attack) {
+fn draw_strike_boundaries(view: &WorldView, cdata: &Character, visibility: &Visibility, hexes: &HashMap<AxialCoord, f64>, attack: &Attack) -> DrawList {
+    let mut draw_list = DrawList::none();
     let ap_per_strike = attack.ap_cost;
     let ap_remaining = cdata.action_points.cur_value();
     let cur_move = cdata.movement.moves.as_f64();
@@ -269,6 +281,7 @@ fn draw_strike_boundaries(view: &WorldView, cdata: &Character, visibility: &Visi
             }
         }
     }
+    draw_list
 }
 
 

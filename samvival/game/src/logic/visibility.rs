@@ -162,3 +162,10 @@ impl VisibilityComputor {
         }
     }
 }
+
+
+pub fn faction_visibility_for_character (view : &WorldView, character : Entity) -> &Visibility {
+    let faction = view.data::<AllegianceData>(character).faction;
+    let vd = view.world_data::<VisibilityData>();
+    vd.visibility_for(faction)
+}

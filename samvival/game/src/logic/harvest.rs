@@ -6,7 +6,7 @@ use logic::breakdown::Breakdown;
 use entities::ItemData;
 use entities::actions::*;
 use entities::InventoryData;
-use entities::ToolData;
+use entities::{ToolData, WorthData};
 
 pub fn harvestables_at(world : &WorldView, coord : AxialCoord) -> Vec<Entity> {
     world.terrain(coord).harvestables.values()
@@ -122,58 +122,83 @@ pub fn compute_harvest_breakdown(world: &World, view: &WorldView, character : En
 }
 
 pub fn harvest(world: &mut World, character : Entity, from : AxialCoord, harvestable : Entity, preserve_renewable : bool, progress : Option<i32>) {
-    let harvestable_data = world.view().data::<Harvestable>(harvestable);
-    world.start_event(GameEvent::EntityHarvested { harvester : character, harvestable, amount : None, resource : harvestable_data.resource });
+    let view = world.view();
+    let harvestable_data = view.data::<Harvestable>(harvestable);
 
-    if let Ok(breakdown) = compute_harvest_breakdown(world, world.view(), character, from, harvestable, preserve_renewable) {
-        let cdata = world.view().data::<CharacterData>(character);
+    if let Some(tile_ent) = view.tile_ent_opt(from) {
+        world.start_event(GameEvent::EntityHarvested { harvester : character, harvestable, harvested_from: tile_ent.entity, amount : None, resource : harvestable_data.resource });
 
-        let action_type = ActionType::Harvest { from, harvestable, preserve_renewable };
+        if let Ok(breakdown) = compute_harvest_breakdown(world, world.view(), character, from, harvestable, preserve_renewable) {
+            let cdata = world.view().data::<CharacterData>(character);
 
-        // Harvesting can be a multi-turn action, so we first want to figure out if we're actually resolving the harvest, or just making progress
-        // toward its eventual completion
-        let ap_so_far = progress.unwrap_or(0);
-        let ap_required = breakdown.ap_to_harvest.total;
-        let ap_remaining = cdata.action_points.cur_value();
-        // if our progress so far, plus the ap we can contribute this turn are still less than what's required, update our action-in-progress
-        if ap_required > ap_remaining + ap_so_far {
-            world.modify(character, CharacterData::action_points.reduce_by(ap_remaining));
-            let in_progress_action = Action {
-                action_type : action_type.clone(),
-                ap : Progress::new(ap_remaining + ap_so_far, ap_required)
-            };
-            world.modify(character, ActionData::active_action.set_to(Some(in_progress_action.clone())));
-            let event = GameEvent::ActionTaken { entity : character, action : in_progress_action };
-            if progress.is_none() {
-                world.start_event(event);
+            let action_type = ActionType::Harvest { from, harvestable, preserve_renewable };
+
+            // Harvesting can be a multi-turn action, so we first want to figure out if we're actually resolving the harvest, or just making progress
+            // toward its eventual completion
+            let ap_so_far = progress.unwrap_or(0);
+            let ap_required = breakdown.ap_to_harvest.total;
+            let ap_remaining = cdata.action_points.cur_value();
+            // if our progress so far, plus the ap we can contribute this turn are still less than what's required, update our action-in-progress
+            if ap_required > ap_remaining + ap_so_far {
+                world.modify(character, CharacterData::action_points.reduce_by(ap_remaining));
+                let in_progress_action = Action {
+                    action_type : action_type.clone(),
+                    ap : Progress::new(ap_remaining + ap_so_far, ap_required)
+                };
+                world.modify(character, ActionData::active_action.set_to(Some(in_progress_action.clone())));
+                let event = GameEvent::ActionTaken { entity : character, action : in_progress_action };
+                if progress.is_none() {
+                    world.start_event(event);
+                } else {
+                    world.continue_event(event);
+                }
             } else {
-                world.continue_event(event);
+                // if we're here then we can actually complete the harvest action
+                world.modify(character, CharacterData::action_points.reduce_by(ap_required - ap_so_far));
+
+                let mut rng = world.random(9221);
+                let amount_harvested = (breakdown.dice_amount_harvested.total.roll(&mut rng).total_result as i32 + breakdown.fixed_amount_harvested.total)
+                    .min(breakdown.harvest_limit)
+                    .min(breakdown.inventory_limit.unwrap_or(1000000));
+                world.modify(harvestable, Harvestable::amount.reduce_by(Sext::of(amount_harvested)));
+
+
+
+                for i in 0 .. amount_harvested {
+                    let new_entity = world.clone_entity(harvestable_data.resource);
+                    logic::item::put_item_in_inventory(world, new_entity, character);
+                }
+
+                world.end_event(GameEvent::EntityHarvested { harvester : character, harvestable, harvested_from : tile_ent.entity, amount : Some(amount_harvested), resource : harvestable_data.resource });
+
+                let completed_action = Action { action_type : action_type.clone(), ap : Progress::new(ap_required, ap_required) };
+                if world.data::<ActionData>(character).active_action.is_some() { // clear the active action, if any
+                    world.modify(character, ActionData::active_action.set_to(None));
+                }
+                let event = GameEvent::ActionTaken { entity : character, action : completed_action };
+                if progress.is_some() { world.end_event(event); } else { world.add_event(event); }
             }
-        } else {
-            // if we're here then we can actually complete the harvest action
-            world.modify(character, CharacterData::action_points.reduce_by(ap_required - ap_so_far));
-
-            let mut rng = world.random(9221);
-            let amount_harvested = (breakdown.dice_amount_harvested.total.roll(&mut rng).total_result as i32 + breakdown.fixed_amount_harvested.total)
-                .min(breakdown.harvest_limit)
-                .min(breakdown.inventory_limit.unwrap_or(1000000));
-            world.modify(harvestable, Harvestable::amount.reduce_by(Sext::of(amount_harvested)));
-
-
-
-            for i in 0 .. amount_harvested {
-                let new_entity = world.clone_entity(harvestable_data.resource);
-                logic::item::put_item_in_inventory(world, new_entity, character);
-            }
-
-            world.end_event(GameEvent::EntityHarvested { harvester : character, harvestable, amount : Some(amount_harvested), resource : harvestable_data.resource });
-
-            let completed_action = Action { action_type : action_type.clone(), ap : Progress::new(ap_required, ap_required) };
-            if world.data::<ActionData>(character).active_action.is_some() { // clear the active action, if any
-                world.modify(character, ActionData::active_action.set_to(None));
-            }
-            let event = GameEvent::ActionTaken { entity : character, action : completed_action };
-            if progress.is_some() { world.end_event(event); } else { world.add_event(event); }
         }
+    } else { error!("tried to harvest from non tile {}", from) }
+}
+
+pub fn harvest_range(view : &WorldView, character : Entity) -> i32 {
+    1
+}
+
+
+/// provides a sorted version of the given harvestables, the sort is a combination of ease of harvesting the resource
+/// (i.e. having the correct tool) and rough quality of the resource itself
+pub fn harvestable_desirability(world_view : &WorldView, character: Entity, harvestable : Entity) -> i32 {
+    let resource = world_view.data::<Harvestable>(harvestable).resource;
+    let worth_rating = world_view.data::<WorthData>(resource).base_worth.as_i32(0,100);
+    if can_harvest(world_view, character, harvestable).0 {
+        100 + worth_rating
+    } else {
+        worth_rating
     }
+}
+
+pub fn harvestables_sorted_by_desirability_at(world_view : &WorldView, character : Entity, at : AxialCoord) -> Vec<Entity> {
+    harvestables_at(world_view, at).into_iter().sorted_by_key(|&h| -harvestable_desirability(world_view, character, h))
 }

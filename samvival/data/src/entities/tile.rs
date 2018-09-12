@@ -22,6 +22,9 @@ pub struct TileData {
     pub occupied_by: Option<Entity>,
 }
 impl EntityData for TileData {}
+impl TileData {
+    pub fn is_occupied(&self) -> bool { self.occupied_by.is_some() }
+}
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize, Fields)]
 pub struct TerrainData {
@@ -301,6 +304,8 @@ use entities::combat::DamageType;
 use entities::combat::AttackType;
 use entities::item::ToolData;
 use entities::time::Season;
+use entities::item::WorthData;
+use entities::item::Worth;
 //impl Modifier<Resources> for InitResourcesModifier {
 //    fn modify(&self, data: &mut Resources, world: &WorldView) {
 //        *data = self.resources.clone()
@@ -324,6 +329,7 @@ impl Resources {
                     cordable: true,
                     ..Default::default()
                 })
+                .with(WorthData::new(Worth::low(1)))
                 .with(ItemData { stack_limit: 6, ..Default::default() })
                 .with(IdentityData::of_kind(&taxonomy::resources::Straw))
                 .create(world);
@@ -353,6 +359,7 @@ impl Resources {
                                       })],
                     ..Default::default()
                 })
+                .with(WorthData::new(Worth::medium(-1)))
                 .with(ToolData { tool_speed_bonus: 1, ..Default::default() })
                 .with(IdentityData::of_kinds(vec![
                     &taxonomy::resources::Wood,
@@ -371,6 +378,7 @@ impl Resources {
                     magnetic: true,
                     ..Default::default()
                 })
+                .with(WorthData::new(Worth::medium(3)))
                 .with(ItemData { stack_limit: 3, ..Default::default() })
                 .with(IdentityData::of_kind(&taxonomy::resources::Iron))
                 .create(world);
@@ -385,6 +393,7 @@ impl Resources {
                     building_quality : 1,
                     ..Default::default()
                 })
+                .with(WorthData::new(Worth::medium(0)))
                 .with(ItemData { stack_limit: 1, ..Default::default() })
                 .with(IdentityData::of_kind(&taxonomy::resources::QuarriedStone))
                 .create(world);
@@ -399,6 +408,7 @@ impl Resources {
                     building_quality: -4, // but they're not very good for making buildings
                     ..Default::default()
                 })
+                .with(WorthData::new(Worth::medium(-2)))
                 .with(ItemData { stack_limit: 3, ..Default::default() })
                 .with(IdentityData::of_kind(&taxonomy::resources::LooseStone))
                 .create(world)
@@ -411,6 +421,7 @@ impl Resources {
                     hardness: 3,
                     ..Default::default()
                 })
+                .with(WorthData::new(Worth::low(-5)))
                 .with(ItemData { stack_limit: 2, ..Default::default() })
                 .with(IdentityData::of_kind(&taxonomy::resources::Dirt))
                 .create(world);
@@ -425,6 +436,7 @@ impl Resources {
                     cordable: true,
                     ..Default::default()
                 })
+                .with(WorthData::new(Worth::medium(0)))
                 .with(ItemData { stack_limit: 6, ..Default::default() })
                 .with(IdentityData::of_kind(&taxonomy::resources::Fruit))
                 .create(world);

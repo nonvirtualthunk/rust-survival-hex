@@ -506,57 +506,65 @@ impl GameMode for TacticalMode {
                 }
             },
             UIEvent::KeyRelease { key } => {
-                match key {
-                    Key::A => gui.mark_all_modified(),
-                    Key::Left => self.camera.move_delta.x = 0.0,
-                    Key::Right => self.camera.move_delta.x = 0.0,
-                    Key::Up => self.camera.move_delta.y = 0.0,
-                    Key::Down => self.camera.move_delta.y = 0.0,
-                    Key::Return => {
-                        self.gui.close_all_auxiliary_windows(gui);
-                        self.end_turn(world);
-                    },
-                    Key::Escape => {
-                        // close auxiliary windows if any are open, otherwise cancel character selection
-                        if ! self.gui.close_all_auxiliary_windows(gui) {
-                            if self.selected_character.is_some() {
-                                self.selected_character = None
-                            } else {
-                                self.gui.toggle_escape_menu(gui);
-                            }
-                        }
-                    },
-                    Key::LShift => self.realtime_clock_speed = 1.0,
-                    Key::LAlt => self.realtime_clock_speed = 1.0,
-                    Key::D9 => self.realtime_clock_speed = if self.realtime_clock_speed < 100.0 { 100.0 } else  { 1.0 },
-                    Key::I => self.gui.toggle_inventory(gui),
-                    Key::LCtrl => self.show_real_world = false,
-                    Key::N => self.select_next_character(world),
-                    Key::Space => {
-                        if let Some(sel) = self.selected_character {
-                            if self.skipped_characters.contains(&sel) {
-                                self.skipped_characters.remove(&sel);
-                            } else {
-                                self.skipped_characters.insert(sel);
-                            }
-                        }
-                        println!("Skip, selecting a character");
-                        self.select_next_character(world);
-                        if self.selected_character.is_none() {
+                let game_state = self.current_game_state(world);
+                if ! self.gui.handle_key_release(world, &game_state, *key) {
+                    match key {
+                        Key::A => gui.mark_all_modified(),
+                        Key::Left => self.camera.move_delta.x = 0.0,
+                        Key::Right => self.camera.move_delta.x = 0.0,
+                        Key::Up => self.camera.move_delta.y = 0.0,
+                        Key::Down => self.camera.move_delta.y = 0.0,
+                        Key::Return => {
+                            self.gui.close_all_auxiliary_windows(gui);
                             self.end_turn(world);
-                        }
-                    },
-                    Key::Y => {
-                        use std::io::Write;
-                        let string = ron::ser::to_string_pretty(&world, ron::ser::PrettyConfig::default()).expect("couldn't deserialize");
-                        File::create(Path::new("/tmp/world.ron")).expect("couldn't create").write_all(string.as_bytes()).expect("couldn't write");
-                    },
-                    Key::U => {
-                        use std::io::Write;
-                        let bytes = ron::ser::to_string_pretty(&world.view().effective_data, ron::ser::PrettyConfig::default()).expect("couldn't deserialize");
-                        File::create(Path::new("/tmp/view.ron")).expect("couldn't create").write_all(&bytes.as_bytes()).expect("couldn't write");
-                    },
-                    _ => ()
+                        },
+                        Key::Escape => {
+                            // close auxiliary windows if any are open, otherwise cancel character selection
+                            if ! self.gui.close_all_auxiliary_windows(gui) {
+                                if self.selected_character.is_some() {
+                                    self.selected_character = None
+                                } else {
+                                    self.gui.toggle_escape_menu(gui);
+                                }
+                            }
+                        },
+                        Key::LShift => self.realtime_clock_speed = 1.0,
+                        Key::LAlt => self.realtime_clock_speed = 1.0,
+                        Key::D9 => self.realtime_clock_speed = if self.realtime_clock_speed < 100.0 { 100.0 } else  { 1.0 },
+                        Key::I => self.gui.toggle_inventory(gui),
+                        Key::LCtrl => self.show_real_world = false,
+                        Key::N => self.select_next_character(world),
+                        Key::Space => {
+                            if let Some(sel) = self.selected_character {
+                                if self.skipped_characters.contains(&sel) {
+                                    self.skipped_characters.remove(&sel);
+                                } else {
+                                    self.skipped_characters.insert(sel);
+                                }
+                            }
+                            println!("Skip, selecting a character");
+                            self.select_next_character(world);
+                            if self.selected_character.is_none() {
+                                self.end_turn(world);
+                            }
+                        },
+                        Key::H => {
+                            if let Some(sel) = self.selected_character {
+                                self.gui.action_bar.set_selected_action_for(world, sel, ::gui::PlayerActionType::Harvest);
+                            }
+                        },
+                        Key::Y => {
+                            use std::io::Write;
+                            let string = ron::ser::to_string_pretty(&world, ron::ser::PrettyConfig::default()).expect("couldn't deserialize");
+                            File::create(Path::new("/tmp/world.ron")).expect("couldn't create").write_all(string.as_bytes()).expect("couldn't write");
+                        },
+                        Key::U => {
+                            use std::io::Write;
+                            let bytes = ron::ser::to_string_pretty(&world.view().effective_data, ron::ser::PrettyConfig::default()).expect("couldn't deserialize");
+                            File::create(Path::new("/tmp/view.ron")).expect("couldn't create").write_all(&bytes.as_bytes()).expect("couldn't write");
+                        },
+                        _ => ()
+                    }
                 }
             },
             _ => ()

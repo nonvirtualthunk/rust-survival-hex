@@ -70,7 +70,7 @@ pub struct TacticalGui {
     main_area : Widget,
     victory_widget : Widget,
     defeat_widget : Widget,
-    action_bar : ActionBar,
+    pub(crate) action_bar : ActionBar,
     reaction_bar : ReactionBar,
     event_bus : EventBus<TacticalEvents>,
     event_bus_handle : ConsumerHandle,
@@ -156,11 +156,11 @@ impl TacticalGui {
 
             let action_type = self.action_bar.selected_action_for(view, selected);
 
-            if let Some((last_state, last_action_type)) = self.last_targeting_info.as_ref() {
-                if last_state == &game_state.key_state() && last_action_type == &action_type {
-                    return self.targeting_draw_list.clone()
-                }
-            }
+//            if let Some((last_state, last_action_type)) = self.last_targeting_info.as_ref() {
+//                if last_state == &game_state.key_state() && last_action_type == &action_type {
+//                    return self.targeting_draw_list.clone()
+//                }
+//            }
 
             let current_position = cdata.position.hex;
 
@@ -171,8 +171,8 @@ impl TacticalGui {
                 draw_list.extend(handler.draw(view, game_state, &action_type));
             }
 
-            self.last_targeting_info = Some((game_state.key_state(), action_type.clone()));
-            self.targeting_draw_list = draw_list.clone();
+//            self.last_targeting_info = Some((game_state.key_state(), action_type.clone()));
+//            self.targeting_draw_list = draw_list.clone();
 
             draw_list
         } else {
@@ -237,6 +237,12 @@ impl TacticalGui {
         let world_view = world.view();
         let action = self.selected_player_action(world_view, game_state);
         self.player_action_handlers.iter_mut().any(|pah| pah.handle_click(world, game_state, &action, button))
+    }
+
+    pub fn handle_key_release(&mut self, world : &mut World, game_state: &GameState, key : Key) -> bool {
+        let world_view = world.view();
+        let action = self.selected_player_action(world_view, game_state);
+        self.player_action_handlers.iter_mut().any(|pah| pah.handle_key_release(world, game_state, &action, key))
     }
 
     pub fn update_gui(&mut self, world: &mut World, world_view : &WorldView, gsrc : &mut GraphicsResources, gui: &mut GUI, frame_id: Option<Wid>, game_state: GameState, game_mode_event_bus : &mut EventBus<GameModeEvent>) {
