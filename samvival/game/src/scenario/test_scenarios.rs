@@ -12,6 +12,7 @@ use logic;
 use prelude::GameEvent;
 use entities::reactions::ReactionTypeRef;
 use game::DebugData;
+use archetypes::weapons::create_weapon_archetypes;
 
 
 #[derive(Clone)]
@@ -22,6 +23,9 @@ impl Scenario for FirstEverScenario {
         {
             let world = &mut raw_world;
             ::samvival_core::initialize_world(world);
+
+            create_weapon_archetypes(world);
+            let item_catalog = Catalog::of::<ItemArchetype>(world.view(), Entity::sentinel());
 
             for tile in terrain::generator::generate(world, 70) {
                 let tile = tile.with(DebugData { name: strf("world tile") }).create(world);
@@ -53,12 +57,11 @@ impl Scenario for FirstEverScenario {
                 .with(DebugData { name: strf("enemy faction") })
                 .create(world);
 
-
-            let weapon_archetypes = weapon_archetypes();
+//            let weapon_archetypes = weapon_archetypes();
 
             let character_archetypes = character_archetypes();
 
-            let bow = weapon_archetypes.with_name("longbow").create(world);
+            let bow = logic::crafting::craft_without_materials(world, item_catalog.entity_with_name("longbow"));
 
 
             let char_base = |name: Str| character_archetypes.with_name("human").clone()
@@ -80,6 +83,7 @@ impl Scenario for FirstEverScenario {
                 .with(DebugData { name: strf("archer") })
                 .create(world);
 
+            logic::item::put_item_in_inventory(world, bow, archer);
             logic::item::equip_item(world, bow, archer, true);
 
             world.modify_with_desc(archer, CombatData::ranged_accuracy_bonus.add(1), "well rested");
@@ -104,7 +108,8 @@ impl Scenario for FirstEverScenario {
                 .with(DebugData { name: strf("spearman") })
                 .create(world);
 
-            let spear = weapon_archetypes.with_name("longspear").create(world);
+            let spear = logic::crafting::craft_without_materials(world, item_catalog.entity_with_name("longspear"));
+            logic::item::put_item_in_inventory(world, spear, spearman);
             logic::item::equip_item(world, spear, spearman, true);
             logic::movement::place_entity_in_world(world, spearman, AxialCoord::new(1, -1));
 
@@ -135,10 +140,12 @@ impl Scenario for FirstEverScenario {
                 .with(DebugData { name: strf("peasant") })
                 .create(world);
 
-            let hatchet = weapon_archetypes.with_name("hatchet").create(world);
+            let hatchet = logic::crafting::craft_without_materials(world, item_catalog.entity_with_name("hatchet"));
+            logic::item::put_item_in_inventory(world, hatchet, peasant);
             logic::item::equip_item(world, hatchet, peasant, true);
 
-            let pickaxe = weapon_archetypes.with_name("pickaxe").create(world);
+            let pickaxe = logic::crafting::craft_without_materials(world, item_catalog.entity_with_name("pickaxe"));
+            logic::item::put_item_in_inventory(world, pickaxe, peasant);
             logic::item::equip_item(world, pickaxe, peasant, true);
 
             logic::movement::place_entity_in_world(world, peasant, AxialCoord::new(1, -2));

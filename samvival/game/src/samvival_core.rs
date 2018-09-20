@@ -51,6 +51,9 @@ pub fn register_world_data(world : &mut World) {
     world.register::<TerrainData>();
     world.register::<Material>();
     world.register::<WorthData>();
+    world.register::<ItemArchetype>();
+    world.register::<EntityMetadata>();
+    world.register::<Recipe>();
 
     register_custom_ability_data(world);
     // -------- world data ---------------

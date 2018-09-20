@@ -26,6 +26,8 @@ use widgets::*;
 use gui::Modifiers;
 use widget_delegation::DelegateToWidget;
 use std::time::Instant;
+use std::any::Any;
+use std::rc::Rc;
 
 
 pub struct WidgetAlteration {
@@ -34,21 +36,37 @@ pub struct WidgetAlteration {
 }
 
 pub struct WidgetContext {
-    pub widget_id: Wid,
-    pub widget_state: WidgetState,
-    pub triggered_events: Vec<UIEvent>,
-    pub widget_alterations : Vec<WidgetAlteration>
+    pub(crate) widget_id: Wid,
+    pub(crate) widget_state: WidgetState,
+    pub(crate) triggered_events: Vec<UIEvent>,
+    pub(crate) widget_alterations : Vec<WidgetAlteration>,
+    pub(crate) custom_data : Option<Rc<Any>>,
 }
 
 impl WidgetContext {
+    pub fn widget_id(&self) -> Wid {
+        self.widget_id
+    }
     pub fn trigger_event(&mut self, event: UIEvent) {
         self.triggered_events.push(event);
+    }
+    pub fn trigger_custom_event<E: Any + 'static>(&mut self, custom_event : E) {
+        self.trigger_event(UIEvent::custom_event(custom_event, self.widget_id));
     }
     pub fn update_state(&mut self, new_state: WidgetState) {
         self.widget_state = new_state;
     }
     pub fn alter_widget<F : Fn(&mut Widget) + 'static>(&mut self, wid : Wid, f : F) {
         self.widget_alterations.push(WidgetAlteration { widget_id : wid, alteration : box f });
+    }
+    pub fn has_custom_data(&self) -> bool { self.custom_data.is_some() }
+    pub fn custom_data<D : Any + 'static>(&self) -> Option<Rc<D>> {
+        self.custom_data.clone().and_then(|d| {
+            match d.downcast::<D>() {
+                Ok(value) => Some(value),
+                Err(_) => None,
+            }
+        })
     }
 }
 
@@ -91,8 +109,9 @@ impl GUI {
         self.mark_widget_modified(wid);
     }
 
-    fn handle_event_widget_intern<F: FnMut(u32, &UIEvent) -> ()>(&mut self, wid: Wid, event: &UIEvent, is_placeholder: bool, mut func: F) -> bool {
-        let (parent_id, accepts_focus, consumed) = {
+    fn handle_event_widget_intern<F: FnMut(u32, &UIEvent) -> ()>(&mut self, wid: Wid, event: &UIEvent, is_placeholder: bool, mut func: F, custom_data : Option<Rc<Any>>) -> bool {
+        let (parent_id, accepts_focus, consumed, new_custom_data) = {
+            let mut new_custom_data = custom_data.clone();
             if is_placeholder {
                 trace!("Pushing event {:?} into vec for widget {:?}", event, self.widget_reification(wid).widget.signifier());
                 self.events_by_widget.entry(wid).or_insert_with(|| Vec::new()).push(event.clone());
@@ -105,9 +124,18 @@ impl GUI {
                     return false;
                 };
 
+                new_custom_data = widget_state.widget.custom_data.clone().or_else(|| custom_data.clone());
+
                 let alterations = if widget_state.widget.callbacks.non_empty() {
                     let callbacks = widget_state.widget.callbacks.clone();
-                    let mut widget_context = WidgetContext { widget_state: widget_state.widget_state.clone(), triggered_events: Vec::new(), widget_id : widget_state.widget.id(), widget_alterations : Vec::new() };
+
+                    let mut widget_context = WidgetContext {
+                        widget_state: widget_state.widget_state.clone(),
+                        triggered_events: Vec::new(),
+                        widget_id : widget_state.widget.id(),
+                        widget_alterations : Vec::new(),
+                        custom_data : new_custom_data.clone(),
+                    };
                     for callback in callbacks {
                         execute_global_widget_registry_callback(callback.id(), &mut widget_context, event);
                         execute_global_widget_registry_callback_2(callback.id(), self, &mut widget_context, event);
@@ -166,7 +194,7 @@ impl GUI {
                 None
             };
 
-            (widget_state.widget.parent_id, widget_state.widget.accepts_focus, consumed)
+            (widget_state.widget.parent_id, widget_state.widget.accepts_focus, consumed, new_custom_data)
         };
 
         if let UIEvent::MouseRelease { .. } = event {
@@ -183,8 +211,8 @@ impl GUI {
         } else if let Some(parent_id) = parent_id {
             trace!("Event not consumed, parent present, passing event to parent : {:?}", self.widget_reification(parent_id).widget.signifier());
             match event {
-                UIEvent::WidgetEvent { .. } => self.handle_event_widget_intern(parent_id, &event.clone_with_most_recently_from_widget(wid), is_placeholder, func),
-                _ => self.handle_event_widget_intern(parent_id, event, is_placeholder, func),
+                UIEvent::WidgetEvent { .. } => self.handle_event_widget_intern(parent_id, &event.clone_with_most_recently_from_widget(wid), is_placeholder, func, new_custom_data),
+                _ => self.handle_event_widget_intern(parent_id, event, is_placeholder, func, new_custom_data),
             }
         } else {
             false
@@ -208,14 +236,14 @@ impl GUI {
     fn handle_event_widget_2<State: 'static, OtherState: 'static>(&mut self, wid: Wid, event: &UIEvent, state: &mut State, other_state: &mut OtherState) -> bool {
         self.handle_event_widget_intern(wid, event, false, |callback, evt| {
             execute_global_widget_registry_callback_2(callback, state, other_state, evt)
-        })
+        }, None)
     }
 
     fn handle_event_widget<State: 'static>(&mut self, wid: Wid, event: &UIEvent, state: &mut State) -> bool {
         let is_placeholder = TypeId::of::<State>() == TypeId::of::<WidgetStatePlaceholder>();
         self.handle_event_widget_intern(wid, event, is_placeholder, |callback, evt| {
             execute_global_widget_registry_callback(callback, state, evt)
-        })
+        }, None)
     }
 
     pub fn handle_ui_event_for_self(&mut self, ui_event: &UIEvent) -> bool {

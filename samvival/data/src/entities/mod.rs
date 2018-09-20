@@ -18,6 +18,8 @@ pub mod movement;
 pub mod selectors;
 pub mod effects;
 pub mod recipes;
+pub mod archetype_data;
+pub mod helpers;
 mod taxonomy_registration;
 
 pub mod fields;
@@ -42,3 +44,5 @@ pub use entities::effects::*;
 pub use entities::actions::*;
 pub use entities::reactions::*;
 pub use entities::recipes::*;
+pub use entities::archetype_data::*;
+pub use entities::helpers::*;

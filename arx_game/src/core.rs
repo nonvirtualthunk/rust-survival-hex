@@ -354,11 +354,11 @@ impl Sext {
     pub fn of<T: num::Integer + num::ToPrimitive>(n: T) -> Sext {
         Sext(n.to_i64().expect("could not create Sext from value") * 6)
     }
-    pub fn of_parts(full: i32, eights: i32) -> Sext {
-        Sext((full * 6 + eights) as i64)
+    pub fn of_parts(full: i32, sixths: i32) -> Sext {
+        Sext((full * 6 + sixths) as i64)
     }
-    pub fn part(eights: i32) -> Sext {
-        Sext(eights as i64)
+    pub fn part(sixths: i32) -> Sext {
+        Sext(sixths as i64)
     }
 
 

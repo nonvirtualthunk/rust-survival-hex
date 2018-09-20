@@ -9,6 +9,10 @@ use game::prelude::*;
 
 pub trait SelectorMatches {
     fn matches(&self, world: &WorldView, entity: Entity) -> bool;
+
+    fn matches_any(&self, world: &WorldView, entities: &Vec<Entity>) -> bool {
+        entities.iter().any(|e| self.matches(world, *e))
+    }
 }
 
 
@@ -52,7 +56,7 @@ impl SelectorMatches for EntitySelector {
             And(a,b) => a.matches(world, entity) && b.matches(world, entity),
             Or(a,b) => a.matches(world, entity) || b.matches(world, entity),
             Any => true,
-            None => true,
+            None => false,
         }
     }
 }

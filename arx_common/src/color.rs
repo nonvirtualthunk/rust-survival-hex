@@ -9,6 +9,9 @@ impl Color {
     pub const fn new (r:f32, g:f32, b:f32, a : f32) -> Color {
         Color([r,g,b,a])
     }
+    pub fn from_rgba8(rgba : &[u8]) -> Color {
+        Color::new(rgba[0] as f32 / 255.0, rgba[1] as f32 / 255.0, rgba[2] as f32 / 255.0, rgba[3] as f32 / 255.0)
+    }
 
     pub fn white() -> Color {
         Color::new(1.0,1.0,1.0,1.0)

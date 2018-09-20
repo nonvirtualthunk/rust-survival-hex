@@ -12,16 +12,20 @@ pub type RTPositionedGlyph = rt::PositionedGlyph<'static>;
 #[serde(default)]
 pub struct FontInfo {
     pub sizing_overrides : HashMap<FontSize, u32>,
-    pub line_height_modifier: f32
+    pub line_height_multiplier: f32,
+    pub space_multiplier: f32
 }
+
 impl Default for FontInfo {
     fn default() -> Self {
         FontInfo {
             sizing_overrides : HashMap::new(),
-            line_height_modifier : 1.0
+            line_height_multiplier : 1.0,
+            space_multiplier: 1.0,
         }
     }
 }
+
 pub struct ArxFont {
     pub font : RTFont,
     pub font_info : FontInfo,
@@ -65,7 +69,8 @@ impl TextLayout {
 
         let mut all_glyphs : Vec<RTPositionedGlyph> = Vec::new();
         let mut max_x : f32 = 0.0;
-        let ascent = vmetrics.ascent * arx_font.font_info.line_height_modifier;
+        let ascent = vmetrics.ascent * arx_font.font_info.line_height_multiplier;
+        let space_mult = arx_font.font_info.space_multiplier;
         let mut line_y = ascent;
 
         let mut last_glyph_id = None;
@@ -122,7 +127,9 @@ impl TextLayout {
                     }
                 }
 
-                line_x += glyph.unpositioned().h_metrics().advance_width;
+                let mut advance = glyph.unpositioned().h_metrics().advance_width;
+                if c == ' ' { advance *= space_mult; }
+                line_x += advance;
                 last_glyph_id = Some(glyph.id());
                 all_glyphs.push(glyph);
             }
@@ -141,7 +148,7 @@ impl TextLayout {
         let effective_size = arx_font.point_size_for(size);
         let scale = rt::Scale::uniform(((effective_size * 4) as f32 / 3.0) * dpi_scale);
         let vmetrics = font.v_metrics(scale);
-            (vmetrics.ascent - vmetrics.descent + vmetrics.line_gap) * arx_font.font_info.line_height_modifier
+            (vmetrics.ascent - vmetrics.descent + vmetrics.line_gap) * arx_font.font_info.line_height_multiplier
     }
 
 }

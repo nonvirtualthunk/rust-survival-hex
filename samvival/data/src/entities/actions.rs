@@ -15,6 +15,8 @@ use entities::combat::AttackRef;
 use entities::reactions::ReactionTypeRef;
 use game::entity;
 use game::EntityData;
+use entities::common_entities::Taxon;
+use std::collections::HashMap;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Action {
@@ -22,12 +24,13 @@ pub struct Action {
     pub ap : Progress<i32>
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ActionType {
     Move { from : AxialCoord , to : AxialCoord, movement_type : MovementTypeRef },
     Attack { targets : Vec<Entity>, attack : AttackRef },
     TransferItem { item : Entity, from : Entity, to : Entity },
-    Harvest { from : AxialCoord, harvestable : Entity, preserve_renewable : bool }
+    Harvest { from : AxialCoord, harvestable : Entity, preserve_renewable : bool },
+    Craft { base_recipe : Entity, ingredients : HashMap<Taxon, Vec<Entity>> },
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, Fields)]
@@ -36,3 +39,16 @@ pub struct ActionData {
     pub active_reaction: ReactionTypeRef,
 }
 impl EntityData for ActionData {}
+
+impl ActionType {
+    pub fn name(&self) -> Str {
+        use self::ActionType::*;
+        match self {
+            Move { .. } => "Move",
+            Attack {.. } => "Attack",
+            TransferItem { .. } => "Transfer Item",
+            Harvest { .. } => "Harvest",
+            Craft { .. } => "Craft",
+        }
+    }
+}

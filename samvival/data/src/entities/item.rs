@@ -8,12 +8,18 @@ use game::entity;
 use game::DicePool;
 use entities::selectors::EntitySelector;
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum StackWith {
+    SameArchetype,
+    Custom(EntitySelector)
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, Fields)]
 pub struct ItemData {
     pub attacks : Vec<Entity>,
     pub in_inventory_of: Option<Entity>,
     pub stack_limit : i32,
-    pub stack_with : EntitySelector,
+    pub stack_with : StackWith,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Fields)]
@@ -74,7 +80,7 @@ impl Default for ItemData {
             attacks : Vec::new(),
             in_inventory_of : None,
             stack_limit : 1,
-            stack_with : EntitySelector::None
+            stack_with : StackWith::SameArchetype
         }
     }
 }

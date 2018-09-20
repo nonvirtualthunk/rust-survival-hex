@@ -171,6 +171,11 @@ impl UIEvent {
             _ => None
         }
     }
+
+    #[inline]
+    pub fn as_custom_event_no_origin<E: Any + Clone + 'static>(&self) -> Option<E> {
+        self.as_custom_event::<E>().map(|(e,_)| e)
+    }
 }
 
 #[derive(Clone, Copy)]

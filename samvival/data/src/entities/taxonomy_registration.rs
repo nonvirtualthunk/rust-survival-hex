@@ -15,6 +15,8 @@ pub(crate) fn register_taxonomy() {
 		taxonomy::register_taxon(&taxonomy::weapons::Bow);
 		taxonomy::register_taxon(&taxonomy::weapons::Spear);
 		taxonomy::register_taxon(&taxonomy::weapons::BattleAxe);
+		taxonomy::register_taxon(&taxonomy::weapons::Longbow);
+		taxonomy::register_taxon(&taxonomy::weapons::Longsword);
 		taxonomy::register_taxon(&taxonomy::Tool);
 		taxonomy::register_taxon(&taxonomy::tools::SharpTool);
 		taxonomy::register_taxon(&taxonomy::tools::MiningTool);
@@ -24,6 +26,7 @@ pub(crate) fn register_taxonomy() {
 		taxonomy::register_taxon(&taxonomy::tools::Scythe);
 		taxonomy::register_taxon(&taxonomy::tools::Hammer);
 		taxonomy::register_taxon(&taxonomy::tools::Shovel);
+		taxonomy::register_taxon(&taxonomy::tools::Hatchet);
 		taxonomy::register_taxon(&taxonomy::Armor);
 		taxonomy::register_taxon(&taxonomy::PlateArmor);
 		taxonomy::register_taxon(&taxonomy::LeatherArmor);
@@ -68,6 +71,9 @@ pub(crate) fn register_taxonomy() {
 		taxonomy::register_taxon(&taxonomy::resources::LooseStone);
 		taxonomy::register_taxon(&taxonomy::resources::Dirt);
 		taxonomy::register_taxon(&taxonomy::resources::Iron);
+		taxonomy::register_taxon(&taxonomy::materials::Wood);
+		taxonomy::register_taxon(&taxonomy::materials::Stone);
+		taxonomy::register_taxon(&taxonomy::materials::Metal);
 		taxonomy::register_taxon(&taxonomy::Terrain);
 		taxonomy::register_taxon(&taxonomy::terrain::Plains);
 		taxonomy::register_taxon(&taxonomy::terrain::Hills);
@@ -77,4 +83,5 @@ pub(crate) fn register_taxonomy() {
 		taxonomy::register_taxon(&taxonomy::vegetation::Forest);
 		taxonomy::register_taxon(&taxonomy::vegetation::PineForest);
 		taxonomy::register_taxon(&taxonomy::vegetation::DeciduousForest);
+		taxonomy::register_taxon(&taxonomy::IngredientType);
 }

@@ -17,6 +17,8 @@ use std::collections::HashMap;
 use ui_event_types::*;
 use widgets::*;
 use compound_widgets::TextDisplayWidget;
+use FontSize;
+use std::rc::Rc;
 
 pub trait DelegateToWidget where Self: Sized {
     fn id(&self) -> Wid {
@@ -60,15 +62,18 @@ pub trait DelegateToWidget where Self: Sized {
         self.as_widget().draw_layer = layer;
         self
     }
-    fn position(mut self, x: Positioning, y: Positioning) -> Self {
+    fn position<PX: Into<Positioning>, PY: Into<Positioning>>(mut self, x: PX, y: PY) -> Self {
         self.set_position(x, y);
         self
     }
     fn centered(self) -> Self {
         self.position(Positioning::centered(), Positioning::centered())
     }
-    fn set_position(&mut self, x: Positioning, y: Positioning) -> &mut Self {
-        self.as_widget().position = [x, y];
+    fn centered_horizontally(self) -> Self {
+        self.x(Positioning::centered())
+    }
+    fn set_position<PX: Into<Positioning>, PY: Into<Positioning>>(&mut self, x: PX, y: PY) -> &mut Self {
+        self.as_widget().position = [x.into(), y.into()];
         self
     }
     fn size<S1 : Into<Sizing>, S2 : Into<Sizing>>(mut self, w: S1, h: S2) -> Self {
@@ -112,6 +117,10 @@ pub trait DelegateToWidget where Self: Sized {
         self.as_widget().widget_type.set_text(text);
         self
     }
+    fn set_font_size(&mut self, font_size : FontSize) -> &mut Self {
+        self.as_widget().widget_type.set_font_size(font_size);
+        self
+    }
 
     fn modify_widget_type<F: Fn(&mut WidgetType)>(&mut self, func: F) -> &mut Self {
         (func)(&mut self.as_widget().widget_type);
@@ -122,10 +131,16 @@ pub trait DelegateToWidget where Self: Sized {
         self.set_showing(showing);
         self
     }
+    fn hidden(mut self) -> Self {
+        self.hide();
+        self
+    }
     fn set_showing(&mut self, showing: bool) -> &mut Self {
         self.as_widget().showing = showing;
         self
     }
+    fn hide(&mut self) -> &mut Self { self.set_showing(false) }
+    fn show(&mut self) -> &mut Self { self.set_showing(true) }
     fn toggle_showing(&mut self) -> &mut Self {
         self.as_widget().showing = ! self.as_widget().showing;
         self
@@ -295,12 +310,41 @@ pub trait DelegateToWidget where Self: Sized {
         self.as_widget().add_callback(function, false);
         self
     }
+    fn with_ui_callback<U: Fn(&mut WidgetContext, &UIEvent) + 'static>(mut self, function: U) -> Self {
+        self.as_widget().add_callback(function, false);
+        self
+    }
     fn add_callback<State: 'static, U: Fn(&mut State, &UIEvent) + 'static>(&mut self, function: U) -> &mut Self {
         self.as_widget().add_callback(function, false);
         self
     }
     fn with_callback_2<State: 'static, OtherState: 'static, U: Fn(&mut State, &mut OtherState, &UIEvent) + 'static>(mut self, function: U) -> Self {
         self.as_widget().add_callback_2(function);
+        self
+    }
+    fn with_custom_event_transform<E : Any + 'static, F : Fn(&UIEvent) -> Option<E> + 'static>(mut self, function : F) -> Self {
+        self.as_widget().add_callback(move |ctxt : &mut WidgetContext, evt : &UIEvent| {
+            if let Some(custom) = (function)(evt) {
+                ctxt.trigger_custom_event(custom);
+            }
+        }, false);
+        self
+    }
+    fn set_custom_data<E : Any + 'static>(&mut self, data : E) -> &mut Self {
+        self.as_widget().custom_data = Some(Rc::new(data));
+        self.as_widget().custom_data_changed = true;
+        self
+    }
+    fn with_custom_data<E: Any + 'static>(mut self, data : E) -> Self {
+        self.set_custom_data(data);
+        self
+    }
+    fn add_custom_event_transform<E : Any + 'static, F : Fn(&UIEvent) -> Option<E> + 'static>(&mut self, function : F) -> &mut Self {
+        self.as_widget().add_callback(move |ctxt : &mut WidgetContext, evt : &UIEvent| {
+            if let Some(custom) = (function)(evt) {
+                ctxt.trigger_custom_event(custom);
+            }
+        }, false);
         self
     }
 

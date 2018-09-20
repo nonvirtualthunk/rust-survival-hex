@@ -26,6 +26,7 @@ use entities::reactions::ReactionTypeRef;
 use serde::de::EnumAccess;
 use serde::de::SeqAccess;
 use serde::ser::SerializeTuple;
+use std::cmp::Ordering;
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize, Fields)]
 pub struct PositionData {
@@ -93,6 +94,16 @@ impl Default for IdentityData {
     }
 }
 
+pub trait IdentityDataStore {
+    fn identity(&self, entity : Entity) -> &IdentityData;
+}
+
+impl IdentityDataStore for WorldView {
+    fn identity(&self, entity: Entity) -> &IdentityData {
+        self.data::<IdentityData>(entity)
+    }
+}
+
 
 
 #[derive(Clone, Debug, Eq)]
@@ -110,6 +121,16 @@ impl Default for Taxon {
 impl PartialEq<Taxon> for Taxon {
     fn eq(&self, other: & Taxon) -> bool {
         self.name() == other.name()
+    }
+}
+impl PartialOrd for Taxon {
+    fn partial_cmp(&self, other: &Taxon) -> Option<Ordering> {
+        self.name().partial_cmp(other.name())
+    }
+}
+impl Ord for Taxon {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.name().cmp(other.name())
     }
 }
 impl Hash for Taxon {
@@ -366,7 +387,7 @@ pub fn taxon(name : Str, parent : &'static Taxon) -> Taxon {
 }
 pub fn taxon2(name : Str, parent1 : &'static Taxon, parent2 : &'static Taxon) -> Taxon {
     Taxon::RuntimeTaxon { name : intern_string(name), parents : [Some(parent1), Some(parent2), None, None] }}
-
+pub const fn alias(of : &'static Taxon) -> Taxon { Taxon::ConstTaxonRef { reference : of }}
 
 pub mod taxonomy {
     use super::Taxon;
@@ -375,6 +396,7 @@ pub mod taxonomy {
     use common::prelude::Str;
     use super::Rc;
     use super::Arc;
+    use super::alias;
 
     pub static Unknown : Taxon = root_taxon("unknown thing");
 
@@ -402,6 +424,9 @@ pub mod taxonomy {
         pub static Bow : Taxon = taxon("bow", &ProjectileWeapon);
         pub static Spear : Taxon = taxon2("spear", &StabbingWeapon, &ReachWeapon);
         pub static BattleAxe : Taxon = taxon2("battle axe", &BladedWeapon, &Axe);
+
+        pub static Longbow : Taxon = taxon("longbow", &Bow);
+        pub static Longsword : Taxon = taxon("longsword", &Sword);
     }
 
     pub static Tool : Taxon = taxon("tool", &Item);
@@ -416,8 +441,10 @@ pub mod taxonomy {
         pub static ToolAxe : Taxon = taxon2("tool axe", &Tool, &Axe);
         pub static Pickaxe : Taxon = taxon("pickaxe", &MiningTool);
         pub static Scythe : Taxon = taxon("scythe", &SharpTool);
-        pub static Hammer : Taxon = taxon("Hammer", &Tool);
+        pub static Hammer : Taxon = taxon("hammer", &Tool);
         pub static Shovel : Taxon = taxon("shovel", &Tool);
+
+        pub static Hatchet : Taxon = taxon2("hatchet", &ToolAxe, &weapons::ImprovisedWeapon);
     }
 
     pub static Armor : Taxon = taxon("armor", &Item);
@@ -505,6 +532,13 @@ pub mod taxonomy {
         pub static Iron : Taxon = taxon2("iron", &Metal, &Material);
     }
 
+    pub mod materials {
+        use super::*;
+
+        pub static Wood : Taxon = alias(&resources::Wood);
+        pub static Stone : Taxon = alias(&resources::Stone);
+        pub static Metal : Taxon = alias(&super::Metal);
+    }
 
     pub static Terrain : Taxon = root_taxon("terrain");
 
@@ -522,6 +556,17 @@ pub mod taxonomy {
         pub static Forest : Taxon = taxon("forest", &Vegetation);
         pub static PineForest : Taxon = taxon("pine forest", &Forest);
         pub static DeciduousForest : Taxon = taxon("deciduous forest", &Forest);
+    }
+
+    pub static IngredientType : Taxon = root_taxon("ingredient type");
+    pub mod ingredient_types {
+        use super::*;
+        pub static Haft : Taxon = taxon("haft", &IngredientType);
+        pub static Axehead: Taxon = taxon("axehead", &IngredientType);
+        pub static Spearhead: Taxon = taxon("spearhead", &IngredientType);
+        pub static Binding : Taxon = taxon("binding", &IngredientType);
+        pub static Blade : Taxon = taxon("blade", &IngredientType);
+        pub static Plate : Taxon = taxon("plate", &IngredientType);
     }
 
 
@@ -622,6 +667,7 @@ mod test {
             match file.read_to_string(&mut contents) {
                 Ok(_) => {
                     for line in contents.lines() {
+                        if line.contains("alias") { continue; }
                         if let Some(captures) = taxon_re.captures(line) {
                             let name = &captures[1];
                             let mod_name : String = mods.iter().join("::");

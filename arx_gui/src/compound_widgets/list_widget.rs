@@ -76,6 +76,11 @@ impl<T: Default + WidgetContainer> ListWidget<T> {
         self
     }
 
+    pub fn item_gap(mut self, gap : UIUnits) -> Self {
+        self.item_gap = gap;
+        self
+    }
+
     pub fn rows_surround_children(mut self) -> Self {
         self.item_archetype.set_size(Sizing::surround_children(), Sizing::surround_children());
         self
@@ -110,11 +115,12 @@ impl<T: Default + WidgetContainer> ListWidget<T> {
         self.update(gui, &[], |t, u: &i32| {})
     }
 
+    /// lambda takes |widget, data|
     pub fn update<U, F: FnMut(&mut T, &U)>(&mut self, gui: &mut GUI, data: &[U], mut func: F) -> &mut Self {
-        self.update_with_row(gui, data, move |t : &mut T, u : &U, _ : &Widget| { func(t,u) })
+        self.update_with_row(gui, data, move |t : &mut T, u : &U, _ : &mut Widget| { func(t,u) })
     }
 
-    pub fn update_with_row<U, F: FnMut(&mut T, &U, &Widget)>(&mut self, gui: &mut GUI, data: &[U], mut func: F) -> &mut Self {
+    pub fn update_with_row<U, F: FnMut(&mut T, &U, &mut Widget)>(&mut self, gui: &mut GUI, data: &[U], mut func: F) -> &mut Self {
         let draw_layer = self.as_widget_immut().draw_layer;
 
         // make sure the body exists. Todo: only actually need to do this the first time
@@ -128,7 +134,7 @@ impl<T: Default + WidgetContainer> ListWidget<T> {
                 .with_callback(move |ctxt: &mut WidgetContext, evt: &UIEvent| {
                     if let UIEvent::MouseRelease { button, .. } = evt {
                         trace!("Triggering list item event");
-                        ctxt.trigger_event(UIEvent::widget_event(WidgetEvent::ListItemClicked(index, *button), body_id));
+                        ctxt.trigger_event(UIEvent::widget_event(WidgetEvent::ListItemClicked(index, *button), ctxt.widget_id()));
                     }
                 });
             new_item.clear_id();
@@ -156,7 +162,7 @@ impl<T: Default + WidgetContainer> ListWidget<T> {
         }
 
         for (i, value) in data.iter().enumerate() {
-            let child = &self.children[i];
+            let child = &mut self.children[i];
             let child_id = child.id();
             func(&mut self.child_structs[i], &value, child);
             ListWidget::auto_apply(child_id, gui, &mut self.child_structs[i], draw_layer);
@@ -173,7 +179,7 @@ impl<T: Default + WidgetContainer> ListWidget<T> {
     }
 
     fn auto_apply(id: Wid, gui: &mut GUI, child_struct: &mut T, draw_layer : GUILayer) {
-        child_struct.for_all_widgets(|w| {
+        child_struct.for_each_widget(|w| {
             w.set_draw_layer(draw_layer);
             if w.parent_id.is_none() {
                 w.set_parent_id(id);
@@ -214,7 +220,7 @@ impl<T: Default> DelegateToWidget for ListWidget<T> {
 }
 
 impl<T: Default> WidgetContainer for ListWidget<T> {
-    fn for_all_widgets<F: FnMut(&mut Widget)>(&mut self, mut func: F) {
+    fn for_each_widget<F: FnMut(&mut Widget)>(&mut self, mut func: F) {
         (func)(&mut self.body);
         for child in &mut self.children {
             (func)(child);

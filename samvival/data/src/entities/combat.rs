@@ -252,6 +252,8 @@ impl AttackRef {
         AttackRef { attack_entity: Entity::sentinel(), derived_from : Entity::sentinel() }
     }
 
+    pub fn identity<'a, 'b>(&'a self, view : &'b WorldView) -> &'b IdentityData { view.data::<IdentityData>(self.attack_entity) }
+
     pub fn as_option(&self) -> Option<&AttackRef> {
         if self.is_none() {
             None

@@ -15,20 +15,23 @@ pub struct AttackDescriptionsWidget {
     attack_list: ListWidget<AttackDescriptionWidget>
 }
 
-impl WidgetContainer for AttackDescriptionsWidget {
-    fn for_all_widgets<F: FnMut(&mut Widget)>(&mut self, func: F) {
-        self.attack_list.for_all_widgets(func);
-    }
+impl DelegateToWidget for AttackDescriptionsWidget {
+    fn as_widget(&mut self) -> &mut Widget { self.attack_list.as_widget() }
+
+    fn as_widget_immut(&self) -> &Widget { self.attack_list.as_widget_immut() }
+//    fn for_each_widget<F: FnMut(&mut Widget)>(&mut self, func: F) {
+//        self.attack_list.for_each_widget(func);
+//    }
+
 }
 
 impl AttackDescriptionsWidget {
-    pub fn new(gui: &mut GUI, parent: &Widget) -> AttackDescriptionsWidget {
+    pub fn new(parent: &Widget) -> AttackDescriptionsWidget {
         let mut attack_list = ListWidget::new()
             .size(Sizing::match_parent(), Sizing::surround_children())
             .parent(parent)
             .and_consume(EventConsumption::mouse_events())
-            .named("attack descriptions list")
-            .apply(gui);
+            .named("attack descriptions list");
 
         attack_list.item_archetype.set_margin(1.ux());
         AttackDescriptionsWidget { attack_list }
@@ -42,25 +45,10 @@ impl AttackDescriptionsWidget {
         let counter_to_use = combat::counter_attack_ref_to_use(view, character);
 
         self.attack_list.update(gui, attack_refs.as_ref(), |widget, attack_ref| {
-            if active_attack.as_ref() == Some(attack_ref) {
-                widget.active_indicator.set_showing(true);
-            } else {
-                widget.active_indicator.set_showing(false);
-            }
-            widget.counter_indicator.set_showing(counter_to_use.as_ref() == Some(attack_ref));
-
             if let Some(attack) = attack_ref.resolve(view, character) {
-                widget.name.set_text(attack.name.capitalized());
-                widget.to_hit.set_text(format!("{} to hit", attack.to_hit_bonus.to_string_with_sign()));
-                widget.damage.set_text(format!("{} {} {} {}",
-                                               attack.damage_dice,
-                                               attack.damage_bonus.sign_str(),
-                                               attack.damage_bonus.abs(),
-                                               attack.primary_damage_type.to_string()));
+                widget.update(&attack, attack_ref.identity(view), active_attack.as_ref() == Some(attack_ref), counter_to_use.as_ref() == Some(attack_ref));
             } else {
-                widget.name.set_text("Unknown, attack referenced was not present");
-                widget.to_hit.set_text(format!("N/A"));
-                widget.damage.set_text(format!("N/A"));
+                widget.clear();
             }
         });
 
@@ -82,7 +70,7 @@ impl AttackDescriptionsWidget {
 }
 
 #[derive(WidgetContainer, Clone)]
-struct AttackDescriptionWidget {
+pub struct AttackDescriptionWidget {
     pub counter_indicator: Widget,
     pub active_indicator: Widget,
     pub name: Widget,
@@ -123,6 +111,29 @@ impl Default for AttackDescriptionWidget {
             .named("attack description damage text");
 
         AttackDescriptionWidget { name, to_hit, damage, active_indicator, counter_indicator }
+    }
+}
+
+impl AttackDescriptionWidget {
+    pub fn update(&mut self, attack: &Attack, identity : &IdentityData, is_active_attack : bool, is_active_counter : bool) -> &mut Self {
+        self.active_indicator.set_showing(is_active_attack);
+        self.counter_indicator.set_showing(is_active_counter);
+
+        self.name.set_text(attack.name.capitalized());
+        self.to_hit.set_text(format!("{} to hit", attack.to_hit_bonus.to_string_with_sign()));
+        self.damage.set_text(format!("{} {} {} {}",
+                                       attack.damage_dice,
+                                       attack.damage_bonus.sign_str(),
+                                       attack.damage_bonus.abs(),
+                                       attack.primary_damage_type.to_string()));
+        self
+    }
+    
+    pub fn clear(&mut self)  -> &mut Self {
+        self.name.set_text("Unknown, attack referenced was not present");
+        self.to_hit.set_text(format!("N/A"));
+        self.damage.set_text(format!("N/A"));
+        self
     }
 }
 
@@ -211,7 +222,7 @@ impl AttackDetailsWidget {
 
         if let Some(strike) = attack_breakdown.strikes.first() {
             if let Some(strike_target) = strike.per_target_breakdowns.first() {
-                self.for_all_widgets(|w| { w.set_showing(true); });
+                self.for_each_widget(|w| { w.set_showing(true); });
                 let components_to_str = |v: &Breakdown<i32>| {
                     v.components.iter().filter(|t| t.0 != "+0").map(|(bonus, description)| format!("{}  {}", bonus, description)).join("\n")
                 };
@@ -229,7 +240,7 @@ impl AttackDetailsWidget {
                 self.damage_absorption_details.set_text(components_to_str(&strike_target.damage_absorption_components));
             }
         } else {
-            self.for_all_widgets(|w| { w.set_showing(false); });
+            self.for_each_widget(|w| { w.set_showing(false); });
             self.body.set_showing(true);
             self.name.set_showing(true).set_text("Insufficient AP to attack");
         }

@@ -45,6 +45,7 @@ use events::ui_event_types::HOVER_START;
 use events::ui_event_types::HOVER_END;
 use widgets::TextDisplayWidget;
 use graphics::FontSize;
+use graphics::ImageIdentifier;
 
 
 #[derive(Clone, Copy, PartialEq, Neg, Debug)]
@@ -148,6 +149,8 @@ impl WidgetReification {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct SegmentationInfo { pub size : i32, pub edge_width : i32, pub center_color : Color }
 
 pub struct GUI {
     pub(crate) widget_reifications: HashMap<Wid, WidgetReification>,
@@ -166,6 +169,7 @@ pub struct GUI {
     pub(crate) hover_start : Instant,
     pub(crate) hover_threshold: Duration,
     pub(crate) hover_widget: Option<Wid>,
+    pub(crate) segmentation_info: HashMap<ImageIdentifier, SegmentationInfo>,
 }
 
 impl GUI {
@@ -187,6 +191,7 @@ impl GUI {
             hover_threshold: Duration::from_secs(1),
             hover_start: Instant::now(),
             hover_widget: None,
+            segmentation_info : HashMap::new(),
         }
     }
 
@@ -302,7 +307,7 @@ impl GUI {
         let existing_state = self.widget_reifications.remove(&wid);
         if let Some(mut state) = existing_state {
             let mut mark_modified = false;
-            let new_tooltip = if state.widget != *widget {
+            let new_tooltip = if widget.custom_data_changed || state.widget != *widget {
                 let new_tooltip = self.handle_tooltip(&state.tooltip, &state.widget.tooltip, widget);
 
                 state.widget = widget.clone();

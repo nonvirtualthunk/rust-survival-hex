@@ -12,6 +12,7 @@ use attack_descriptions::*;
 use state::ControlContext;
 use game::Entity;
 use graphics::FontSize;
+use game::logic;
 
 
 pub struct CharacterInfoWidget {
@@ -88,7 +89,7 @@ impl CharacterInfoWidget {
             .apply(gui);
         skills.item_archetype.set_margin(4.px());
 
-        let attack_descriptions = AttackDescriptionsWidget::new(gui, tabs.tab_named("Attacks"));
+        let attack_descriptions = AttackDescriptionsWidget::new(tabs.tab_named("Attacks"));
 
         CharacterInfoWidget {
             character_stats,
@@ -133,13 +134,12 @@ impl CharacterInfoWidget {
 
             self.skills.update(gui, character_skills.as_ref(), |skill_w, skill| {
                 let (skill, lvl): (Skill, i32) = *skill;
-                let skill_info = skill_info(skill);
-                let text = format!("{} : {}", skill_info.name, lvl);
+                let text = format!("{} : {}", skill.name(), lvl);
                 skill_w.text.modify_widget_type(|wt| wt.set_text(text.clone()));
 
 
-                let xp_required_for_current_level = Skill::xp_required_for_level(lvl);
-                let xp_required_for_next_level = Skill::xp_required_for_level(lvl + 1);
+                let xp_required_for_current_level = logic::skill::xp_required_for_level(lvl);
+                let xp_required_for_next_level = logic::skill::xp_required_for_level(lvl + 1);
                 let current_xp = skills.cur_skill_xp(skill);
 
                 let required_delta = xp_required_for_next_level - xp_required_for_current_level;

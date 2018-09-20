@@ -30,7 +30,7 @@ impl DelegateToWidget for TabWidget {
 }
 
 impl WidgetContainer for TabWidget {
-    fn for_all_widgets<F: FnMut(&mut Widget)>(&mut self, mut func: F) {
+    fn for_each_widget<F: FnMut(&mut Widget)>(&mut self, mut func: F) {
         (func)(&mut self.body);
         for tab in &mut self.tabs {
             (func)(tab);
@@ -47,11 +47,20 @@ pub struct TabWidget {
     pub tab_titles: Vec<String>,
     pub tabs: Vec<Widget>,
     pub tab_buttons: Vec<Button>,
-    pub to_remove : Vec<Wid>
+    pub to_remove : Vec<Wid>,
+    pub button_archetype : Button,
 }
 
 impl TabWidget {
     pub fn new<S : Into<String>>(tab_titles: Vec<S>) -> TabWidget {
+        TabWidget::custom(tab_titles, Button::new("")
+            .widget_type(WidgetType::window())
+            .font_size(FontSize::HeadingMajor)
+            .text_position(Positioning::CenteredInParent, Positioning::CenteredInParent)
+            .color(Color::greyscale(0.8)))
+    }
+
+    pub fn custom<S : Into<String>>(tab_titles: Vec<S>, button_archetype : Button) -> TabWidget {
         let body_color = Color::greyscale(0.8);
 
         let body = Widget::window(body_color, 2)
@@ -108,6 +117,7 @@ impl TabWidget {
             tabs : Vec::new(),
             tab_buttons : Vec::new(),
             to_remove : Vec::new(),
+            button_archetype,
         };
 
         tab_widget.set_tabs(tab_titles);
@@ -126,11 +136,9 @@ impl TabWidget {
 
             while self.tab_buttons.len() < tab_titles.len() {
                 let title_index = self.tab_buttons.len();
-                self.tab_buttons.push(Button::new(tab_titles[title_index].clone())
-                    .font_size(FontSize::HeadingMajor)
-                    .text_position(Positioning::CenteredInParent, Positioning::CenteredInParent)
-                    .color(self.body.color)
-                );
+                let mut new_button = self.button_archetype.create_copy();
+                new_button.set_text(tab_titles[title_index].clone());
+                self.tab_buttons.push(new_button);
             }
             while self.tabs.len() < tab_titles.len() {
                 let title_index = self.tabs.len();

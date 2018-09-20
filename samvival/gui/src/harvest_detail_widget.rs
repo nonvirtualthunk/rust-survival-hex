@@ -90,7 +90,7 @@ impl HarvestableSummary {
         self.time.set_text(format!("{} AP", breakdown.ap_to_harvest.total));
 
         let body_id = self.body.id();
-        self.for_all_widgets(|w: &mut Widget| {
+        self.for_each_widget(|w: &mut Widget| {
             if w.id() != body_id {
                 w.set_color(if greyed_out { Color::new(0.5, 0.5, 0.5, 1.0) } else {
                     if let WidgetType::Text { .. } = w.widget_type {

@@ -33,15 +33,17 @@ pub struct InventoryDisplayData {
     pub name: String,
     pub items: Vec<Entity>,
     pub destacked_items: Vec<Entity>,
+    pub excluded_items: HashSet<Entity>,
     pub from_entities: Vec<Entity>,
     pub equippable: bool,
     pub size: Option<u32>
 }
 impl InventoryDisplayData {
-    pub fn new<S : Into<String>>(items : Vec<Entity>, destacked_items: Vec<Entity>, name : S, from_entities : Vec<Entity>, equippable : bool, size : Option<u32>) -> InventoryDisplayData {
+    pub fn new<S : Into<String>>(items : Vec<Entity>, destacked_items: Vec<Entity>, excluded_items : HashSet<Entity>, name : S, from_entities : Vec<Entity>, equippable : bool, size : Option<u32>) -> InventoryDisplayData {
         InventoryDisplayData {
             items,
             destacked_items,
+            excluded_items,
             name : name.into(),
             from_entities,
             equippable,
@@ -51,7 +53,8 @@ impl InventoryDisplayData {
 }
 
 impl InventoryDisplay {
-    pub fn new(main_inv_name: String, parent: &Widget) -> InventoryDisplay {
+    pub fn new<S : Into<String>>(main_inv_name: S, parent: &Widget) -> InventoryDisplay {
+        let main_inv_name = main_inv_name.into();
         let body = Widget::div().centered().named("Inventory display parent div").parent(parent);
         let main_inventories = InventoryDisplayWidget::new(&body);
         let other_inventories = InventoryDisplayWidget::new(&body)
@@ -151,7 +154,7 @@ impl InventoryDisplay {
 }
 
 
-struct InventoryDisplayWidget {
+pub(crate) struct InventoryDisplayWidget {
     pub body: TabWidget,
     pub inventory_lists: Vec<ListWidget<ItemNameDisplay>>,
     pub inventories : Vec<InventoryDisplayData>,
@@ -169,16 +172,16 @@ impl DelegateToWidget for InventoryDisplayWidget {
 }
 
 #[derive(WidgetContainer)]
-struct ItemNameDisplay {
+pub struct ItemNameDisplay {
     pub name: Widget,
     pub picked_up_indicator: Widget,
     pub equip_button: Button
 }
 
 #[derive(Clone)]
-pub struct InventoryItemSelected { inventory_index : usize, item_index : usize }
+pub struct InventoryItemSelected { pub inventory_index : usize, pub item_index : usize }
 #[derive(Clone)]
-pub struct InventoryItemToggleEquip { item : Entity }
+pub struct InventoryItemToggleEquip { pub item : Entity }
 
 impl Default for ItemNameDisplay {
     fn default() -> Self {
@@ -197,7 +200,15 @@ impl Default for ItemNameDisplay {
 
 impl InventoryDisplayWidget {
     pub fn new(parent: &Widget) -> InventoryDisplayWidget {
-        let body = TabWidget::new(Vec::<String>::new())
+        let button_arch = Button::new("")
+            .widget_type(WidgetType::segmented_window("ui/window/minimalist_white"))
+            .font_size(FontSize::HeadingMajor)
+            .text_position(Positioning::CenteredInParent, Positioning::CenteredInParent)
+            .color(Color::greyscale(0.8));
+
+        let body = TabWidget::custom(Vec::<String>::new(), button_arch)
+            .widget_type(WidgetType::segmented_window("ui/window/fancy"))
+            .color(Color::greyscale(0.7))
             .width(40.ux())
             .height(30.ux())
             .margin(3.px())
@@ -211,6 +222,7 @@ impl InventoryDisplayWidget {
             placeholder_data : InventoryDisplayData {
                 items : Vec::new(),
                 destacked_items : Vec::new(),
+                excluded_items : HashSet::new(),
                 name : String::from("sentinel"),
                 from_entities : Vec::new(),
                 equippable: false,
@@ -277,10 +289,17 @@ impl InventoryDisplayWidget {
                         let raw_item : Entity = **item;
 
                         let (item, count) = if let Some(stack_data) = world.data_opt::<StackData>(raw_item) {
-                            (stack_data.entities.first().cloned().unwrap_or(Entity::sentinel()), stack_data.entities.len())
+                            (stack_data.entities.first().cloned().unwrap_or(Entity::sentinel()), stack_data.entities.iter().filter(|e| ! inventory.excluded_items.contains(*e)).count())
                         } else {
                             (raw_item,1)
                         };
+
+                        let greyed_out = count == 0 || inventory.excluded_items.contains(&item);
+                        if greyed_out {
+                            widget.name.set_color(Color::new(0.4,0.4,0.5,1.0));
+                        } else {
+                            widget.name.set_color(Color::black());
+                        }
 
                         if let Some(ident) = world.data_opt::<IdentityData>(item) {
                             let count_str = if count <= 1 { strf("") } else { format!("x{}", count) };

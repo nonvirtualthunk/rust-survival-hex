@@ -7,6 +7,8 @@ pub mod characters;
 pub use archetypes::characters::character_archetypes;
 
 pub mod tiles;
+
+pub mod recipes;
 //pub use archetypes::tiles::tile_archetypes;
 
 use game::EntityBuilder;

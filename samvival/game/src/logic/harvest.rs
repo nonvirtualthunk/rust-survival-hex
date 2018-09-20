@@ -6,7 +6,7 @@ use logic::breakdown::Breakdown;
 use entities::ItemData;
 use entities::actions::*;
 use entities::InventoryData;
-use entities::{ToolData, WorthData};
+use entities::{ToolData, WorthData, EntityMetadata};
 
 pub fn harvestables_at(world : &WorldView, coord : AxialCoord) -> Vec<Entity> {
     world.terrain(coord).harvestables.values()
@@ -93,7 +93,7 @@ pub fn compute_harvest_breakdown(world: &World, view: &WorldView, character : En
 
             if tool_opt.is_none() {
                 if let ToolUse::DifficultWithout { amount_limit, ap_increase } = harvestable_data.tool_use {
-                    difficulty_reason = Some(format!("difficult without {}", harvestable_data.tool.article_string(view)));
+                    difficulty_reason = Some(format!("difficult without {}", harvestable_data.tool.to_string_with_article(view)));
                     if let Some(amount_limit) = amount_limit {
                         harvest_limit = harvest_limit.min(amount_limit);
                     }
@@ -164,8 +164,11 @@ pub fn harvest(world: &mut World, character : Entity, from : AxialCoord, harvest
 
 
 
+                let resource = harvestable_data.resource;
                 for i in 0 .. amount_harvested {
-                    let new_entity = world.clone_entity(harvestable_data.resource);
+                    let new_entity = world.clone_entity(resource);
+                    world.attach_data::<EntityMetadata>(new_entity, EntityMetadata { archetype : resource });
+                    world.add_event(GameEvent::EntityCreated { entity : new_entity });
                     logic::item::put_item_in_inventory(world, new_entity, character);
                 }
 

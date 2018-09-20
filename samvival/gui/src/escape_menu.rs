@@ -25,7 +25,7 @@ impl EscapeMenu {
             .font_size(FontSize::Large)
             .x(Positioning::centered())
             .with_on_click(|ctxt : &mut WidgetContext, evt : &UIEvent| {
-               ctxt.trigger_event(UIEvent::custom_event(TacticalEvents::Save, ctxt.widget_id));
+               ctxt.trigger_custom_event(TacticalEvents::Save);
             }).apply(gui);
 
         let main_menu_button = Button::new("Main Menu").parent(&body)//.x(Positioning::CenteredInParent)
@@ -33,7 +33,7 @@ impl EscapeMenu {
             .x(Positioning::centered())
             .font_size(FontSize::Large)
             .with_on_click(|ctxt : &mut WidgetContext, evt : &UIEvent| {
-                ctxt.trigger_event(UIEvent::custom_event(TacticalEvents::MainMenu, ctxt.widget_id));
+                ctxt.trigger_custom_event(TacticalEvents::MainMenu);
             }).apply(gui);
 
         let mut ret = EscapeMenu {

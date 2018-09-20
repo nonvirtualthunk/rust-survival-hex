@@ -12,7 +12,7 @@ pub fn continue_ongoing_actions(world : &mut World, event : &GameEventWrapper<Ga
                 if &allegiance.faction == faction {
                     let action_data = action_data_store.data(*ent);
                     if let Some(active_action) = &action_data.active_action {
-                        apply_action(world, *ent, active_action)
+                        apply_action(world, *ent, active_action.clone())
                     }
                 }
             }
@@ -23,8 +23,11 @@ pub fn continue_ongoing_actions(world : &mut World, event : &GameEventWrapper<Ga
 
 
 
-pub fn apply_action(world: &mut World, character : Entity, action : &Action) {
+pub fn apply_action(world: &mut World, character : Entity, action : Action) {
     let view = world.view();
+
+    world.modify(character, ActionData::active_action.set_to(None));
+    world.add_event(::game::events::CoreEvent::Mark);
 
     match action.action_type {
         ActionType::Harvest { from, harvestable, preserve_renewable } => {
@@ -32,7 +35,4 @@ pub fn apply_action(world: &mut World, character : Entity, action : &Action) {
         },
         _ => error!("No action application has been set up for {:?}", action)
     }
-
-    world.modify(character, ActionData::active_action.set_to(None));
-    world.add_event(::game::events::CoreEvent::Mark);
 }

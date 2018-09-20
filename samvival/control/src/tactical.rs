@@ -472,7 +472,7 @@ impl GameMode for TacticalMode {
 
                     let game_state = self.current_game_state(world);
                     if !game_state.animating && game_state.player_faction_active {
-                        if ! self.gui.handle_click(world, &game_state, *button) {
+                        if ! self.gui.handle_click(gui, world, &game_state, *button) {
                             let found = character_at(display_world_view, clicked_coord);
                             if let Some((found_char, found_data)) = found {
                                 match self.selected_character {
@@ -507,7 +507,7 @@ impl GameMode for TacticalMode {
             },
             UIEvent::KeyRelease { key } => {
                 let game_state = self.current_game_state(world);
-                if ! self.gui.handle_key_release(world, &game_state, *key) {
+                if ! self.gui.handle_key_release(world, gui, &game_state, *key) {
                     match key {
                         Key::A => gui.mark_all_modified(),
                         Key::Left => self.camera.move_delta.x = 0.0,

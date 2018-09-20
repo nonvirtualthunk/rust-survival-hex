@@ -11,6 +11,7 @@ use game::universe::WorldRef;
 #[derive(Clone)]
 pub enum TacticalEvents {
     ActionSelected(PlayerActionType),
+    CancelActiveAction,
     ReactionSelected(ReactionTypeRef),
     AttackSelected(AttackRef),
     CounterattackSelected(AttackRef),

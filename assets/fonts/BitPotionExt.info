@@ -7,5 +7,5 @@
 	    Large: 30,
 	    ExtraLarge: 34
     },
-    line_height_modifier: 0.75,
+    line_height_multiplier: 0.75,
 )

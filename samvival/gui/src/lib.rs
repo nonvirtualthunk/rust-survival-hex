@@ -57,6 +57,11 @@ pub mod escape_menu;
 
 pub mod harvest_detail_widget;
 
+pub mod recipe_selection_widget;
+pub mod crafting_widget;
+
+pub mod item_display_widget;
+
 use std::fs::File;
 pub fn open_save_file(create: bool) -> Option<File> {
     use common;

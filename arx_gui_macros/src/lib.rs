@@ -66,7 +66,7 @@ pub fn derive_widget_container(input: proc_macro::TokenStream) -> proc_macro::To
                         )*
 
                         #(
-                            //self.#container_fnames.for_all_widgets(func);
+                            //self.#container_fnames.for_each_widget(func);
                             (func)(&mut self.#container_fnames_1.as_widget());
                         )*
                     },
@@ -76,8 +76,8 @@ pub fn derive_widget_container(input: proc_macro::TokenStream) -> proc_macro::To
                         )*
 
                         #(
-                            //self.#container_fnames.for_all_widgets(func);
-                            self.#container_fnames.for_all_widgets(|w| w.reapply(gui));
+                            //self.#container_fnames.for_each_widget(func);
+                            self.#container_fnames.for_each_widget(|w| w.reapply(gui));
                         )*
                     })
                 }
@@ -112,7 +112,7 @@ pub fn derive_widget_container(input: proc_macro::TokenStream) -> proc_macro::To
 
     let expanded = quote! {
         impl WidgetContainer for #name {
-            fn for_all_widgets<F: FnMut(&mut Widget)>(&mut self, mut func: F) {
+            fn for_each_widget<F: FnMut(&mut Widget)>(&mut self, mut func: F) {
                 #exec_tokens
             }
 

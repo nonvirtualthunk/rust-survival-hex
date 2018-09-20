@@ -129,6 +129,14 @@ fn make_windows(gui: &mut GUI) {
         .with_tooltip("This is a tooltip")
         .apply(gui);
 
+    let full_segmented = Widget::segmented_window(strf("ui/fancy_grey"))
+        .right_of(&pill_bar, 2.ux())
+        .match_y_of(&pill_bar)
+        .size(10.ux(), 5.ux())
+        .parent(&test_window)
+        .with_tooltip("Demonstration of segmented widgets")
+        .apply(gui);
+
     let tab_widget = TabWidget::new(vec!["Foo","Bar","Bazilicus"])
         .position(Positioning::Constant(4.ux()), Positioning::Constant(10.ux()))
         .size(Sizing::Constant(30.ux()), Sizing::Constant(50.ux()))

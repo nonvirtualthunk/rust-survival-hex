@@ -132,9 +132,9 @@ impl EntityData for DebugData {}
 
 
 
-#[derive(Clone,Debug,Default,Serialize, Deserialize, Fields)]
-pub struct EntityMetadata {
-    pub cloned_from : Option<Entity>
-}
-impl EntityData for EntityMetadata {}
-impl EntityMetadata { pub const cloned_from : Field < EntityMetadata , Option < Entity > > = Field :: new ( stringify ! ( cloned_from ) , | t | & t . cloned_from , | t | & mut t . cloned_from , | t , v | { t . cloned_from = v ; } ) ; }
+//#[derive(Clone,Debug,Default,Serialize, Deserialize, Fields)]
+//pub struct EntityCoreMetadata {
+//    pub cloned_from : Option<Entity>
+//}
+//impl EntityData for EntityCoreMetadata {}
+//impl EntityCoreMetadata { pub const cloned_from : Field < EntityCoreMetadata , Option < Entity > > = Field :: new ( stringify ! ( cloned_from ) , | t | & t . cloned_from , | t | & mut t . cloned_from , | t , v | { t . cloned_from = v ; } ) ; }

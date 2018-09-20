@@ -28,6 +28,8 @@ use gui::UIUnits;
 use gui::ToGUIUnit;
 use widget_delegation::DelegateToWidget;
 use std::time::Instant;
+use graphics::ImageIdentifier;
+use image::Pixel;
 
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy, PartialOrd)]
@@ -51,7 +53,7 @@ impl GUI {
     pub fn update_widget(&mut self, g: &mut GraphicsAssets, wid: Wid, secondary: bool) -> bool {
         let mut internal_state = self.widget_reifications.remove(&wid).expect("every wid called to update must have existing internal state");
         let child_dependent = internal_state.widget.dependent_on_children();
-        if child_dependent && ! secondary { internal_state.update_in_progress = true; }
+        if child_dependent && !secondary { internal_state.update_in_progress = true; }
 
         let widget = &internal_state.widget;
 
@@ -85,7 +87,11 @@ impl GUI {
                     Alignment::Right | Alignment::Bottom => (anchor_pos + anchor_size, -1.0, -1.0)
                 };
 
-                let border_width = widget.border.width;
+                let mut border_width = widget.border.width;
+                if let WidgetType::Window { segment : ImageSegmentation::All, image : Some(img) } = &widget.widget_type {
+                    let increase_by = self.segmentation_info_for(&img, g).edge_width;
+                    border_width += increase_by as u8;
+                }
                 let border_width = self.pixel_dim_axis_to_gui(border_width as f32);
                 let border_width_near = if widget.border.sides.has_near_side_for_axis(axis) { border_width } else { 0.0 };
                 let border_width_far = if widget.border.sides.has_far_side_for_axis(axis) { border_width } else { 0.0 };
@@ -144,7 +150,7 @@ impl GUI {
                                 let dim = self.pixel_dim_axis_to_gui(dims[axis]);
                                 trace!(target: "gui_redraw", "Calculated derived dim for text[size {:?}] {} of {:?}", *font_size, text.replace('\n', "\\n"), dim);
                                 dim
-                            },
+                            }
                             WidgetType::Image { image } => {
                                 let img = g.image(image.clone());
                                 if axis == 0 {
@@ -152,7 +158,7 @@ impl GUI {
                                 } else {
                                     self.pixel_dim_axis_to_gui(img.height() as f32)
                                 }
-                            },
+                            }
                             other => {
                                 trace!(target: "gui_redraw", "Widget had derived size, but non-derivable widget type {:?}", other);
                                 0.0
@@ -272,14 +278,14 @@ impl GUI {
                                     .offset(inner_pixel_offset - v2(0.0, effective_internal_dim.y))
                                     .wrap_to(wrap_dist)
                             );
-                        },
+                        }
                         WidgetType::Image { ref image } => {
                             internal_state.draw_list.add_quad(
                                 Quad::new(image.clone(), inner_pixel_offset - v2(0.0, effective_internal_dim.y))
                                     .color(widget.color)
                                     .size(effective_internal_dim)
                             );
-                        },
+                        }
                         WidgetType::Window { ref image, ref segment } => {
                             let color_multiplier = match internal_state.widget_state {
                                 WidgetState::Button { pressed } if pressed => Color::new(0.5, 0.5, 0.54, 1.0),
@@ -319,18 +325,22 @@ impl GUI {
                                     )
                                 }
                             }
-                            if widget.color.a() > 0.0 {
-                                match image {
-                                    Some(image) => {
-                                        match segment {
-                                            ImageSegmentation::None => {
+
+
+                            match image {
+                                Some(image) => {
+                                    match segment {
+                                        ImageSegmentation::None => {
+                                            if widget.color.a() > 0.0 {
                                                 internal_state.draw_list = internal_state.draw_list.with_quad(
                                                     Quad::new(image.clone(), inner_pixel_offset - v2(0.0, effective_internal_dim.y))
                                                         .color(widget.color * color_multiplier)
                                                         .size(effective_internal_dim)
                                                 )
                                             }
-                                            ImageSegmentation::Horizontal => {
+                                        }
+                                        ImageSegmentation::Horizontal => {
+                                            if widget.color.a() > 0.0 {
                                                 let start = inner_pixel_offset - v2(0.0, effective_internal_dim.y);
                                                 let dim = effective_internal_dim;
                                                 let endcap_size = dim.y * 0.5;
@@ -367,17 +377,73 @@ impl GUI {
                                                     );
                                                 }
                                             }
-                                            _ => warn!("unimplemented segmentation {:?}", segment)
-                                        };
-                                    }
-                                    None => {
-                                        trace!(target: "gui_redraw_quads", "\tAdding no image quad at {:?} with dimensions {:?}", inner_pixel_offset - v2(0.0, effective_internal_dim.y), effective_internal_dim);
-                                        internal_state.draw_list = internal_state.draw_list.with_quad(
-                                            Quad::new(String::from("ui/blank"), inner_pixel_offset - v2(0.0, effective_internal_dim.y))
-                                                .color(widget.color * color_multiplier)
-                                                .size(effective_internal_dim)
-                                        );
-                                    }
+                                        }
+                                        ImageSegmentation::All => {
+                                            let seg_info = self.segmentation_info_for(image, g);
+
+                                            let corner_size = (seg_info.size / 2) as f32;
+                                            let edge_w = seg_info.edge_width as f32;
+
+                                            let dim = effective_dim;
+                                            let middle = pixel_offset + v2(dim.x * 0.5, dim.y * -0.5);
+                                            let horizontal_side_size = dim.x - corner_size * 2.0;
+                                            let vertical_side_size = dim.y - corner_size * 2.0;
+
+                                            internal_state.draw_list.add_quad(
+                                                Quad::new(image.clone(), middle)
+                                                    .color(widget.color * color_multiplier)
+                                                    .sub_rect(Rect::new(1.0,0.0,0.0,0.0))
+                                                    .size(dim - v2(edge_w * 2.0, edge_w * 2.0))
+                                                    .centered());
+
+                                            for dx in -1..=1 {
+                                                for dy in -1..=1 {
+                                                    if dx != 0 && dy != 0 { // corner
+                                                        internal_state.draw_list.add_quad(
+                                                            Quad::new(image.clone(), middle + v2(((dim.x - corner_size) * dx as f32) * 0.5, ((dim.y - corner_size) * dy as f32) * 0.5))
+                                                                .color(Color::white())
+                                                                .sub_rect(Rect::new(0.25 + dx as f32 * 0.25, 0.75 - dy as f32 * 0.25, -dx as f32 * 0.5, dy as f32 * 0.5))
+                                                                .size(v2(corner_size, corner_size))
+                                                                .centered()
+                                                        );
+                                                    } else if dx != 0 || dy != 0 { // side
+                                                        let mut sub_rect = if dx < 0 { Rect::new(0.0, 0.0, 0.5, 0.5) } else { Rect::new(0.5, 0.5, 0.5, 0.5) };
+                                                        if dx > 0 {
+                                                            sub_rect.w *= -1.0;
+                                                            sub_rect.h *= -1.0;
+                                                        } else if dy < 0 {
+                                                            sub_rect.h *= -1.0;
+                                                            sub_rect.y += 0.5;
+                                                        };
+                                                        if dx != 0 {
+                                                            internal_state.draw_list.add_quad(
+                                                                Quad::new(image.clone(), middle + v2((dim.x - corner_size) * dx as f32 * 0.5, 0.0))
+                                                                    .color(Color::white())
+                                                                    .sub_rect(sub_rect)
+                                                                    .size(v2(corner_size, vertical_side_size))
+                                                                    .centered());
+                                                        } else {
+                                                            internal_state.draw_list.add_quad(
+                                                                Quad::new(image.clone(), middle + v2(0.0, (dim.y - corner_size) * dy as f32 * 0.5))
+                                                                    .color(Color::white())
+                                                                    .sub_rect(sub_rect)
+                                                                    .size(v2(horizontal_side_size, corner_size))
+                                                                    .centered());
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        _ => warn!("unimplemented segmentation {:?}", segment)
+                                    };
+                                }
+                                None => {
+                                    trace!(target: "gui_redraw_quads", "\tAdding no image quad at {:?} with dimensions {:?}", inner_pixel_offset - v2(0.0, effective_internal_dim.y), effective_internal_dim);
+                                    internal_state.draw_list = internal_state.draw_list.with_quad(
+                                        Quad::new(String::from("ui/blank"), inner_pixel_offset - v2(0.0, effective_internal_dim.y))
+                                            .color(widget.color * color_multiplier)
+                                            .size(effective_internal_dim)
+                                    );
                                 }
                             }
                         }
@@ -391,6 +457,26 @@ impl GUI {
         self.widget_reifications.insert(wid, internal_state);
     }
 
+    fn segmentation_info_for(&mut self, image: &ImageIdentifier, assets: &mut GraphicsAssets) -> ::SegmentationInfo {
+        *self.segmentation_info.entry(image.clone()).or_insert_with(|| {
+            let img = assets.image(image.clone());
+            let w = img.width();
+            let h = img.height();
+            if w != h { error!("Width and height of segmented background image are expected to be equal but were not for {}", image); }
+            let mut x = 0;
+            while x < w && img.get_pixel(x, h / 2)[3] != 0 {
+                x += 1;
+            }
+            let center_color = img.get_pixel(w - 1, 0);
+            let center_color = Color::from_rgba8(center_color.channels());
+
+            ::SegmentationInfo {
+                size: w as i32,
+                edge_width: x as i32,
+                center_color,
+            }
+        })
+    }
 
     fn depth_of_widget(&self, wid: Wid) -> usize {
         let mut count = 0;

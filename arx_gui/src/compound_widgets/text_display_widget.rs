@@ -26,7 +26,7 @@ pub struct TextDisplayWidget {
 }
 
 impl WidgetContainer for TextDisplayWidget {
-    fn for_all_widgets<F: FnMut(&mut Widget)>(&mut self, mut func: F) {
+    fn for_each_widget<F: FnMut(&mut Widget)>(&mut self, mut func: F) {
         (func)(&mut self.body);
         (func)(&mut self.text);
     }
@@ -38,8 +38,8 @@ impl DelegateToWidget for TextDisplayWidget {
 }
 
 impl TextDisplayWidget {
-    pub fn new<S>(text: S, font_size : FontSize, image: Option<ImageIdentifier>, segment: ImageSegmentation) -> TextDisplayWidget where S: Into<String> {
-        let body = Widget::new(WidgetType::Window { image, segment })
+    pub fn new<S, I>(text: S, font_size : FontSize, image: I, segment: ImageSegmentation) -> TextDisplayWidget where S: Into<String>, I : OptionalStringArg {
+        let body = Widget::new(WidgetType::Window { image : image.into_string_opt(), segment })
             .border_width(1)
             .border_color(Color::black())
             .size(Sizing::SurroundChildren, Sizing::SurroundChildren)
@@ -55,6 +55,32 @@ impl TextDisplayWidget {
     pub fn wrapped(mut self, w : Sizing) -> Self {
         self.body.set_width(w);
         self.text.widget_type.set_text_wrap(Some(TextWrap::WithinParent));
+        self
+    }
+
+    pub fn reapply(&mut self, gui : &mut GUI) -> &mut Self {
+        self.body.reapply(gui);
+        self.text.reapply(gui);
+        self
+    }
+
+    pub fn centered_text(mut self) -> Self {
+        self.center_text_horizontally();
+        self
+    }
+
+    pub fn center_text_horizontally(&mut self) -> &mut Self {
+        self.text.set_x(Positioning::CenteredInParent);
+        self
+    }
+
+    pub fn set_text<S : Into<String>>(&mut self, text : S) -> &mut Self {
+        self.text.set_text(text);
+        self
+    }
+
+    pub fn set_font_size(&mut self, font_size : FontSize) -> &mut Self {
+        self.text.set_font_size(font_size);
         self
     }
 }

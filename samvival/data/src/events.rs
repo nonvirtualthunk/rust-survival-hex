@@ -29,11 +29,13 @@ pub enum GameEvent {
     EffectEnded { entity : Option<Entity> },
     WorldStart,
     SelectedAttackChanged { entity : Entity, attack_ref : AttackRef },
+    ActionCanceled,
     SelectedCounterattackChanged { entity : Entity, attack_ref : AttackRef },
     SelectedReactionChanged { entity : Entity, reaction_type : ReactionTypeRef },
     ReactionEffectApplied { entity : Entity },
     ActionTaken { entity : Entity, action : Action },
     EntityHarvested { harvester : Entity, harvestable : Entity, harvested_from: Entity, resource : Entity, amount : Option<i32> },
+    EntityCreated { entity : Entity },
 
 
     EffectRegistered,

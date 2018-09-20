@@ -264,7 +264,7 @@ fn animate_damage(world_view: &WorldView, entity: Entity, damage_done: u32) -> V
 }
 
 fn animate_harvest(world_view: &WorldView, harvester: Entity, harvestable: Entity, harvested_from : Entity, resource: Entity, amount: Option<i32>) -> Vec<Box<AnimationElement>> {
-    let move_duration = 1.0;
+    let move_duration = 0.7;
 
     let harvested_pos = logic::movement::position_of(world_view, harvested_from).as_cart_vec();
     let harvester_pos = logic::movement::position_of(world_view, harvester).as_cart_vec();
@@ -282,10 +282,10 @@ fn animate_harvest(world_view: &WorldView, harvester: Entity, harvestable: Entit
 
     let resource_name = world_view.data::<IdentityData>(resource).effective_name();
     let msg = format!("+ {} {}", amount.unwrap_or(0), resource_name.to_string().capitalized());
-    let text_anim = TextAnimationElement::new(msg, FontSize::ExtraLarge, harvested_pos + CartVec::new(0.0, 0.5), color, 3.0)
+    let text_anim = TextAnimationElement::new(msg, FontSize::ExtraLarge, harvested_pos + CartVec::new(0.0, 0.5), color, 2.5)
         .with_delta(CartVec::new(0.0, 1.0), InterpolationType::Linear)
         .with_end_color(color.with_a(0.0), InterpolationType::Linear)
-        .with_outline_color(Color::greyscale(0.7), Color::greyscale(0.7).with_a(0.0), InterpolationType::Linear)
+        .with_outline_color(Color::greyscale(0.7).with_a(0.7), Color::greyscale(0.7).with_a(0.0), InterpolationType::Linear)
         .with_blocking_duration(0.0);
 
 

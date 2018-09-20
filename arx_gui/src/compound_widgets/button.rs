@@ -19,16 +19,29 @@ use widgets::*;
 use widget_delegation::DelegateToWidget;
 use graphics::FontSize;
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct Button {
     pub body: Widget,
     pub text: Widget,
 }
 
+impl Default for Button {
+    fn default() -> Self {
+        Button::new("")
+    }
+}
 impl Button {
-    fn create_body(image: ImageIdentifier) -> Widget {
+    pub fn create_copy(&self) -> Self {
+        let body = self.body.create_copy();
+        let text = self.text.create_copy().parent(&body);
+        Button {
+            body,
+            text,
+        }
+    }
+    fn create_body(image: ImageIdentifier, segment : ImageSegmentation) -> Widget {
         Widget::new(
-            WidgetType::Window { image: Some(image), segment: ImageSegmentation::None })
+            WidgetType::Window { image: Some(image), segment })
             .color(Color::white())
             .border_width(2)
             .border_color(Color::black())
@@ -52,13 +65,16 @@ impl Button {
 
     pub fn image_button(image: ImageIdentifier) -> Widget {
         // TODO: make this use derived sizing, have derived sizing work with image widgets and default to the literal size of the image
-        Button::create_body(image)
+        Button::create_body(image, ImageSegmentation::None)
             .size(Sizing::constant(10.ux()), Sizing::constant(10.ux()))
     }
 
     pub fn new<S>(text: S) -> Button where S: Into<String> {
-        let body = Button::create_body(String::from("ui/blank"));
+        let body = Button::create_body(String::from("ui/blank"), ImageSegmentation::None);
+        Button::custom(text, body)
+    }
 
+    pub fn custom<S>(text : S, body : Widget) -> Button where S : Into<String> {
         Button {
             text: Widget::text(text, FontSize::Standard)
                 .size(Sizing::Derived, Sizing::Derived)
@@ -68,8 +84,18 @@ impl Button {
         }
     }
 
+    pub fn segmented<S1, S2>(text: S1, image : S2) -> Button where S1 : Into<String>, S2 : Into<String> {
+        let body = Button::create_body(image.into(), ImageSegmentation::All);
+        Button::custom(text, body)
+    }
+
     pub fn set_text<S : Into<String>>(&mut self, text : S) -> &mut Self {
         self.text.set_text(text);
+        self
+    }
+
+    pub fn set_font_size(&mut self, font_size : FontSize) -> &mut Self {
+        self.text.set_font_size(font_size);
         self
     }
 
@@ -91,14 +117,18 @@ impl Button {
         self
     }
 
-    pub fn with_on_click<F: Fn(&mut WidgetContext, &UIEvent) -> () + 'static>(mut self, function: F) -> Self {
-        self.body = self.body.with_callback(move |ctxt: &mut WidgetContext, evt: &UIEvent| {
+    pub fn add_on_click<F: Fn(&mut WidgetContext, &UIEvent) -> () + 'static>(&mut self, function: F) -> &mut Self {
+        self.body.add_callback(move |ctxt: &mut WidgetContext, evt: &UIEvent| {
             if let UIEvent::WidgetEvent{ event, .. } = evt {
                 if let WidgetEvent::ButtonClicked(btn) = event {
                     (function)(ctxt, evt)
                 }
             };
-        });
+        }, false);
+        self
+    }
+    pub fn with_on_click<F: Fn(&mut WidgetContext, &UIEvent) -> () + 'static>(mut self, function: F) -> Self {
+        self.add_on_click(function);
         self
     }
     pub fn with_on_click_2<State: 'static, OtherState: 'static, F: Fn(&mut State, &mut OtherState) -> () + 'static>(mut self, function: F) -> Self {
@@ -140,7 +170,7 @@ impl DelegateToWidget for Button {
 }
 
 impl WidgetContainer for Button {
-    fn for_all_widgets<F: FnMut(&mut Widget)>(&mut self, mut func: F) {
+    fn for_each_widget<F: FnMut(&mut Widget)>(&mut self, mut func: F) {
         (func)(&mut self.body);
         (func)(&mut self.text);
     }

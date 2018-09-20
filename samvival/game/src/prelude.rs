@@ -6,6 +6,7 @@ pub use data::entities::Taxon;
 pub use data::entities::taxonomy;
 pub use data::entities::taxon;
 pub use data::entities::IdentityData;
+pub use data::entities::IdentityDataStore;
 
 pub use game::prelude::*;
 pub use samvival_core::*;

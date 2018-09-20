@@ -95,7 +95,7 @@ impl GraphicsAssets {
             dpi_scale: 1.0,
             default_font: FontIdentifier(0),
         };
-        let default_font_name = ::std::env::var("DEFAULT_FONT").unwrap_or(strf("visitor1.ttf"));
+        let default_font_name = ::std::env::var("DEFAULT_FONT").unwrap_or(strf("thin_pixel-7.ttf"));
         let identifier = assets.load_font(default_font_name.as_str());
         assets.default_font = identifier;
         assets

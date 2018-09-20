@@ -60,6 +60,7 @@ use graphics::GraphicsResources;
 use action_ui_handlers::player_action_handler::PlayerActionHandler;
 use action_ui_handlers::harvest_handler::HarvestHandler;
 use game::logic::item;
+use std::collections::HashSet;
 
 #[derive(PartialEq,Clone,Copy)]
 pub enum AuxiliaryWindows {
@@ -79,6 +80,7 @@ pub struct TacticalGui {
     last_targeting_info : Option<(KeyGameState, PlayerActionType)>,
     messages_display : MessagesDisplay,
     inventory_widget: inventory_widget::InventoryDisplay,
+    crafting_widget: crafting_widget::CraftingWidget,
     open_auxiliary_windows : Vec<AuxiliaryWindows>,
     escape_menu : EscapeMenu,
     player_action_handlers : Vec<Box<PlayerActionHandler>>,
@@ -130,6 +132,7 @@ impl TacticalGui {
             last_targeting_info : None,
             messages_display : MessagesDisplay::new(gui, &main_area),
             inventory_widget : inventory_widget::InventoryDisplay::new(strf("Character Inventory"), &main_area),
+            crafting_widget : crafting_widget::CraftingWidget::new(&main_area),
             open_auxiliary_windows: Vec::new(),
             escape_menu : EscapeMenu::new(gui, &main_area),
             main_area,
@@ -233,16 +236,26 @@ impl TacticalGui {
 //    }
 
 
-    pub fn handle_click(&mut self, world: &mut World, game_state : &GameState, button : MouseButton) -> bool {
+    pub fn handle_click(&mut self, gui : &mut GUI, world: &mut World, game_state : &GameState, button : MouseButton) -> bool {
         let world_view = world.view();
         let action = self.selected_player_action(world_view, game_state);
-        self.player_action_handlers.iter_mut().any(|pah| pah.handle_click(world, game_state, &action, button))
+        if gui.moused_over_widget() == Some(self.main_area.id()) {
+            self.player_action_handlers.iter_mut().any(|pah| pah.handle_click(world, game_state, &action, button))
+        } else { // handle any click that isn't going through to the main area
+            true
+        }
     }
 
-    pub fn handle_key_release(&mut self, world : &mut World, game_state: &GameState, key : Key) -> bool {
+    pub fn handle_key_release(&mut self, world : &mut World, gui : &mut GUI, game_state: &GameState, key : Key) -> bool {
         let world_view = world.view();
         let action = self.selected_player_action(world_view, game_state);
-        self.player_action_handlers.iter_mut().any(|pah| pah.handle_key_release(world, game_state, &action, key))
+
+        if key == Key::C {
+            self.crafting_widget.toggle(world_view, gui);
+            true
+        } else {
+            self.player_action_handlers.iter_mut().any(|pah| pah.handle_key_release(world, game_state, &action, key))
+        }
     }
 
     pub fn update_gui(&mut self, world: &mut World, world_view : &WorldView, gsrc : &mut GraphicsResources, gui: &mut GUI, frame_id: Option<Wid>, game_state: GameState, game_mode_event_bus : &mut EventBus<GameModeEvent>) {
@@ -282,7 +295,7 @@ impl TacticalGui {
             let inv_data = world_view.data::<InventoryData>(selected);
             let items = &inv_data.items;
             let destacked = item::items_in_inventory(world_view, selected);
-            let main_inv = vec![InventoryDisplayData::new(items.clone(), destacked, "Character Inventory", vec![selected], true, inv_data.inventory_size)];
+            let main_inv = vec![InventoryDisplayData::new(items.clone(), destacked, HashSet::new(), "Character Inventory", vec![selected], true, inv_data.inventory_size)];
 
             let mut ground_items = Vec::new();
             let mut ground_entities = Vec::new();
@@ -297,8 +310,9 @@ impl TacticalGui {
                     }
                 }
             }
-            let other_inv = vec![InventoryDisplayData::new(ground_items, destacked_ground_items, "Ground", ground_entities, false, None)];
+            let other_inv = vec![InventoryDisplayData::new(ground_items, destacked_ground_items, HashSet::new(), "Ground", ground_entities, false, None)];
             self.inventory_widget.update(gui, world, main_inv, other_inv, &mut control);
+            self.crafting_widget.update(world, gui, &game_state, &mut control);
         } else {
             self.main_area.set_width(Sizing::DeltaOfParent(0.ux())).reapply(gui);
 
@@ -306,9 +320,10 @@ impl TacticalGui {
             self.action_bar.set_showing(false).reapply(gui);
             self.reaction_bar.set_showing(false).reapply(gui);
             self.inventory_widget.set_showing(false).reapply(gui);
+            self.crafting_widget.hide().reapply(gui);
         }
 
-        if gui.moused_over_widget().map(|mow| gui.widget_and_all_ancestors(mow).contains(&self.character_info_widget.id())).unwrap_or(false) {
+        if gui.moused_over_widget() != Some(self.main_area.id()) {
             for handler in &mut self.player_action_handlers {
                 handler.hide_widgets(gui);
             }
@@ -332,6 +347,10 @@ impl TacticalGui {
                 match event {
                     TacticalEvents::ActionSelected(action_type) => {
                         println!("Selected action type : {:?}", action_type);
+                    },
+                    TacticalEvents::CancelActiveAction => {
+                        world.modify(selected, ActionData::active_action.set_to(None));
+                        world.add_event(GameEvent::ActionCanceled);
                     },
                     TacticalEvents::AttackSelected(attack_ref) => {
                         println!("Attack selected");

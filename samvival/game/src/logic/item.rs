@@ -12,14 +12,12 @@ use data::entities::inventory::EquipmentData;
 use data::entities::item::ItemData;
 use common::hex::*;
 use data::entities::inventory::*;
-use game::EntityMetadata;
+use data::entities::{StackWith, EntityMetadata};
+//use game::EntityMetadata;
 use prelude::*;
 use common::prelude::*;
 use data::entities::common_entities::LookupSignifier;
 
-/// clone_on_add is used when creating an item into an inventory that may be able to stack, in that case you don't
-/// want to clone-create the entity ahead of time, because then you pay the cost even if it stacks, rather you want
-/// to clone only if you have to create a new stack
 pub fn put_item_in_inventory(world: &mut World, item : Entity, inventory : Entity) -> bool {
     let view = world.view();
     if let Some(stack) = view.data_opt::<StackData>(item) {
@@ -28,7 +26,8 @@ pub fn put_item_in_inventory(world: &mut World, item : Entity, inventory : Entit
         let inv_data = view.data::<InventoryData>(inventory);
         let item_data = view.data::<ItemData>(item);
 
-        let stack_to_add_to = if item_data.stack_limit > 1 { inv_data.items.find(|i| can_stack_entity_in(view, *i, item)) } else { None };
+        let stack_to_add_to = if item_data.stack_limit > 1 { inv_data.items.find(|i| can_stack_entity_in_existing_stack(view, *i, item)) } else { None };
+        println!("Stack to add to {:?}", stack_to_add_to);
 
         if let Some(stack) = stack_to_add_to {
             world.modify(item, ItemData::in_inventory_of.set_to(Some(inventory)));
@@ -93,17 +92,37 @@ pub fn transfer_item(world: &mut World, item : Entity, from : Entity, to : Entit
 }
 
 /// checks whether the given entity is a stack that can hold the to_hold entity
-pub fn can_stack_entity_in(view: &WorldView, stack_entity : Entity, to_hold : Entity) -> bool {
+pub fn can_stack_entity_in_existing_stack(view: &WorldView, stack_entity : Entity, to_hold : Entity) -> bool {
     if let Some(stack) = view.data_opt::<StackData>(stack_entity) {
         if stack.stack_limit > stack.entities.len() as i32 {
             if let Some(first_ent) = stack.entities.first() {
-                if view.data::<ItemData>(*first_ent).stack_with.matches(view, to_hold) {
+                if can_items_stack_together(view, *first_ent, to_hold) {
                     return true;
                 }
             } else { warn!("Entity-less stack encountered") }
         }
     }
     false
+}
+
+/// checks whether the base_item can have to_be_stacked stacked with it. Does not check stack limits
+pub fn can_items_stack_together(view : &WorldView, base_item : Entity, to_be_stacked: Entity) -> bool {
+    let base_item = item_or_first_in_stack(view, base_item);
+    if let Some(base_item_data) = view.data_opt::<ItemData>(base_item) {
+        match &base_item_data.stack_with {
+            StackWith::SameArchetype => {
+                let base_arch = view.data::<EntityMetadata>(base_item).archetype;
+                let other_arch = view.data::<EntityMetadata>(to_be_stacked).archetype;
+                if ! base_arch.is_sentinel() && ! other_arch.is_sentinel() {
+                    base_arch == other_arch
+                } else { false }
+            },
+            StackWith::Custom(sel) => sel.matches(view, to_be_stacked)
+        }
+    } else {
+        warn!("Checking item stackability of non-item entity: {}", view.signifier(base_item));
+        false
+    }
 }
 
 pub fn item_stacks_in_inventory(view: &WorldView, inventory : Entity) -> Vec<(Entity, StackData)> {
@@ -114,7 +133,7 @@ pub fn item_stacks_in_inventory(view: &WorldView, inventory : Entity) -> Vec<(En
 }
 
 
-/// removes the item indicated from the inventory specified, if possible. Does not account for equipment
+/// removes the item indicated from the inventory specified, if possible. Accounts for equipped as well
 pub fn remove_item_from_inventory(world: &mut World, item : Entity, inventory : Entity) {
     let view = world.view();
 
@@ -151,21 +170,21 @@ pub fn equip_item(world: &mut World, item : Entity, character : Entity, trigger_
         (item, character)
     };
 
-    world.modify_with_desc(character, EquipmentData::equipped.append(item), None);
     if ! is_item_in_inventory_of(world, item, character) {
-        put_item_in_inventory(world, item, character);
-    }
+        error!("Attempting to equip an item that is not already in inventory, item {}, character {}", world_view.signifier(item), world_view.signifier(character));
+    } else {
+        world.modify_with_desc(character, EquipmentData::equipped.append(item), None);
 
-
-    if world_view.data::<CombatData>(character).active_attack.is_none() {
-        let item_attack_ref = AttackRef::of_primary_from(world.view(), item);
-        if item_attack_ref.is_some() {
-            world.modify_with_desc(character, CombatData::active_attack.set_to(item_attack_ref), "item equipped");
+        if world_view.data::<CombatData>(character).active_attack.is_none() {
+            let item_attack_ref = AttackRef::of_primary_from(world.view(), item);
+            if item_attack_ref.is_some() {
+                world.modify_with_desc(character, CombatData::active_attack.set_to(item_attack_ref), "item equipped");
+            }
         }
-    }
 
-    if trigger_event {
-        world.add_event(GameEvent::Equip { character, item });
+        if trigger_event {
+            world.add_event(GameEvent::Equip { character, item });
+        }
     }
 }
 
@@ -255,7 +274,7 @@ pub fn inventory_limit_remaining_for(world: &WorldView, inventory_entity : Entit
                     if let Some(stack) = world.data_opt::<StackData>(*item) {
                         if let Some(first_ent) = stack.entities.first() {
                             let slots_remaining_in_stack = stack.stack_limit - stack.entities.len() as i32;
-                            if slots_remaining_in_stack > 0 && world.data::<ItemData>(*first_ent).stack_with.matches(world, to_hold) {
+                            if slots_remaining_in_stack > 0 && can_items_stack_together(world, *first_ent, to_hold) {
                                 stack_capacity += slots_remaining_in_stack;
                             }
                         } else { warn!("stack of entities with no entities in it, this is not allowed"); }
@@ -271,5 +290,33 @@ pub fn inventory_limit_remaining_for(world: &WorldView, inventory_entity : Entit
         }
     } else {
         Some(0)
+    }
+}
+
+
+pub fn destroy_item(world: &mut World, item : Entity) -> bool {
+    let view = world.view();
+    if let Some(item_data) = view.data_opt::<ItemData>(item) {
+        if let Some(in_inventory) = item_data.in_inventory_of {
+            remove_item_from_inventory(world, item, in_inventory);
+        }
+
+        world.destroy_entity(item);
+
+        true
+    } else { error!("Attempted to destroy an item that was not an item: {}", view.signifier(item)); false }
+}
+
+/// returns the item given or, if it is a stack of items, the first item in the stack
+pub fn item_or_first_in_stack(view : &WorldView, item : Entity) -> Entity {
+    if let Some(stack_data) = view.data_opt::<StackData>(item) {
+        if let Some(first) = stack_data.entities.first() {
+            *first
+        } else {
+            error!("Empty stack encountered when checking item usability");
+            Entity::sentinel()
+        }
+    } else {
+        item
     }
 }

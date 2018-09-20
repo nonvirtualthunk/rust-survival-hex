@@ -73,6 +73,11 @@ impl Default for Border {
         Border { width: 0, color: Color::black(), sides: BorderSides::all() }
     }
 }
+impl Border {
+    pub fn none() -> Border {
+        Border { width : 0 , color : Color::black(), sides : BorderSides::none() }
+    }
+}
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct BorderSides(u8);
@@ -139,7 +144,7 @@ pub enum ImageSegmentation {
     None,
     Horizontal,
     Vertical,
-    Sides,
+    All,
 }
 
 impl Default for ImageSegmentation {
@@ -171,6 +176,7 @@ impl WidgetType {
     pub fn window() -> WidgetType {
         WidgetType::Window { image: None, segment: ImageSegmentation::None }
     }
+    pub fn segmented_window<S>(image : S) -> WidgetType where S : Into<String> { WidgetType::Window { image : Some(image.into()), segment : ImageSegmentation::All }}
     pub fn image<S>(image: S) -> WidgetType where S: Into<String> {
         WidgetType::Image { image: image.into() }
     }
@@ -179,6 +185,11 @@ impl WidgetType {
         match self {
             WidgetType::Text { ref mut text, .. } => *text = text_in.into(),
             _ => ()
+        };
+    }
+    pub fn set_font_size (&mut self, new_font_size : FontSize) {
+        if let WidgetType::Text { ref mut font_size, .. } = self {
+            *font_size = new_font_size
         };
     }
     pub fn set_text_wrap(&mut self, wrap_in : Option<TextWrap>) {
@@ -358,7 +369,7 @@ impl WidgetCallbackRef {
 }
 
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub struct Widget {
     pub name : Option<Str>,
     pub callbacks: Vec<WidgetCallbackRef>,
@@ -374,10 +385,36 @@ pub struct Widget {
     pub showing: bool,
     pub accepts_focus: bool,
     pub ignores_parent_bounds : bool,
+    pub custom_data_changed: bool,
     pub draw_layer : GUILayer,
     pub state_override: Option<WidgetState>,
     pub event_consumption: EventConsumption,
-    pub tooltip : Option<String>
+    pub tooltip : Option<String>,
+    pub custom_data: Option<Rc<Any>>,
+}
+
+impl PartialEq for Widget {
+    fn eq(&self, other: &Widget) -> bool {
+        self.name.eq(&other.name) &&
+        self.callbacks.eq(&other.callbacks) &&
+        self.id.eq(&other.id) &&
+        self.parent_id.eq(&other.parent_id) &&
+        self.widget_type.eq(&other.widget_type) &&
+        self.size.eq(&other.size) &&
+        self.position.eq(&other.position) &&
+        self.alignment.eq(&other.alignment) &&
+        self.border.eq(&other.border) &&
+        self.color.eq(&other.color) &&
+        self.margin.eq(&other.margin) &&
+        self.showing.eq(&other.showing) &&
+        self.accepts_focus.eq(&other.accepts_focus) &&
+        self.ignores_parent_bounds.eq(&other.ignores_parent_bounds) &&
+        self.draw_layer.eq(&other.draw_layer) &&
+        self.state_override.eq(&other.state_override) &&
+        self.event_consumption.eq(&other.event_consumption) &&
+        self.tooltip.eq(&other.tooltip)
+//        self.user_data.eq(other.user_data)
+    }
 }
 
 
@@ -401,8 +438,15 @@ impl Widget {
             ignores_parent_bounds: false,
             name : None,
             draw_layer : GUILayer::Main,
-            tooltip: None
+            tooltip: None,
+            custom_data: None,
+            custom_data_changed: false,
         }
+    }
+
+    /// create a copy of this widget with a new id
+    pub fn create_copy(&self) -> Self {
+        self.clone().with_new_id()
     }
 
     pub fn id(&self) -> Wid {
@@ -422,6 +466,11 @@ impl Widget {
 
     pub fn clear_id(&mut self) {
         self.set_id(NO_WID);
+    }
+
+    pub fn with_new_id(mut self) -> Self {
+        self.set_id(create_wid());
+        self
     }
 
     pub fn div() -> Widget {
@@ -458,6 +507,11 @@ impl Widget {
         Widget::new(WidgetType::window())
             .color(color)
             .border(Border { color: Color::black(), width: border_width, sides: BorderSides::all() })
+    }
+
+    pub fn segmented_window<S : Into<ImageIdentifier>>(image : S) -> Widget {
+        Widget::new(WidgetType::Window { image : Some(image.into()), segment : ImageSegmentation::All })
+            .border(Border { width : 0 , color : Color::white(), sides : BorderSides::all() })
     }
 
     pub fn none() -> Widget {
@@ -559,10 +613,10 @@ impl Default for Widget {
 
 
 pub trait WidgetContainer {
-    fn for_all_widgets<F: FnMut(&mut Widget)>(&mut self, func: F);
+    fn for_each_widget<F: FnMut(&mut Widget)>(&mut self, func: F);
 
     fn reapply_all(&mut self, gui : &mut GUI) {
-        self.for_all_widgets(|w| w.reapply(gui));
+        self.for_each_widget(|w| w.reapply(gui));
     }
     fn apply_all(mut self, gui : &mut GUI) -> Self where Self : Sized {
         self.reapply_all(gui);
@@ -570,7 +624,7 @@ pub trait WidgetContainer {
     }
 
     fn draw_layer_for_all(mut self, draw_layer : GUILayer) -> Self where Self : Sized {
-        self.for_all_widgets(|w| { w.draw_layer = draw_layer; });
+        self.for_each_widget(|w| { w.draw_layer = draw_layer; });
         self
     }
 }
@@ -588,7 +642,7 @@ impl DelegateToWidget for Widget {
 }
 
 impl WidgetContainer for Widget {
-    fn for_all_widgets<F: FnMut(&mut Widget)>(&mut self, mut func: F) {
+    fn for_each_widget<F: FnMut(&mut Widget)>(&mut self, mut func: F) {
         (func)(self)
     }
 }

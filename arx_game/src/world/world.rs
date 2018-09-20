@@ -48,7 +48,7 @@ use serde::Serializer;
 use serde::de::SeqAccess;
 use serde::de;
 use serde::de::MapAccess;
-use entity::EntityMetadata;
+//use entity::EntityCoreMetadata;
 use multimap::MultiMap;
 
 pub struct ModifiersApplication {
@@ -112,6 +112,8 @@ pub struct World {
     pub(crate) events: MultiTypeEventContainer,
     pub entity_indices: MultiTypeContainer,
     pub entity_id_counter : usize,
+    pub destroyed_entities: HashMap<Entity, GameEventClock>,
+    pub destroyed_entities_sorted_by_time : Vec<(Entity, GameEventClock)>,
     // runtime only -----------------------------------------------------------------------
     #[serde(skip_serializing, skip_deserializing)]
     pub view: UnsafeCell<WorldView>,
@@ -140,6 +142,8 @@ impl World {
             total_dynamic_modifier_count: 0,
             next_time: 0,
             events: MultiTypeEventContainer::new(),
+            destroyed_entities: HashMap::new(),
+            destroyed_entities_sorted_by_time: Vec::new(),
             view: UnsafeCell::new(WorldView {
                 entities: vec![],
                 copy_on_write_entities_by_source: MultiMap::new(),
@@ -178,7 +182,7 @@ impl World {
     pub fn register_core_types(&mut self) {
         self.register_event_type::<CoreEvent>();
         self.register::<DebugData>();
-        self.register::<EntityMetadata>();
+//        self.register::<EntityCoreMetadata>();
     }
 
     pub fn current_time(&self) -> GameEventClock {
@@ -427,6 +431,9 @@ impl World {
         let remove_entity_func = |view: &mut WorldView, entity: Entity| {
             view.effective_data.get_mut::<DataContainer<T>>().storage.remove(&entity);
             view.constant_data.get_mut::<DataContainer<T>>().storage.remove(&entity);
+            if view.overlay_data.contains::<DataContainer<T>>() {
+                view.overlay_data.get_mut::<DataContainer<T>>().storage.remove(&entity);
+            }
         };
 
         let bootstrap_entity_func = |world: &World, view: &mut WorldView, entity: Entity| {
@@ -508,7 +515,7 @@ impl World {
         for clone_func in clone_funcs {
             (clone_func)(self, entity, new_entity);
         }
-        self.attach_data(new_entity, EntityMetadata { cloned_from : Some(new_entity) });
+//        self.attach_data(new_entity, EntityCoreMetadata { cloned_from : Some(new_entity) });
         self.add_entity(new_entity);
         new_entity
     }
@@ -545,6 +552,14 @@ impl World {
             .cloned()
             .collect();
 
+        let destroyed_entities: Vec<(Entity, GameEventClock)> = self.destroyed_entities_sorted_by_time.iter().rev()
+            .skip_while(|e| e.1 >= at_time)
+            .take_while(|e| e.1 >= cur_time)
+            .filter(|e| existing_set.contains(&e.0))
+            .cloned()
+            .collect();
+        let destroyed_set : HashSet<Entity> = destroyed_entities.iter().map(|e| e.0.clone()).collect();
+
         new_entities.into_iter().rev().for_each(|e| {
             trace!("Bootstrapping entity that was created after {:?}, id: {:?}, [{:?}]", cur_time, e.0, e.1);
             for (type_id, application_capability) in &self.modifier_application_by_type {
@@ -555,6 +570,17 @@ impl World {
             view.entity_set.insert(e.0);
             view.entities.push(e);
         });
+
+        destroyed_entities.into_iter().rev().for_each(|e| {
+            trace!(target: "entity removal", "Removing entity, id: {:?}, removed at [{:?}]", e.0, e.1);
+            for (type_id, application_capability) in &self.modifier_application_by_type {
+                if application_capability.registered_at <= at_time {
+                    (application_capability.remove_entity_func)(view, e.0);
+                }
+            }
+            view.entity_set.remove(&e.0);
+        });
+        view.entities.retain(|e| !destroyed_set.contains(&e.0));
 
 
         // we need to keep track of where we are in each modifier type, as well as the global modifier cursor.
@@ -716,6 +742,9 @@ impl World {
     }
 
     pub(crate) fn add_modifier<T: EntityData, S: OptionalStringArg, RMT: Into<Rc<Modifier<T>>>>(&mut self, entity: Entity, modifier: RMT, description: S) -> ModifierReference {
+        if let Some(locked_at) = self.destroyed_entities.get(&entity) {
+            error!("Attempting to modify locked entity with ID {}, locked at {}. Allowing modification, but this indicates an error", entity.0, locked_at);
+        }
         let all_modifiers: &mut ModifiersContainer<T> = self.modifiers.get_mut::<ModifiersContainer<T>>();
         let modifier = modifier.into();
         if modifier.modifier_type() == ModifierType::Dynamic {
@@ -768,32 +797,13 @@ impl World {
         self.add_modifier(tmp, modifier, description.into_string_opt())
     }
 
-//    pub fn add_constant_modifier<T: EntityData, CM: ConstantModifier<T> + 'static>(&mut self, entity: Entity, constant_modifier: CM) {
-//        self.add_modifier(entity, box ConstantModifierWrapper { inner: constant_modifier, _ignored: PhantomData }, None);
-//    }
-//
-//    pub fn add_limited_modifier<T: EntityData, CM: LimitedModifier<T> + 'static>(&mut self, entity: Entity, limited_modifier: CM) {
-//        self.add_modifier(entity, box LimitedModifierWrapper { inner: limited_modifier, _ignored: PhantomData }, None);
-//    }
-//
-//    pub fn add_dynamic_modifier<T: EntityData, CM: DynamicModifier<T> + 'static>(&mut self, entity: Entity, dynamic_modifier: CM) {
-//        self.add_modifier(entity, box DynamicModifierWrapper { inner: dynamic_modifier, _ignored: PhantomData }, None);
-//    }
-//
-//    pub fn add_constant_world_modifier<T: EntityData, CM: ConstantModifier<T> + 'static>(&mut self, constant_modifier: CM) {
-//        let entity = self.self_entity;
-//        self.add_modifier(entity, box ConstantModifierWrapper { inner: constant_modifier, _ignored: PhantomData }, None);
-//    }
-//
-//    pub fn add_limited_world_modifier<T: EntityData, CM: LimitedModifier<T> + 'static>(&mut self, limited_modifier: CM) {
-//        let entity = self.self_entity;
-//        self.add_modifier(entity, box LimitedModifierWrapper { inner: limited_modifier, _ignored: PhantomData }, None);
-//    }
-//
-//    pub fn add_dynamic_world_modifier<T: EntityData, CM: DynamicModifier<T> + 'static>(&mut self, dynamic_modifier: CM) {
-//        let entity = self.self_entity;
-//        self.add_modifier(entity, box DynamicModifierWrapper { inner: dynamic_modifier, _ignored: PhantomData }, None);
-//    }
+
+    /// destroy an entity, marking it as non-usable from this point forward
+    pub fn destroy_entity(&mut self, entity : Entity) {
+        // TODO: flesh out the removal process, propagate on to views such that the entities act like they have no data once they are removed
+        self.destroyed_entities.insert(entity, self.current_time());
+        self.destroyed_entities_sorted_by_time.push((entity, self.current_time()));
+    }
 
     pub fn add_callback<E: GameEventType + 'static>(&mut self, event_callback: EventCallback<E>) {
         self.events.add_callback(event_callback);

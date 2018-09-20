@@ -3,9 +3,10 @@
 	    Small: 18,
         Standard: 20,
 	    HeadingMinor: 22,
-	    HeadingMajor: 24,
+	    HeadingMajor: 26,
 	    Large: 30,
 	    ExtraLarge: 34
     },
-    line_height_modifier: 0.6
+    line_height_multiplier: 0.6,
+    space_multiplier: 0.7,
 )

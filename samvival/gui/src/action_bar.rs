@@ -22,6 +22,7 @@ pub enum PlayerActionType {
     InteractWithInventory,
     Move(MovementTypeRef),
     Wait,
+    Continue { previous : Box<PlayerActionType> },
     None,
 }
 
@@ -33,9 +34,14 @@ impl PlayerActionType {
             PlayerActionType::Move(move_ref) => move_ref.resolve(world).map(|mt| mt.name.capitalized()).unwrap_or_else(|| String::from("Unknown move type")),
             PlayerActionType::Wait => String::from("Wait"),
             PlayerActionType::Harvest => String::from("Harvest"),
-            PlayerActionType::None => String::from("None"),
+            PlayerActionType::Continue { previous } => format!("Continue : {}", previous.name(world, character)),
+            PlayerActionType::None => {
+                let active_action_str = world.data::<ActionData>(character).active_action.as_ref().map(|a| a.action_type.name()).unwrap_or("");
+                format!("Cancel : {}", active_action_str)
+            }
         }
     }
+
     pub fn description(&self, world : &WorldView, character : Entity) -> String {
         match self {
             PlayerActionType::MoveAndAttack(move_ref, attack_ref) => format!("Move (if necessary) and {} an enemy", attack_ref.resolve(world, character).map(|a| a.verb.unwrap_or(a.name)).unwrap_or(String::from("Attack"))),
@@ -43,9 +49,11 @@ impl PlayerActionType {
             PlayerActionType::Move(move_ref) => format!("{} across terrain to another location", move_ref.resolve(world).map(|m| m.name.as_str()).unwrap_or("move")),
             PlayerActionType::Wait => format!("Do nothing for the moment"),
             PlayerActionType::Harvest => format!("Harvest resources from a nearby hex."),
-            PlayerActionType::None => String::from("None"),
+            PlayerActionType::None => format!("Cancels the active action, losing any progress you may have made"),
+            PlayerActionType::Continue { previous } => format!("Continue performing an action that has already been started, but requires more time to finish."),
         }
     }
+
     pub fn icon(&self, world : &WorldView, character : Entity) -> String {
         match self {
             PlayerActionType::MoveAndAttack(move_ref, attack_ref) => format!("ui/attack_icon"),
@@ -53,7 +61,8 @@ impl PlayerActionType {
             PlayerActionType::Move(move_ref) => format!("ui/move_icon"),
             PlayerActionType::Wait => format!("ui/clock_icon"),
             PlayerActionType::Harvest => format!("ui/harvest_icon"),
-            PlayerActionType::None => String::from("None"),
+            PlayerActionType::None => format!("ui/cancel"),
+            PlayerActionType::Continue { previous } => previous.icon(world, character)
         }
     }
 }
@@ -135,14 +144,25 @@ impl ActionBar {
         if let Some(selected_char) = game_state.selected_character {
             self.action_list.set_showing(true).reapply(gui);
 
+            let actions = if let PlayerActionType::Continue { .. } = self.selected_action_for(view, selected_char) {
+                vec![PlayerActionType::None]
+            } else {
+                actions
+            };
+
             let mut selection_changed = false;
             for event in gui.events_for(self.action_list.as_widget_immut()) {
                 if let UIEvent::WidgetEvent{ event, .. } = event {
                     if let WidgetEvent::ListItemClicked(index, button) = event {
                         let action_type = self.actions[*index].clone();
-                        self.selected_actions.insert(selected_char, action_type.clone());
-                        control_context.event_bus.push_event(TacticalEvents::ActionSelected(action_type));
-                        selection_changed = true;
+                        if action_type == PlayerActionType::None {
+                            control_context.event_bus.push_event(TacticalEvents::CancelActiveAction);
+                            selection_changed = true;
+                        } else {
+                            self.selected_actions.insert(selected_char, action_type.clone());
+                            control_context.event_bus.push_event(TacticalEvents::ActionSelected(action_type));
+                            selection_changed = true;
+                        }
                     }
                 }
             }
@@ -170,6 +190,15 @@ impl ActionBar {
     pub fn selected_action_for(&self, view : &WorldView, character : Entity) -> PlayerActionType {
         use game::logic;
 
+        let raw = self.raw_selected_action_for(view, character);
+        if view.data::<ActionData>(character).active_action.is_some() {
+            PlayerActionType::Continue { previous : box raw }
+        } else {
+            raw
+        }
+    }
+
+    fn raw_selected_action_for(&self, view : &WorldView, character : Entity) -> PlayerActionType {
         if let Some(selected) = self.selected_actions.get(&character).cloned() {
             return selected;
         } else if let Some(default_move) = logic::movement::default_movement_type(view, character) {
@@ -177,7 +206,6 @@ impl ActionBar {
                 return PlayerActionType::MoveAndAttack(default_move, default_attack);
             }
         }
-
         PlayerActionType::Wait
     }
 
