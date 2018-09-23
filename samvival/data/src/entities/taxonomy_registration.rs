@@ -9,6 +9,8 @@ pub(crate) fn register_taxonomy() {
 		taxonomy::register_taxon(&taxonomy::weapons::MeleeWeapon);
 		taxonomy::register_taxon(&taxonomy::weapons::RangedWeapon);
 		taxonomy::register_taxon(&taxonomy::weapons::ImprovisedWeapon);
+		taxonomy::register_taxon(&taxonomy::weapons::StabbingWeapon);
+		taxonomy::register_taxon(&taxonomy::weapons::BladedWeapon);
 		taxonomy::register_taxon(&taxonomy::weapons::ProjectileWeapon);
 		taxonomy::register_taxon(&taxonomy::weapons::ReachWeapon);
 		taxonomy::register_taxon(&taxonomy::weapons::Sword);
@@ -63,6 +65,7 @@ pub(crate) fn register_taxonomy() {
 		taxonomy::register_taxon(&taxonomy::Material);
 		taxonomy::register_taxon(&taxonomy::Mineral);
 		taxonomy::register_taxon(&taxonomy::Metal);
+		taxonomy::register_taxon(&taxonomy::resources::PlantResource);
 		taxonomy::register_taxon(&taxonomy::resources::Straw);
 		taxonomy::register_taxon(&taxonomy::resources::Fruit);
 		taxonomy::register_taxon(&taxonomy::resources::Wood);
@@ -71,9 +74,6 @@ pub(crate) fn register_taxonomy() {
 		taxonomy::register_taxon(&taxonomy::resources::LooseStone);
 		taxonomy::register_taxon(&taxonomy::resources::Dirt);
 		taxonomy::register_taxon(&taxonomy::resources::Iron);
-		taxonomy::register_taxon(&taxonomy::materials::Wood);
-		taxonomy::register_taxon(&taxonomy::materials::Stone);
-		taxonomy::register_taxon(&taxonomy::materials::Metal);
 		taxonomy::register_taxon(&taxonomy::Terrain);
 		taxonomy::register_taxon(&taxonomy::terrain::Plains);
 		taxonomy::register_taxon(&taxonomy::terrain::Hills);
@@ -84,4 +84,10 @@ pub(crate) fn register_taxonomy() {
 		taxonomy::register_taxon(&taxonomy::vegetation::PineForest);
 		taxonomy::register_taxon(&taxonomy::vegetation::DeciduousForest);
 		taxonomy::register_taxon(&taxonomy::IngredientType);
+		taxonomy::register_taxon(&taxonomy::ingredient_types::Haft);
+		taxonomy::register_taxon(&taxonomy::ingredient_types::Axehead);
+		taxonomy::register_taxon(&taxonomy::ingredient_types::Spearhead);
+		taxonomy::register_taxon(&taxonomy::ingredient_types::Binding);
+		taxonomy::register_taxon(&taxonomy::ingredient_types::Blade);
+		taxonomy::register_taxon(&taxonomy::ingredient_types::Plate);
 }

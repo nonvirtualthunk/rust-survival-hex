@@ -63,6 +63,7 @@ pub fn register_world_data(world : &mut World) {
     world.register::<VisibilityData>();
     world.register::<Effects>();
     world.register::<Resources>();
+    world.register::<RuntimeTaxonData>();
 
     println!("Registering axial coord index");
     world.register_index::<AxialCoord>();

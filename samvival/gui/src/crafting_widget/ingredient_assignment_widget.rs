@@ -117,7 +117,7 @@ struct IngredientAssignmentSubWidget {
 
 impl Default for IngredientAssignmentSubWidget {
     fn default() -> Self {
-        let name_display = Widget::text("", FontSize::HeadingMinor);
+        let name_display = Widget::text("", FontSize::HeadingMinor).centered_horizontally();
 
         let selector_display = TextDisplayWidget::new("A", FontSize::Standard, "ui/window/minimalist", ImageSegmentation::All)
             .color(Color::greyscale(0.9))

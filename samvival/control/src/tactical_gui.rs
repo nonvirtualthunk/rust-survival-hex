@@ -64,7 +64,7 @@ use std::collections::HashSet;
 
 #[derive(PartialEq,Clone,Copy)]
 pub enum AuxiliaryWindows {
-    Inventory
+    Inventory,
 }
 
 pub struct TacticalGui {
@@ -202,12 +202,13 @@ impl TacticalGui {
     }
 
     pub fn close_all_auxiliary_windows(&mut self, gui : &mut GUI) -> bool {
-        if self.open_auxiliary_windows.non_empty() {
+        if self.open_auxiliary_windows.non_empty() || self.crafting_widget.is_showing() {
             for window in &self.open_auxiliary_windows {
                 match window {
                     AuxiliaryWindows::Inventory => self.inventory_widget.set_showing(false).reapply(gui)
                 }
             }
+            self.crafting_widget.hide().reapply(gui);
             self.open_auxiliary_windows.clear();
             true
         } else {
@@ -295,7 +296,11 @@ impl TacticalGui {
             let inv_data = world_view.data::<InventoryData>(selected);
             let items = &inv_data.items;
             let destacked = item::items_in_inventory(world_view, selected);
-            let main_inv = vec![InventoryDisplayData::new(items.clone(), destacked, HashSet::new(), "Character Inventory", vec![selected], true, inv_data.inventory_size)];
+            let all_equipped_items : HashSet<Entity> = vec![selected].iter()
+                .flat_map(|ent| world.data_opt::<EquipmentData>(*ent).map(|eq| eq.equipped.clone()).unwrap_or(Vec::new()))
+                .collect();
+
+            let main_inv = vec![InventoryDisplayData::new(items.clone(), destacked, HashSet::new(), all_equipped_items, "Character Inventory", vec![selected], true, inv_data.inventory_size)];
 
             let mut ground_items = Vec::new();
             let mut ground_entities = Vec::new();
@@ -310,7 +315,7 @@ impl TacticalGui {
                     }
                 }
             }
-            let other_inv = vec![InventoryDisplayData::new(ground_items, destacked_ground_items, HashSet::new(), "Ground", ground_entities, false, None)];
+            let other_inv = vec![InventoryDisplayData::new(ground_items, destacked_ground_items, HashSet::new(), HashSet::new(), "Ground", ground_entities, false, None)];
             self.inventory_widget.update(gui, world, main_inv, other_inv, &mut control);
             self.crafting_widget.update(world, gui, &game_state, &mut control);
         } else {
@@ -345,6 +350,9 @@ impl TacticalGui {
             let event : &TacticalEvents = event; // explicit typing so that IDEA can figure out what's going on
             if let Some(selected) = game_state.selected_character {
                 match event {
+                    TacticalEvents::DisplayMessage(message) => {
+                        self.messages_display.add_message(message.clone())
+                    },
                     TacticalEvents::ActionSelected(action_type) => {
                         println!("Selected action type : {:?}", action_type);
                     },

@@ -59,10 +59,10 @@ impl CraftingOutputWidget {
         CraftingOutputWidget { body, item_display, craft_button, cancel_button, reason_display }
     }
 
-    pub fn update(&mut self, view : &WorldView, gui : &mut GUI, crafter : Entity, base_recipe : Option<Entity>, ingredients : &HashMap<Taxon, Vec<Entity>>) {
+    pub fn update(&mut self, world : &mut World, view : &WorldView, gui : &mut GUI, crafter : Entity, base_recipe : Option<Entity>, ingredients : &HashMap<Taxon, Vec<Entity>>) {
         self.body.reapply(gui);
         if let Some(base_recipe) = base_recipe {
-            match crafting::compute_crafting_breakdown(view, crafter, ingredients, base_recipe) {
+            match crafting::compute_crafting_breakdown(world, view, crafter, ingredients, base_recipe) {
                 Ok(breakdown) => {
                     self.reason_display.hide().reapply(gui);
                     self.craft_button.show().reapply(gui);

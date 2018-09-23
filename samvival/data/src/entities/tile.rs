@@ -261,27 +261,49 @@ impl EntityData for FoodInfo {}
 
 #[derive(Clone, Default, Debug, Serialize, Deserialize, Fields)]
 pub struct Material {
-    pub edge: i32,
-    // how well it can hold an edge
-    pub hardness: i32,
-    pub flammable: bool,
-    pub density: i32,
-    pub ductile: bool,
-    pub cordable: bool,
-    pub magnetic: bool,
+    pub edge: i32, // how well this material can hold an edge
+    pub point: i32, // how well it can hold a point
+    pub hardness: i32, // how hard it is to dint or break
+    pub flammable: bool, // whether it can burn
+    pub density: i32, // how dense it is
+    pub strength: i32, // how strong it is, how much it can support
+    pub ductile: bool, // whether it can be made into wire
+    pub cordable: bool, // whether it can be made into rope
+    pub magnetic: bool, // whether it is magnetic
     // Quality measures are relative to what their other stats would normally indicate, so
     // they are an after-the-fact modifier, not the core determinator of how good something made
     // from this will be
     pub item_quality: i32, // centered at 0, -8 is very bad quality, +8 is very good quality
     pub building_quality: i32, // as above
+    pub material_effects : Vec<MaterialEffect>, // specific effects that apply to things made from this material
 
 }
+
+#[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
+pub enum MaterialEffectSelector {
+    IngredientType(Taxon),
+    ItemType(Taxon),
+}
+#[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
+pub enum MaterialEffectType {
+    DamageBonus(EntitySelector),
+    ToHitBonus(EntitySelector),
+    WeaponAttribute(AttributeType, i32)
+}
+#[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
+pub struct MaterialEffect(pub MaterialEffectSelector, pub MaterialEffectType);
+
 
 impl EntityData for Material {}
 
 
+#[derive(Clone, Default, Debug, Serialize, Deserialize, Fields)]
+pub struct IngredientData {
+    pub effects_by_kinds : HashMap<Taxon, EffectReference>
+}
+
+
 use entities::common_entities::taxonomy;
-use entities::common_entities::taxon;
 use entities::common_entities::taxon_vec;
 use game::World;
 use game::EntityBuilder;
@@ -306,6 +328,8 @@ use entities::item::ToolData;
 use entities::time::Season;
 use entities::item::WorthData;
 use entities::item::Worth;
+use entities::attributes::AttributeType;
+use entities::attributes::attributes;
 //impl Modifier<Resources> for InitResourcesModifier {
 //    fn modify(&self, data: &mut Resources, world: &WorldView) {
 //        *data = self.resources.clone()
@@ -324,7 +348,8 @@ impl Resources {
             main.straw = EntityBuilder::new()
                 .with(Material {
                     hardness: 1,
-                    density: 1,
+                    density: 2,
+                    strength: 1,
                     flammable: true,
                     cordable: true,
                     ..Default::default()
@@ -336,11 +361,20 @@ impl Resources {
         }
 
         if main.wood.is_sentinel() {
+            let training_blade_material_effect = MaterialEffect(
+                MaterialEffectSelector::IngredientType((&taxonomy::ingredient_types::WeaponHeadIngredient).into()),
+                MaterialEffectType::WeaponAttribute(&attributes::TrainingWeapon, 1)
+            );
+
             main.wood = EntityBuilder::new()
                 .with(Material {
+                    edge: 1,
+                    point: 5,
                     hardness: 4,
                     density: 3,
+                    strength: 4,
                     flammable: true,
+                    material_effects: vec![training_blade_material_effect],
                     ..Default::default()
                 })
                 .with_creator(|world| ItemData {
@@ -372,7 +406,9 @@ impl Resources {
             main.iron = EntityBuilder::new()
                 .with(Material {
                     edge: 6,
+                    point: 6,
                     hardness: 10,
+                    strength: 10,
                     density: 6,
                     ductile: true,
                     magnetic: true,
@@ -387,8 +423,11 @@ impl Resources {
         if main.quarried_stone.is_sentinel() {
             main.quarried_stone = EntityBuilder::new()
                 .with(Material {
+                    edge : 2,
+                    point : 4,
                     hardness: 6,
                     density: 5,
+                    strength: 4,
                     item_quality : 1,
                     building_quality : 1,
                     ..Default::default()
@@ -402,7 +441,10 @@ impl Resources {
         if main.loose_stone.is_sentinel() {
             main.loose_stone = EntityBuilder::new()
                 .with(Material {
+                    edge : 1,
+                    point : 3,
                     hardness: 6,
+                    strength: 3,
                     density: 5,
                     item_quality: 0, // loose rocks are ok for making itmes out of
                     building_quality: -4, // but they're not very good for making buildings

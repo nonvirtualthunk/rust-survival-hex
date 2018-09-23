@@ -43,6 +43,7 @@ pub fn put_item_in_inventory(world: &mut World, item : Entity, inventory : Entit
                     item
                 };
 
+                println!("Setting {} to be in inventory of {} (non-stacked)", item, inventory);
                 world.modify(item, ItemData::in_inventory_of.set_to(Some(inventory)));
                 world.modify(inventory, InventoryData::items.append(item_to_add));
                 world.add_event(GameEvent::AddToInventory { item, to_inventory: inventory });
@@ -143,14 +144,23 @@ pub fn remove_item_from_inventory(world: &mut World, item : Entity, inventory : 
 
     let inv_data = view.data::<InventoryData>(inventory);
     if inv_data.items.contains(&item) {
-        if view.has_data::<ItemData>(item) { world.modify(item, ItemData::in_inventory_of.set_to(None)); }
+        if let Some(ItemData { in_inventory_of, .. }) = view.data_opt::<ItemData>(item) {
+            if in_inventory_of == &Some(inventory) {
+                println!("Item {} was in inventory of {}, removing (non-stacked)", item, inventory);
+                world.modify(item, ItemData::in_inventory_of.set_to(None));
+            }
+        }
         world.modify(inventory, InventoryData::items.remove(item));
         world.add_event(GameEvent::RemoveFromInventory { item, from_inventory: inventory });
     } else {
         for (stack_ent, stack_d) in item_stacks_in_inventory(view, inventory) {
             if stack_d.entities.contains(&item) {
                 let remove_stack = stack_d.entities.len() == 1;
-                world.modify(item, ItemData::in_inventory_of.set_to(None));
+                if let Some(ItemData { in_inventory_of, .. }) = view.data_opt::<ItemData>(item) {
+                    if in_inventory_of == &Some(inventory) {
+                        world.modify(item, ItemData::in_inventory_of.set_to(None));
+                    }
+                }
                 world.modify(stack_ent, StackData::entities.remove(item));
                 if remove_stack {
                     world.modify(inventory, InventoryData::items.remove(stack_ent));

@@ -6,6 +6,7 @@ use game::entities::combat::AttackRef;
 use action_bar::PlayerActionType;
 use game::scenario::Scenario;
 use game::universe::WorldRef;
+use messages_widget::Message;
 
 
 #[derive(Clone)]
@@ -17,6 +18,7 @@ pub enum TacticalEvents {
     CounterattackSelected(AttackRef),
     ItemTransferRequested { item : Entity, from : Vec<Entity>, to : Vec<Entity> },
     EquipItemRequested { item : Entity, equip_on : Entity },
+    DisplayMessage(Message),
     Save,
     MainMenu
 }

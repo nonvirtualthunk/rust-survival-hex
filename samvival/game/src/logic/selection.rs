@@ -52,7 +52,7 @@ impl SelectorMatches for EntitySelector {
                 logic::combat::possible_attack_refs(world, entity).iter().any(|eq| sub_selector.matches(world, eq.attack_entity))
             },
             HasSkillLevel(skill, level) => logic::skill::skill_level(world, entity, *skill) >= *level,
-            IsA(taxon) => world.data_opt::<IdentityData>(entity).filter(|i| i.kinds.any_match(|k| k.is_a(&taxon))).is_some(),
+            IsA(taxon) => world.data_opt::<IdentityData>(entity).filter(|i| i.kinds.any_match(|k| k.is_a(world, &taxon))).is_some(),
             And(a,b) => a.matches(world, entity) && b.matches(world, entity),
             Or(a,b) => a.matches(world, entity) || b.matches(world, entity),
             Any => true,

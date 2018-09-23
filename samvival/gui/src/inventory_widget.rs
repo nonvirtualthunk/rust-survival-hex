@@ -34,16 +34,18 @@ pub struct InventoryDisplayData {
     pub items: Vec<Entity>,
     pub destacked_items: Vec<Entity>,
     pub excluded_items: HashSet<Entity>,
+    pub equipped_items: HashSet<Entity>,
     pub from_entities: Vec<Entity>,
     pub equippable: bool,
     pub size: Option<u32>
 }
 impl InventoryDisplayData {
-    pub fn new<S : Into<String>>(items : Vec<Entity>, destacked_items: Vec<Entity>, excluded_items : HashSet<Entity>, name : S, from_entities : Vec<Entity>, equippable : bool, size : Option<u32>) -> InventoryDisplayData {
+    pub fn new<S : Into<String>>(items : Vec<Entity>, destacked_items: Vec<Entity>, excluded_items : HashSet<Entity>, equipped_items: HashSet<Entity>, name : S, from_entities : Vec<Entity>, equippable : bool, size : Option<u32>) -> InventoryDisplayData {
         InventoryDisplayData {
             items,
             destacked_items,
             excluded_items,
+            equipped_items,
             name : name.into(),
             from_entities,
             equippable,
@@ -56,8 +58,8 @@ impl InventoryDisplay {
     pub fn new<S : Into<String>>(main_inv_name: S, parent: &Widget) -> InventoryDisplay {
         let main_inv_name = main_inv_name.into();
         let body = Widget::div().centered().named("Inventory display parent div").parent(parent);
-        let main_inventories = InventoryDisplayWidget::new(&body);
-        let other_inventories = InventoryDisplayWidget::new(&body)
+        let main_inventories = InventoryDisplayWidget::new(&body, true);
+        let other_inventories = InventoryDisplayWidget::new(&body, true)
             .below(main_inventories.as_widget_immut(), 4.ux());
 
         InventoryDisplay {
@@ -156,6 +158,7 @@ impl InventoryDisplay {
 
 pub(crate) struct InventoryDisplayWidget {
     pub body: TabWidget,
+    show_equip_buttons : bool,
     pub inventory_lists: Vec<ListWidget<ItemNameDisplay>>,
     pub inventories : Vec<InventoryDisplayData>,
     placeholder_data : InventoryDisplayData,
@@ -199,7 +202,7 @@ impl Default for ItemNameDisplay {
 }
 
 impl InventoryDisplayWidget {
-    pub fn new(parent: &Widget) -> InventoryDisplayWidget {
+    pub fn new(parent: &Widget, show_equip_buttons : bool) -> InventoryDisplayWidget {
         let button_arch = Button::new("")
             .widget_type(WidgetType::segmented_window("ui/window/minimalist_white"))
             .font_size(FontSize::HeadingMajor)
@@ -217,12 +220,14 @@ impl InventoryDisplayWidget {
 
         InventoryDisplayWidget {
             body,
+            show_equip_buttons,
             inventory_lists : Vec::new(),
             inventories : Vec::new(),
             placeholder_data : InventoryDisplayData {
                 items : Vec::new(),
                 destacked_items : Vec::new(),
                 excluded_items : HashSet::new(),
+                equipped_items : HashSet::new(),
                 name : String::from("sentinel"),
                 from_entities : Vec::new(),
                 equippable: false,
@@ -278,23 +283,23 @@ impl InventoryDisplayWidget {
             for (inventory_list, inventory) in self.inventory_lists.iter_mut().zip(inventories.iter()) {
                 let equippable = inventory.equippable;
 
-                let all_equipped_items : HashSet<Entity> = inventory.from_entities.iter()
-                    .flat_map(|ent| world.data_opt::<EquipmentData>(*ent).map(|eq| eq.equipped.clone()).unwrap_or(Vec::new()))
-                    .collect();
+                let all_equipped_items = &inventory.equipped_items;
 
                 let empty_slots = (0 .. (inventory.size.unwrap_or(0) as i32 - inventory.items.len() as i32).as_u32_or_0()).map(|i| None);
                 let item_or_slot = inventory.items.iter().map(|i| Some(i)).chain(empty_slots).collect_vec();
+                let show_equip_buttons = self.show_equip_buttons;
                 inventory_list.update(gui, &item_or_slot, |widget, item_or_slot| {
                     if let Some(item) = item_or_slot {
                         let raw_item : Entity = **item;
 
                         let (item, count) = if let Some(stack_data) = world.data_opt::<StackData>(raw_item) {
-                            (stack_data.entities.first().cloned().unwrap_or(Entity::sentinel()), stack_data.entities.iter().filter(|e| ! inventory.excluded_items.contains(*e)).count())
+                            let num_non_excluded = stack_data.entities.iter().filter(|e| ! inventory.excluded_items.contains(*e)).count();
+                            (stack_data.entities.first().cloned().unwrap_or(Entity::sentinel()), num_non_excluded)
                         } else {
                             (raw_item,1)
                         };
 
-                        let greyed_out = count == 0 || inventory.excluded_items.contains(&item);
+                        let greyed_out = count == 0 || inventory.excluded_items.contains(&raw_item);
                         if greyed_out {
                             widget.name.set_color(Color::new(0.4,0.4,0.5,1.0));
                         } else {
@@ -309,7 +314,7 @@ impl InventoryDisplayWidget {
                             widget.name.set_showing(true).set_text("unknown entity");
                         }
                         widget.picked_up_indicator.set_showing(Some(raw_item) == selected_item);
-                        if equippable {
+                        if equippable && show_equip_buttons {
                             let text = if all_equipped_items.contains(&item) { "Unequip" } else { "Equip" };
 
                             let item_copy = item;

@@ -215,6 +215,10 @@ impl<T: EntityData> DataContainer<T> {
             entities_with_data: Vec::new(),
         }
     }
+
+//    pub fn initialize(&mut self) {
+//        entities_with_data
+//    }
 }
 impl <T: EntityData> Default for DataContainer<T> {
     fn default() -> Self {

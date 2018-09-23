@@ -886,8 +886,10 @@ impl World {
     }
 
     pub fn raw_data<T: EntityData>(&self, entity: Entity) -> &T {
-        self.raw_data_opt::<T>(entity)
-            .unwrap_or_else(|| panic!(format!("Attempted to get raw data of type {:?}, but entity {:?} had none", unsafe { std::intrinsics::type_name::<T>() }, entity)))
+        let data_container = self.data.get::<DataContainer<T>>();
+        data_container.storage.get(&entity)
+            .or_else(|| self.copy_on_write_entities.get(&entity).and_then(|cow_source| self.raw_data_opt::<T>(*cow_source)))
+            .unwrap_or(&data_container.sentinel)
     }
     pub fn raw_data_opt<T: EntityData>(&self, entity: Entity) -> Option<&T> {
         self.data.get::<DataContainer<T>>().storage.get(&entity)

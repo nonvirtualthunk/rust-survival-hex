@@ -5,7 +5,7 @@ use data::entities::combat::*;
 use std::collections::HashMap;
 use data::entities::{IdentityData, ItemArchetype};
 use data::entities::Taxon;
-use data::entities::taxon;
+
 use data::entities::taxonomy;
 use data::entities::taxonomy::attacks::*;
 
@@ -97,7 +97,7 @@ pub fn create_weapon_archetypes(world: &mut World) {
             }
             base
         })
-        .with(IdentityData::of_kind(taxon("stone longsword", &taxonomy::weapons::Longsword)))
+        .with(IdentityData::of_kind(Taxon::new(world, "stone longsword", &taxonomy::weapons::Longsword)))
         .create(world);
 
     let training_longsword = EntityBuilder::new()
@@ -112,7 +112,7 @@ pub fn create_weapon_archetypes(world: &mut World) {
             }
             base
         })
-        .with(IdentityData::of_kind(taxon("training longsword", &taxonomy::weapons::Longbow)))
+        .with(IdentityData::of_kind(Taxon::new(world, "training longsword", &taxonomy::weapons::Longsword)))
         .create(world);
 
 
@@ -170,7 +170,7 @@ pub fn create_weapon_archetypes(world: &mut World) {
             worth: Worth::medium(0),
             ..Default::default()
         })
-        .with(IdentityData::of_kind(taxon("longspear", &taxonomy::weapons::Spear)))
+        .with(IdentityData::of_kind(Taxon::new(world, "longspear", &taxonomy::weapons::Spear)))
         .create(world);
 
     let hatchet = EntityBuilder::new()
@@ -221,7 +221,7 @@ pub fn create_weapon_archetypes(world: &mut World) {
             worth: Worth::low(0),
             ..Default::default()
         })
-        .with(IdentityData::of_kind(taxon("pickaxe", &taxonomy::tools::Pickaxe)))
+        .with(IdentityData::of_kind(Taxon::new(world, "pickaxe", &taxonomy::tools::Pickaxe)))
         .create(world);
 
 
@@ -233,6 +233,7 @@ pub fn create_weapon_archetypes(world: &mut World) {
 
     let longsword_recipe = EntityBuilder::new()
         .with(Recipe::new(EntityArchetype::Archetype(longsword))
+            .name_from(&Blade)
             .with_ingredient(&Haft, EntitySelector::is_either(&Wood, &Metal), 2)
             .with_ingredient(&Blade, EntitySelector::is_one_of(vec![&Wood, &Metal, &Stone]), 3)
         ).create(world);
@@ -278,66 +279,28 @@ pub fn test_thing () {
                 let children_with_depth = catalog.self_and_child_recipes_of(*recipe);
                 println!("All children: {:?}", children_with_depth);
                 let valid_children = children_with_depth.into_iter().filter(|c| logic::crafting::is_recipe_valid_with_ingredients(view, c.recipe, &ingredients));
+                println!("All valid recipes : {:?}", valid_children.clone().collect_vec());
                 let most_specific_valid_child = valid_children.max_by_key(|c| c.depth);
 
-                println!("All valid recipes : {:?}", most_specific_valid_child);
+                println!("most specific valid recipe : {:?}", most_specific_valid_child);
             }
         }
     }
 }
 
-pub fn weapon_archetypes() -> ArchetypeLibrary {
-    let mut archetypes_by_name = HashMap::new();
-
-
-    archetypes_by_name.insert(strf("longsword"), EntityBuilder::new()
-        .with_creator(|world| ItemData {
-            attacks: vec![
-                create_attack(world, "stab", vec![&StabbingAttack, &MeleeAttack], Attack {
-                    name: strf("stab"),
-                    verb: None,
-                    attack_type: AttackType::Melee,
-                    ap_cost: 3,
-                    damage_dice: DicePool::of(1, 10),
-                    damage_bonus: 0,
-                    to_hit_bonus: 1,
-                    primary_damage_type: DamageType::Piercing,
-                    secondary_damage_type: None,
-                    range: 1,
-                    min_range: 0,
-                    ammunition_kind: None,
-                    stamina_cost: 0,
-                    pattern: HexPattern::Single,
-                }),
-                create_attack(world, "slash", vec![&SlashingAttack, &MeleeAttack], Attack {
-                    name: strf("slash"),
-                    verb: None,
-                    attack_type: AttackType::Melee,
-                    ap_cost: 4,
-                    damage_dice: DicePool::of(2, 6),
-                    damage_bonus: 1,
-                    to_hit_bonus: 0,
-                    primary_damage_type: DamageType::Slashing,
-                    secondary_damage_type: None,
-                    range: 1,
-                    min_range: 0,
-                    ammunition_kind: None,
-                    stamina_cost: 0,
-                    pattern: HexPattern::Single,
-                })],
-            ..Default::default()
-        })
-        .with(IdentityData::of_kind(taxon("longsword", &taxonomy::weapons::Sword))),
-    );
-
-//    archetypes_by_name.insert(strf("shortsword"), EntityBuilder::new()
-//        .with(ItemData {
+//pub fn weapon_archetypes() -> ArchetypeLibrary {
+//    let mut archetypes_by_name = HashMap::new();
+//
+//
+//    archetypes_by_name.insert(strf("longsword"), EntityBuilder::new()
+//        .with_creator(|world| ItemData {
 //            attacks: vec![
-//                Attack {
-//                    name: "stab",
+//                create_attack(world, "stab", vec![&StabbingAttack, &MeleeAttack], Attack {
+//                    name: strf("stab"),
+//                    verb: None,
 //                    attack_type: AttackType::Melee,
 //                    ap_cost: 3,
-//                    damage_dice: DicePool::of(1, 8),
+//                    damage_dice: DicePool::of(1, 10),
 //                    damage_bonus: 0,
 //                    to_hit_bonus: 1,
 //                    primary_damage_type: DamageType::Piercing,
@@ -345,155 +308,194 @@ pub fn weapon_archetypes() -> ArchetypeLibrary {
 //                    range: 1,
 //                    min_range: 0,
 //                    ammunition_kind: None,
-//                },
-//                Attack {
-//                    name: "slash",
+//                    stamina_cost: 0,
+//                    pattern: HexPattern::Single,
+//                }),
+//                create_attack(world, "slash", vec![&SlashingAttack, &MeleeAttack], Attack {
+//                    name: strf("slash"),
+//                    verb: None,
 //                    attack_type: AttackType::Melee,
-//                    ap_cost: 3,
-//                    damage_dice: DicePool::of(2, 4),
-//                    damage_bonus: 0,
+//                    ap_cost: 4,
+//                    damage_dice: DicePool::of(2, 6),
+//                    damage_bonus: 1,
 //                    to_hit_bonus: 0,
 //                    primary_damage_type: DamageType::Slashing,
 //                    secondary_damage_type: None,
 //                    range: 1,
 //                    min_range: 0,
 //                    ammunition_kind: None,
-//                }],
+//                    stamina_cost: 0,
+//                    pattern: HexPattern::Single,
+//                })],
 //            ..Default::default()
 //        })
-//        .with(IdentityData::of_kind(taxon("shortsword", &taxonomy::Sword))),
+//        .with(IdentityData::of_kind(Taxon::new(world, "longsword", &taxonomy::weapons::Sword))),
 //    );
-
-    archetypes_by_name.insert(strf("longspear"), EntityBuilder::new()
-        .with_creator(|world| ItemData {
-            attacks: vec![
-                create_attack(world, "stab", vec![&StabbingAttack, &ReachAttack], Attack {
-                    name: strf("stab"),
-                    verb: None,
-                    attack_type: AttackType::Reach,
-                    ap_cost: 5,
-                    damage_dice: DicePool::of(1, 10),
-                    damage_bonus: 2,
-                    to_hit_bonus: 0,
-                    primary_damage_type: DamageType::Piercing,
-                    secondary_damage_type: None,
-                    range: 2,
-                    min_range: 2,
-                    ammunition_kind: None,
-                    stamina_cost: 0,
-                    pattern: HexPattern::Single,
-                }),
-                create_attack(world, "smack", vec![&BludgeoningAttack, &MeleeAttack], Attack {
-                    name: strf("smack"),
-                    verb: None,
-                    attack_type: AttackType::Melee,
-                    ap_cost: 3,
-                    damage_dice: DicePool::of(1, 4),
-                    damage_bonus: 0,
-                    to_hit_bonus: 1,
-                    primary_damage_type: DamageType::Bludgeoning,
-                    secondary_damage_type: None,
-                    range: 1,
-                    min_range: 0,
-                    ammunition_kind: None,
-                    stamina_cost: 0,
-                    pattern: HexPattern::Single,
-                }),
-                create_attack(world, "throw", vec![&ThrownAttack, &PiercingAttack], Attack {
-                    name: strf("throw"),
-                    verb: Some(strf("throw your spear at")),
-                    attack_type: AttackType::Thrown,
-                    ap_cost: 4,
-                    damage_dice: DicePool::of(1, 12),
-                    damage_bonus: 2,
-                    to_hit_bonus: -1,
-                    primary_damage_type: DamageType::Piercing,
-                    secondary_damage_type: None,
-                    range: 4,
-                    min_range: 2,
-                    ammunition_kind: None,
-                    stamina_cost: 0,
-                    pattern: HexPattern::Single,
-                })],
-            ..Default::default()
-        })
-        .with(IdentityData::of_kind(taxon("longspear", &taxonomy::weapons::Spear))),
-    );
-
-    archetypes_by_name.insert(strf("hatchet"), EntityBuilder::new()
-        .with_creator(|world| ItemData {
-            attacks: vec![
-                create_attack(world, "chop", vec![&SlashingAttack], Attack {
-                    name: strf("chop"),
-                    verb: None,
-                    attack_type: AttackType::Melee,
-                    ap_cost: 4,
-                    damage_dice: DicePool::of(1, 4),
-                    damage_bonus: 2,
-                    to_hit_bonus: 0,
-                    primary_damage_type: DamageType::Slashing,
-                    ..Default::default()
-                })],
-            ..Default::default()
-        })
-        .with(ToolData {
-            tool_harvest_fixed_bonus: 1,
-            tool_speed_bonus: 1,
-            tool_harvest_dice_bonus: DicePool::none(),
-        })
-        .with(IdentityData::of_kind(taxon("hatchet", &taxonomy::tools::ToolAxe))),
-    );
-
-
-    archetypes_by_name.insert(strf("pickaxe"), EntityBuilder::new()
-        .with_creator(|world| ItemData {
-            attacks: vec![
-                create_attack(world, "stab", vec![&StabbingAttack, &ImprovisedAttack], Attack {
-                    name: strf("stab"),
-                    verb: None,
-                    attack_type: AttackType::Melee,
-                    ap_cost: 8,
-                    damage_dice: DicePool::of(1, 10),
-                    damage_bonus: 1,
-                    to_hit_bonus: 0,
-                    primary_damage_type: DamageType::Piercing,
-                    ..Default::default()
-                })],
-            ..Default::default()
-        })
-        .with(ToolData {
-            tool_harvest_fixed_bonus: 0,
-            tool_speed_bonus: 1,
-            tool_harvest_dice_bonus: DicePool::of(1, 2),
-        })
-        .with(IdentityData::of_kind(taxon("pickaxe", &taxonomy::tools::Pickaxe))),
-    );
-
-    let default = EntityBuilder::new()
-        .with_creator(|world| ItemData {
-            attacks: vec![
-                create_attack(world, "default", vec![&taxonomy::Attack], Attack {
-                    name: strf("default"),
-                    verb: None,
-                    attack_type: AttackType::Melee,
-                    ap_cost: 3,
-                    damage_dice: DicePool::of(1, 6),
-                    damage_bonus: 0,
-                    to_hit_bonus: 0,
-                    primary_damage_type: DamageType::Piercing,
-                    secondary_damage_type: None,
-                    range: 1,
-                    min_range: 0,
-                    ammunition_kind: None,
-                    stamina_cost: 0,
-                    pattern: HexPattern::Single,
-                })],
-            ..Default::default()
-        })
-        .with(IdentityData::of_kind(taxon("default", &taxonomy::Weapon)));
-
-    ArchetypeLibrary {
-        archetypes_by_name,
-        default,
-    }
-}
+//
+////    archetypes_by_name.insert(strf("shortsword"), EntityBuilder::new()
+////        .with(ItemData {
+////            attacks: vec![
+////                Attack {
+////                    name: "stab",
+////                    attack_type: AttackType::Melee,
+////                    ap_cost: 3,
+////                    damage_dice: DicePool::of(1, 8),
+////                    damage_bonus: 0,
+////                    to_hit_bonus: 1,
+////                    primary_damage_type: DamageType::Piercing,
+////                    secondary_damage_type: None,
+////                    range: 1,
+////                    min_range: 0,
+////                    ammunition_kind: None,
+////                },
+////                Attack {
+////                    name: "slash",
+////                    attack_type: AttackType::Melee,
+////                    ap_cost: 3,
+////                    damage_dice: DicePool::of(2, 4),
+////                    damage_bonus: 0,
+////                    to_hit_bonus: 0,
+////                    primary_damage_type: DamageType::Slashing,
+////                    secondary_damage_type: None,
+////                    range: 1,
+////                    min_range: 0,
+////                    ammunition_kind: None,
+////                }],
+////            ..Default::default()
+////        })
+////        .with(IdentityData::of_kind(taxon("shortsword", &taxonomy::Sword))),
+////    );
+//
+//    archetypes_by_name.insert(strf("longspear"), EntityBuilder::new()
+//        .with_creator(|world| ItemData {
+//            attacks: vec![
+//                create_attack(world, "stab", vec![&StabbingAttack, &ReachAttack], Attack {
+//                    name: strf("stab"),
+//                    verb: None,
+//                    attack_type: AttackType::Reach,
+//                    ap_cost: 5,
+//                    damage_dice: DicePool::of(1, 10),
+//                    damage_bonus: 2,
+//                    to_hit_bonus: 0,
+//                    primary_damage_type: DamageType::Piercing,
+//                    secondary_damage_type: None,
+//                    range: 2,
+//                    min_range: 2,
+//                    ammunition_kind: None,
+//                    stamina_cost: 0,
+//                    pattern: HexPattern::Single,
+//                }),
+//                create_attack(world, "smack", vec![&BludgeoningAttack, &MeleeAttack], Attack {
+//                    name: strf("smack"),
+//                    verb: None,
+//                    attack_type: AttackType::Melee,
+//                    ap_cost: 3,
+//                    damage_dice: DicePool::of(1, 4),
+//                    damage_bonus: 0,
+//                    to_hit_bonus: 1,
+//                    primary_damage_type: DamageType::Bludgeoning,
+//                    secondary_damage_type: None,
+//                    range: 1,
+//                    min_range: 0,
+//                    ammunition_kind: None,
+//                    stamina_cost: 0,
+//                    pattern: HexPattern::Single,
+//                }),
+//                create_attack(world, "throw", vec![&ThrownAttack, &PiercingAttack], Attack {
+//                    name: strf("throw"),
+//                    verb: Some(strf("throw your spear at")),
+//                    attack_type: AttackType::Thrown,
+//                    ap_cost: 4,
+//                    damage_dice: DicePool::of(1, 12),
+//                    damage_bonus: 2,
+//                    to_hit_bonus: -1,
+//                    primary_damage_type: DamageType::Piercing,
+//                    secondary_damage_type: None,
+//                    range: 4,
+//                    min_range: 2,
+//                    ammunition_kind: None,
+//                    stamina_cost: 0,
+//                    pattern: HexPattern::Single,
+//                })],
+//            ..Default::default()
+//        })
+//        .with(IdentityData::of_kind(taxon("longspear", &taxonomy::weapons::Spear))),
+//    );
+//
+//    archetypes_by_name.insert(strf("hatchet"), EntityBuilder::new()
+//        .with_creator(|world| ItemData {
+//            attacks: vec![
+//                create_attack(world, "chop", vec![&SlashingAttack], Attack {
+//                    name: strf("chop"),
+//                    verb: None,
+//                    attack_type: AttackType::Melee,
+//                    ap_cost: 4,
+//                    damage_dice: DicePool::of(1, 4),
+//                    damage_bonus: 2,
+//                    to_hit_bonus: 0,
+//                    primary_damage_type: DamageType::Slashing,
+//                    ..Default::default()
+//                })],
+//            ..Default::default()
+//        })
+//        .with(ToolData {
+//            tool_harvest_fixed_bonus: 1,
+//            tool_speed_bonus: 1,
+//            tool_harvest_dice_bonus: DicePool::none(),
+//        })
+//        .with(IdentityData::of_kind(taxon("hatchet", &taxonomy::tools::ToolAxe))),
+//    );
+//
+//
+//    archetypes_by_name.insert(strf("pickaxe"), EntityBuilder::new()
+//        .with_creator(|world| ItemData {
+//            attacks: vec![
+//                create_attack(world, "stab", vec![&StabbingAttack, &ImprovisedAttack], Attack {
+//                    name: strf("stab"),
+//                    verb: None,
+//                    attack_type: AttackType::Melee,
+//                    ap_cost: 8,
+//                    damage_dice: DicePool::of(1, 10),
+//                    damage_bonus: 1,
+//                    to_hit_bonus: 0,
+//                    primary_damage_type: DamageType::Piercing,
+//                    ..Default::default()
+//                })],
+//            ..Default::default()
+//        })
+//        .with(ToolData {
+//            tool_harvest_fixed_bonus: 0,
+//            tool_speed_bonus: 1,
+//            tool_harvest_dice_bonus: DicePool::of(1, 2),
+//        })
+//        .with(IdentityData::of_kind(taxon("pickaxe", &taxonomy::tools::Pickaxe))),
+//    );
+//
+//    let default = EntityBuilder::new()
+//        .with_creator(|world| ItemData {
+//            attacks: vec![
+//                create_attack(world, "default", vec![&taxonomy::Attack], Attack {
+//                    name: strf("default"),
+//                    verb: None,
+//                    attack_type: AttackType::Melee,
+//                    ap_cost: 3,
+//                    damage_dice: DicePool::of(1, 6),
+//                    damage_bonus: 0,
+//                    to_hit_bonus: 0,
+//                    primary_damage_type: DamageType::Piercing,
+//                    secondary_damage_type: None,
+//                    range: 1,
+//                    min_range: 0,
+//                    ammunition_kind: None,
+//                    stamina_cost: 0,
+//                    pattern: HexPattern::Single,
+//                })],
+//            ..Default::default()
+//        })
+//        .with(IdentityData::of_kind(taxon("default", &taxonomy::Weapon)));
+//
+//    ArchetypeLibrary {
+//        archetypes_by_name,
+//        default,
+//    }
+//}

@@ -4,7 +4,6 @@ pub use data::entities::character::CharacterData;
 pub use data::entities::character::CharacterStore;
 pub use data::entities::Taxon;
 pub use data::entities::taxonomy;
-pub use data::entities::taxon;
 pub use data::entities::IdentityData;
 pub use data::entities::IdentityDataStore;
 

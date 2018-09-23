@@ -40,6 +40,7 @@ pub struct Recipe {
     // i.e. MithrilDoomAxe -> DoomAxe -> Axe, so we can choose the most specific recipe
     pub parent_recipe: Option<Entity>,
     pub ingredients_by_kind: HashMap<Taxon, Ingredient>,
+    pub name_from_ingredient : Option<Taxon>,
     pub result: EntityArchetype,
     pub tools_used: Vec<(EntitySelector, RecipeToolUse)>,
     pub skills_used : Vec<SkillUse>,
@@ -65,6 +66,7 @@ impl Recipe {
     pub fn new(result : EntityArchetype) -> Recipe {
         Recipe {
             parent_recipe : None,
+            name_from_ingredient : None,
             ingredients_by_kind : HashMap::new(),
             result,
             skills_used : Vec::new(),
@@ -75,11 +77,17 @@ impl Recipe {
     pub fn new_child(result : EntityArchetype, parent : Entity) -> Recipe {
         Recipe {
             parent_recipe : Some(parent),
+            name_from_ingredient : None,
             ingredients_by_kind : HashMap::new(),
             result,
             skills_used : Vec::new(),
             tools_used: Vec::new(),
         }
+    }
+
+    pub fn name_from<T : Into<Taxon>>(mut self, ingredient_type : T) -> Self {
+        self.name_from_ingredient = Some(ingredient_type.into());
+        self
     }
 
     pub fn effective_ingredients_by_kind(&self, view: &WorldView) -> HashMap<Taxon, Ingredient> {

@@ -3,7 +3,7 @@ use prelude::*;
 
 //use data::entities::ItemArchetype;
 use data::entities::recipes::*;
-use data::entities::{ItemArchetype, ItemData, Attack, WorthData, StackData};
+use data::entities::{ItemArchetype, ItemData, Attack, WorthData, StackData, DamageType, Material};
 use data::archetype::EntityArchetype;
 use logic;
 use std::collections::HashMap;
@@ -54,7 +54,7 @@ pub fn can_entity_craft_recipe(view: &WorldView, crafter : Entity, recipe : Enti
     Ok(())
 }
 
-pub fn compute_crafting_breakdown(view : &WorldView, crafter: Entity, ingredients : &HashMap<Taxon, Vec<Entity>>, base_recipe : Entity) -> Result<CraftingBreakdown, String> {
+pub fn compute_crafting_breakdown(world : &mut World, view : &WorldView, crafter: Entity, ingredients : &HashMap<Taxon, Vec<Entity>>, base_recipe : Entity) -> Result<CraftingBreakdown, String> {
     let recipe_catalog = RecipeCatalogView::of(view);
     let children_with_depth = recipe_catalog.self_and_child_recipes_of(base_recipe);
     let valid_children = children_with_depth.into_iter().filter(|c| is_recipe_valid_with_ingredients(view, c.recipe, &ingredients));
@@ -66,11 +66,44 @@ pub fn compute_crafting_breakdown(view : &WorldView, crafter: Entity, ingredient
 
         if let EntityArchetype::Archetype(archetype_entity) = recipe_dat.result {
             if let Some(item_arch) = view.data_opt::<ItemArchetype>(archetype_entity) {
-                let arch = item_arch.clone();
+                let mut arch = item_arch.clone();
+                let mut ident = view.data::<IdentityData>(archetype_entity).clone();
+                if let Some(name_from) = &recipe_dat.name_from_ingredient {
+                    if let Taxon::ConstTaxonRef { reference } = ident.main_kind() {
+                        if let Some(ingredient) = ingredients.get(&name_from).and_then(|e| e.first().cloned()) {
+                            let ingredient_name = view.identity(ingredient).main_kind().name();
+                            let new_main_kind = Taxon::new(world, format!("{} {}", ingredient_name, reference.name()), *reference);
+                            ident.replace_main_kind(new_main_kind);
+                        }
+                    } else {
+                        warn!("Encountered a situation in which we want to create a child of a runtime taxon, time to figure that out");
+                    }
+                }
 
                 // TODO: perform per-material modifications here
+                for (ingredient_type, ingredient_list) in ingredients {
+                    if let Some(ingredient) = ingredient_list.first() {
+                        let material_info = view.data_opt::<Material>(*ingredient);
+                        if let Some(material_info) = material_info {
+                            for (_,attack) in &mut arch.attacks {
+                                if ingredient_type.is_a(view, &taxonomy::ingredient_types::WeaponHeadIngredient) {
+                                    match attack.primary_damage_type {
+                                        DamageType::Slashing => attack.damage_bonus += material_info.edge - 5,
+                                        DamageType::Bludgeoning => attack.damage_bonus += (material_info.hardness + material_info.density)/2 - 5,
+                                        DamageType::Piercing => attack.damage_bonus += material_info.point - 5,
+                                        _ => () // do nothing
+                                    }
+                                } else if ingredient_type.is_a(view, &taxonomy::ingredient_types::HandleIngredient) {
+                                    // if it's strong relative to its weight, give a bonus to hit, otherwise a penalty
+                                    attack.to_hit_bonus += (material_info.strength - material_info.density) / 2;
+                                }
+                            }
+                        }
+                    }
+                }
 
-                let breakdown = CraftingBreakdown { recipe, effective_archetype : arch, result_identity : view.data::<IdentityData>(archetype_entity).clone() };
+
+                let breakdown = CraftingBreakdown { recipe, effective_archetype : arch, result_identity : ident };
                 Ok(breakdown)
             } else { Err(strf("non-item archetype based recipes not yet supported")) }
         } else { Err(strf("non-archetype based recipes not yet supported")) }
@@ -86,10 +119,15 @@ pub fn compute_crafting_breakdown(view : &WorldView, crafter: Entity, ingredient
 }
 
 pub fn craft(world : &mut World, crafter : Entity, ingredients : &HashMap<Taxon, Vec<Entity>>, base_recipe : Entity) -> Result<Entity, String> {
-    let breakdown = compute_crafting_breakdown(world.view(), crafter, ingredients, base_recipe)?;
+    let breakdown = compute_crafting_breakdown(world, world.view(), crafter, ingredients, base_recipe)?;
 
     let crafted = create_item_from_archetype(world, &breakdown.effective_archetype, &breakdown.result_identity);
 
+    for ingredient_list in ingredients.values() {
+        for ingredient in ingredient_list {
+            logic::item::destroy_item(world, *ingredient);
+        }
+    }
 
 
     Ok(crafted)

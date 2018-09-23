@@ -120,7 +120,7 @@ fn animate_attack(world_view: &WorldView, attacker: Entity, defenders: &Vec<Enti
                     let dist: f64 = raw_delta.magnitude_s() as f64;
 
                     let ident = world_view.data::<IdentityData>(weapon);
-                    let item_image = ItemRenderer::image_for(resources, &ident.main_kind());
+                    let item_image = ItemRenderer::image_for(world_view, resources, &ident.main_kind());
 
                     let baseline_rotation = consts::PI / 4.0;
                     let rotation = f64::atan2(delta.y as f64, delta.x as f64);
@@ -169,7 +169,7 @@ fn animate_attack(world_view: &WorldView, attacker: Entity, defenders: &Vec<Enti
                     let delta = raw_delta.normalize_s() * 0.5;
                     let dist: f64 = raw_delta.magnitude_s() as f64;
 
-                    let item_image = ItemRenderer::image_for(resources, projectile_kind);
+                    let item_image = ItemRenderer::image_for(world_view, resources, projectile_kind);
 
                     let baseline_rotation = consts::PI / 4.0;
                     let rotation = f64::atan2(delta.y as f64, delta.x as f64);

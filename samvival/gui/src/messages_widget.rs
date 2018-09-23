@@ -11,6 +11,7 @@ use std::time::Duration;
 use std::time::Instant;
 use std::collections::VecDeque;
 
+#[derive(Clone)]
 pub struct Message {
     text : String,
     color : Color,

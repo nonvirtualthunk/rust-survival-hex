@@ -40,12 +40,17 @@ impl ItemRenderer {
             // so it is acting as an entity of its own
             if let Some(in_inventory) = item_data.in_inventory_of {
                 if world.has_data::<TileData>(in_inventory) {
+                    println!("Item in tile inventory, will draw");
                     self.items_to_draw.push(*id);
                 }
             } else if world.has_data::<PositionData>(*id) {
+                println!("Pushing item to draw on its own");
                 self.items_to_draw.push(*id);
             }
         }
+//        for (id, stack_data) in world.entities_with_data::<StackData>() {
+//
+//        }
     }
 
     pub fn draw_at(world: &WorldView, item : Entity) -> Option<AxialCoord> {
@@ -58,7 +63,7 @@ impl ItemRenderer {
         }
     }
 
-    pub fn image_for(resources : &mut GraphicsResources, kind : &Taxon) -> ImageIdentifier {
+    pub fn image_for(view : &WorldView, resources : &mut GraphicsResources, kind : &Taxon) -> ImageIdentifier {
         let mut taxon_queue = VecDeque::new();
         taxon_queue.push_front(kind);
 
@@ -68,7 +73,7 @@ impl ItemRenderer {
                 if resources.is_valid_texture(image_ident.clone()) {
                     return image_ident;
                 } else {
-                    for parent in taxon.parents() {
+                    for parent in taxon.parents(view) {
                         taxon_queue.push_front(parent);
                     }
                 }
@@ -78,7 +83,7 @@ impl ItemRenderer {
         strf("entities/items/default")
     }
 
-    pub fn cached_image_for(item_images_by_taxon : &mut HashMap<Taxon, ImageIdentifier>, resources : &mut GraphicsResources, ident_data : &IdentityData) -> ImageIdentifier {
+    pub fn cached_image_for(view : &WorldView, item_images_by_taxon : &mut HashMap<Taxon, ImageIdentifier>, resources : &mut GraphicsResources, ident_data : &IdentityData) -> ImageIdentifier {
         if let Some(item_image) = item_images_by_taxon.get(ident_data.main_kind()) {
             item_image.clone()
         } else {
@@ -92,7 +97,7 @@ impl ItemRenderer {
                         item_images_by_taxon.insert(ident_data.main_kind().clone(), image_ident.clone());
                         return image_ident;
                     } else {
-                        for parent in taxon.parents() {
+                        for parent in taxon.parents(view) {
                             taxon_queue.push_front(parent);
                         }
                     }
@@ -106,6 +111,7 @@ impl ItemRenderer {
     pub fn render_items(&mut self, world: &WorldView, resources : &mut GraphicsResources, _bounds : Rect<f32>) -> DrawList {
         if self.cached_game_time != Some(world.current_time) {
             self.identify_relevant_entities(world);
+            self.cached_game_time = Some(world.current_time);
         }
 
         let mut quads : Vec<Quad> = vec![];
@@ -119,7 +125,7 @@ impl ItemRenderer {
             // Main item display
             if let Some(pos) = ItemRenderer::draw_at(world, ent) {
                 let pos = pos.as_cart_vec();
-                let img = ItemRenderer::cached_image_for(&mut self.item_images_by_taxon, resources, ident_data);
+                let img = ItemRenderer::cached_image_for(world, &mut self.item_images_by_taxon, resources, ident_data);
                 let quad = Quad::new(img, pos.0).centered().color(graphics_data.color);
                 quads.push(quad);
             } else {

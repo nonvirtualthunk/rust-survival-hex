@@ -23,6 +23,8 @@ use item_display_widget::ItemDisplayWidget;
 use crafting_widget::crafting_output_widget::CraftingOutputWidget;
 use crafting_widget::ingredient_assignment_widget::*;
 use std::collections::HashSet;
+use control_events::TacticalEvents;
+use messages_widget::Message;
 
 #[derive(Clone,Debug)]
 pub(crate) enum CraftWidgetInternalEvent {
@@ -57,10 +59,10 @@ impl CraftingWidget {
             .height(50.ux())
             .position(0.px(), 0.px());
 
-        let inventory_widget = InventoryDisplayWidget::new(&body)
+        let inventory_widget = InventoryDisplayWidget::new(&body, false)
             .width(Sizing::match_parent())
             .height(28.ux())
-            .below(&recipe_selector, 1.ux());
+            .align_bottom();
 
         let output_widget = CraftingOutputWidget::new()
             .parent(&body)
@@ -87,18 +89,26 @@ impl CraftingWidget {
         }
     }
 
-    pub fn toggle(&mut self, view : &WorldView, gui : &mut GUI) {
+    pub fn toggle(&mut self, view : &WorldView, gui : &mut GUI) -> bool {
         self.body.reapply(gui);
 
         self.recipe_selector.update(view, gui);
         if self.body.showing {
             self.body.hide().reapply(gui);
+            false
         } else {
             self.body.show().reapply(gui);
+            true
         }
     }
 
-    pub fn update(&mut self, view : &WorldView, gui : &mut GUI, game_state : &GameState, control : &mut ControlContext) {
+    pub fn is_showing(&self) -> bool {
+        self.body.showing
+    }
+
+    pub fn update(&mut self, world : &mut World, gui : &mut GUI, game_state : &GameState, control_context : &mut ControlContext) {
+        let view = world.view();
+
         self.body.reapply(gui);
 
         if let Some(selected) = game_state.selected_character {
@@ -106,7 +116,7 @@ impl CraftingWidget {
             let items = &inv_data.items;
             let all_assigned_items : HashSet<Entity> = self.ingredient_assignments.values().flat_map(|v| v.iter().cloned()).collect();
             let destacked = item::items_in_inventory(view, selected);
-            let main_inv = vec![InventoryDisplayData::new(items.clone(), destacked, all_assigned_items, "Character Inventory", vec![selected], true, inv_data.inventory_size)];
+            let main_inv = vec![InventoryDisplayData::new(items.clone(), destacked, all_assigned_items, HashSet::new(), "Character Inventory", vec![selected], true, inv_data.inventory_size)];
 
             self.inventory_widget.update(gui, view, &main_inv, self.selected_item);
 
@@ -144,11 +154,18 @@ impl CraftingWidget {
                     self.selected_base_recipe = None;
                     self.ingredient_assignments.clear();
                 } else if let Some(CraftWidgetInternalEvent::Craft) = evt.as_custom_event_no_origin() {
-                    println!("PERFORM CRAFT HERE");
+                    if let Some(recipe) = self.selected_base_recipe {
+                        match crafting::craft(world, selected, &self.ingredient_assignments, recipe) {
+                            Ok(crafted_entity) =>  {
+                                item::put_item_in_inventory(world, crafted_entity, selected);
+                            },
+                            Err(err_str) => control_context.trigger_event(TacticalEvents::DisplayMessage(Message::new(err_str)))
+                        }
+                    } else { warn!("Craft operation requested without a selected recipe, which is weird") }
                 }
             }
 
-            self.output_widget.update(view, gui, selected, self.selected_base_recipe, &self.ingredient_assignments);
+            self.output_widget.update(world, view, gui, selected, self.selected_base_recipe, &self.ingredient_assignments);
         }
     }
 

@@ -165,8 +165,8 @@ pub fn generate(world : &mut World, radius: i32) -> Vec<EntityBuilder> {
                 let tile = EntityBuilder::new()
                     .with(tile_data)
                     .with(terrain_data)
-                    .with_opt(vegetation_data)
-                    .with(InventoryData::default());
+                    .with_opt(vegetation_data);
+//                    .with(InventoryData::default());
                 ret.push(tile);
             }
         }

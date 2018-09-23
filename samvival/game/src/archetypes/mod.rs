@@ -1,6 +1,6 @@
 pub mod weapons;
 
-pub use archetypes::weapons::weapon_archetypes;
+//pub use archetypes::weapons::weapon_archetypes;
 
 pub mod characters;
 

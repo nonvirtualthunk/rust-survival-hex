@@ -86,6 +86,15 @@ impl Scenario for FirstEverScenario {
             logic::item::put_item_in_inventory(world, bow, archer);
             logic::item::equip_item(world, bow, archer, true);
 
+            let resources = world.view().world_data::<Resources>();
+            for i in 0..5 {
+                let iron = world.clone_entity(resources.main.iron);
+                world.attach_data::<EntityMetadata>(iron, EntityMetadata {archetype : resources.main.iron});
+                world.add_event(GameEvent::EntityCreated { entity : iron });
+                logic::item::put_item_in_inventory(world, iron, archer);
+            }
+
+
             world.modify_with_desc(archer, CombatData::ranged_accuracy_bonus.add(1), "well rested");
             world.modify_with_desc(archer, CombatData::ranged_accuracy_bonus.add(3), "careful aim");
 
@@ -186,7 +195,7 @@ impl Scenario for FirstEverScenario {
                             turns_between_spawns: 4,
                         }]
                 })
-                .with(IdentityData::of_kind(taxon("summoning stone", &taxonomy::Monster)))
+                .with_creator(|world|IdentityData::of_kind(Taxon::new(world, "summoning stone", &taxonomy::Monster)))
                 .create(world);
             logic::movement::place_entity_in_world(world, spawner, AxialCoord::new(10, 0));
 

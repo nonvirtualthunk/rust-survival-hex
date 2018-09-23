@@ -63,7 +63,7 @@ impl HarvestableSummary {
     pub fn update(&mut self, view: &WorldView, graphics: &mut GraphicsResources, breakdown: &HarvestBreakdown, greyed_out: bool) {
         let harvestable_data = view.data::<Harvestable>(breakdown.harvestable);
         let resource_ident = view.data::<IdentityData>(breakdown.resource);
-        let resource_img = ItemRenderer::image_for(graphics, resource_ident.main_kind());
+        let resource_img = ItemRenderer::image_for(view, graphics, resource_ident.main_kind());
         self.resource_icon.set_widget_type(WidgetType::image(resource_img));
         self.action_description.set_text(harvestable_data.action_name.capitalized());
 

@@ -90,7 +90,7 @@ pub fn character_archetypes() -> ArchetypeLibrary {
         .with(EquipmentData::default())
         .with(GraphicsData::default())
         .with(PositionData::default())
-        .with(IdentityData::of_kind(taxon("mud monster", &taxonomy::Monster))),
+        .with_creator(|world| IdentityData::of_kind(Taxon::new(world, "mud monster", &taxonomy::Monster))),
     );
 
     ArchetypeLibrary {
