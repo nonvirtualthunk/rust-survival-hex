@@ -7,7 +7,6 @@
 #![allow(dead_code)]
 #![allow(non_upper_case_globals)]
 
-#![feature(extern_prelude)]
 #![feature(const_fn)]
 #![feature(type_ascription)]
 #![feature(const_vec_new)]

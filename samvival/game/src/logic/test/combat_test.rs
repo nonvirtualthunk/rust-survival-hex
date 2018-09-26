@@ -13,6 +13,9 @@ use data::entities::combat::DerivedAttackData;
 use data::entities::selectors::EntitySelector;
 use data::entities::taxonomy;
 use data::entities::combat::*;
+use data::entities::Catalog;
+use data::entities::{ItemArchetype};
+use archetypes::weapons::create_weapon_archetypes;
 
 
 #[test]
@@ -36,9 +39,11 @@ pub fn test_basic_equip_and_select_attack() {
             assert_that(&primary_attack).matching_contains(|p| natural_attacks.contains(&p.attack_entity));
         }
 
+        let item_catalog = Catalog::of::<ItemArchetype>(world.view(), Entity::sentinel());
+
 
         // give the character a spear, now that should be part of the attacks
-        let spear = weapon_archetypes().with_name("longspear").create(world);
+        let spear = logic::crafting::craft_without_materials(world, item_catalog.entity_with_name("longspear"));
         logic::item::put_item_in_inventory(world, spear, character);
         logic::item::equip_item(world, spear, character, true);
 
@@ -81,8 +86,11 @@ pub fn test_derived_attack() {
         let view = world.view();
         let character = character_archetypes().with_name("human").create(world);
 
+        let item_catalog = Catalog::of::<ItemArchetype>(world.view(), Entity::sentinel());
+
+
         // give the character a spear, now that should be part of the attacks
-        let spear = weapon_archetypes().with_name("longspear").create(world);
+        let spear = logic::crafting::craft_without_materials(world, item_catalog.entity_with_name("longspear"));
         logic::item::put_item_in_inventory(world, spear, character);
         logic::item::equip_item(world, spear, character, true);
 

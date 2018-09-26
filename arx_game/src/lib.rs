@@ -7,7 +7,6 @@
 #![feature(get_type_id)]
 #![feature(core_intrinsics)]
 #![feature(box_syntax)]
-#![feature(extern_prelude)]
 #![feature(const_fn)]
 #![feature(type_ascription)]
 #![feature(nll)]

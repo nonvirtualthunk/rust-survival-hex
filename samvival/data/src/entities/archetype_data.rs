@@ -1,6 +1,6 @@
 use common::prelude::*;
 
-use entities::{IdentityData, Attack, ToolData};
+use entities::{IdentityData, Attack, ToolData, AttributeData};
 use game::prelude::*;
 use game::EntityData;
 use entities::selectors::EntitySelector;
@@ -21,6 +21,7 @@ pub struct ItemArchetype {
     pub stack_with : StackWith,
     pub worth : Worth,
     pub tool_data : Option<ToolData>,
+    pub attributes : AttributeData,
 }
 impl EntityData for ItemArchetype {}
 
@@ -33,6 +34,7 @@ impl Default for ItemArchetype {
             stack_with : StackWith::SameArchetype,
             worth : Worth::low(-1),
             tool_data : None,
+            attributes : AttributeData::default(),
         }
     }
 }

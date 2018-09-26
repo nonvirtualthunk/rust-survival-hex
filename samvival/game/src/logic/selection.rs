@@ -10,6 +10,10 @@ use game::prelude::*;
 pub trait SelectorMatches {
     fn matches(&self, world: &WorldView, entity: Entity) -> bool;
 
+    fn matches_attack(&self, view : &WorldView, attack: &Attack) -> bool;
+
+    fn matches_identity(&self, view : &WorldView, ident: &IdentityData) -> bool;
+
     fn matches_any(&self, world: &WorldView, entities: &Vec<Entity>) -> bool {
         entities.iter().any(|e| self.matches(world, *e))
     }
@@ -57,6 +61,25 @@ impl SelectorMatches for EntitySelector {
             Or(a,b) => a.matches(world, entity) || b.matches(world, entity),
             Any => true,
             None => false,
+        }
+    }
+
+    fn matches_attack(&self, view : &WorldView, attack: &Attack) -> bool {
+        match self {
+            And(a,b) => a.matches_attack(view, attack) && b.matches_attack(view, attack),
+            Or(a,b) => a.matches_attack(view, attack) || b.matches_attack(view, attack),
+            Any => true,
+            _ => false
+        }
+    }
+
+    fn matches_identity(&self, view : &WorldView, ident: &IdentityData) -> bool {
+        match self {
+            IsA(taxon) => ident.kinds.any_match(|k| k.is_a(view, taxon)),
+            And(a,b) => a.matches_identity(view, ident) && b.matches_identity(view, ident),
+            Or(a,b) => a.matches_identity(view, ident) || b.matches_identity(view, ident),
+            Any => true,
+            _ => false,
         }
     }
 }

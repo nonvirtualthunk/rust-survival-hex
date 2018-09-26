@@ -6,6 +6,7 @@ use data::entities::faction::FactionData;
 use data::entities::time::TurnData;
 use data::entities::tile::TileData;
 use game::DebugData;
+use archetypes::weapons::create_weapon_archetypes;
 
 
 pub struct Testbed {
@@ -29,6 +30,8 @@ pub fn in_testbed<F : Fn(&mut World, Testbed)>(func : F) {
 
 pub fn in_custom_testbed<F : Fn(&mut World, Testbed)>(config : TestbedConfig, func : F) {
     let mut world = create_world();
+
+    create_weapon_archetypes(&mut world);
 
     for tile in terrain::generator::generate(&mut world, config.map_radius) {
         let tile = tile.with(DebugData { name : strf("world tile") }).create(&mut world);

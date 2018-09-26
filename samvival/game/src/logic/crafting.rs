@@ -3,7 +3,7 @@ use prelude::*;
 
 //use data::entities::ItemArchetype;
 use data::entities::recipes::*;
-use data::entities::{ItemArchetype, ItemData, Attack, WorthData, StackData, DamageType, Material};
+use data::entities::{ItemArchetype, ItemData, Attack, WorthData, StackData, DamageType, Material, MaterialEffectSelector, MaterialEffect, MaterialEffectType};
 use data::archetype::EntityArchetype;
 use logic;
 use std::collections::HashMap;
@@ -80,7 +80,7 @@ pub fn compute_crafting_breakdown(world : &mut World, view : &WorldView, crafter
                     }
                 }
 
-                // TODO: perform per-material modifications here
+
                 for (ingredient_type, ingredient_list) in ingredients {
                     if let Some(ingredient) = ingredient_list.first() {
                         let material_info = view.data_opt::<Material>(*ingredient);
@@ -98,9 +98,22 @@ pub fn compute_crafting_breakdown(world : &mut World, view : &WorldView, crafter
                                     attack.to_hit_bonus += (material_info.strength - material_info.density) / 2;
                                 }
                             }
+
+                            for MaterialEffect(condition, effect) in &material_info.material_effects {
+                                if let MaterialEffectSelector::IngredientType(sel_ingredient_type) = condition {
+                                    if ingredient_type.is_a(view, sel_ingredient_type) {
+                                        apply_material_effect(view, &mut arch, effect)
+                                    }
+                                } else if let MaterialEffectSelector::ItemType(sel_item_type) = condition {
+                                    if ident.kinds.any_match(|k| k.is_a(view, sel_item_type)) {
+                                        apply_material_effect(view, &mut arch, effect);
+                                    }
+                                }
+                            }
                         }
                     }
                 }
+
 
 
                 let breakdown = CraftingBreakdown { recipe, effective_archetype : arch, result_identity : ident };
@@ -115,6 +128,28 @@ pub fn compute_crafting_breakdown(world : &mut World, view : &WorldView, crafter
         } else {
             Err(strf("No valid recipes"))
         }
+    }
+}
+
+fn apply_material_effect(view: &WorldView, arch : &mut ItemArchetype, effect : &MaterialEffectType) {
+    match effect {
+        MaterialEffectType::WeaponAttribute(attribute_type, amount) => {
+            arch.attributes.increase_attribute(attribute_type, *amount)
+        },
+        MaterialEffectType::ToHitBonus(attack_selector, bonus) => {
+            for (ident, attack) in &mut arch.attacks {
+                if attack_selector.matches_identity(view, ident) || attack_selector.matches_attack(view, attack) {
+                    attack.to_hit_bonus += *bonus
+                }
+            }
+        },
+        MaterialEffectType::DamageBonus(attack_selector, bonus) => {
+            for (ident, attack) in &mut arch.attacks {
+                if attack_selector.matches_identity(view, ident) || attack_selector.matches_attack(view, attack) {
+                    attack.damage_bonus += *bonus
+                }
+            }
+        },
     }
 }
 

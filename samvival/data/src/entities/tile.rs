@@ -286,8 +286,8 @@ pub enum MaterialEffectSelector {
 }
 #[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
 pub enum MaterialEffectType {
-    DamageBonus(EntitySelector),
-    ToHitBonus(EntitySelector),
+    DamageBonus(EntitySelector, i32),
+    ToHitBonus(EntitySelector, i32),
     WeaponAttribute(AttributeType, i32)
 }
 #[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]

@@ -211,6 +211,18 @@ impl AttributeData {
     }
 
 
+    pub fn increase_attribute(&mut self, attr : AttributeType, by : i32) {
+        let new_value = if let Some(existing) = self.attributes.get(attr.name) {
+            *existing + AttributeValue(attr, by)
+        } else {
+            AttributeValue(attr, by)
+        };
+        self.attributes.insert(attr.name.to_string(), new_value);
+    }
+
+    pub fn decrease_attribute(&mut self, attr : AttributeType, by : i32) {
+        self.increase_attribute(attr, -by);
+    }
 
 //    pub fn value_for(&self, for_attr: &AttributeTypeStruct) -> Option<i32> {
 //        AttributeData::value_for_intern(&self.attributes, for_attr)
