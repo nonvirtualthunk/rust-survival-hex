@@ -7,6 +7,7 @@ use action_bar::PlayerActionType;
 use game::scenario::Scenario;
 use game::universe::WorldRef;
 use messages_widget::Message;
+use gui::Wid;
 
 
 #[derive(Clone)]
@@ -19,6 +20,7 @@ pub enum TacticalEvents {
     ItemTransferRequested { item : Entity, from : Vec<Entity>, to : Vec<Entity> },
     EquipItemRequested { item : Entity, equip_on : Entity },
     DisplayMessage(Message),
+    SpeechDialogDismissed(Entity, Wid),
     Save,
     MainMenu
 }

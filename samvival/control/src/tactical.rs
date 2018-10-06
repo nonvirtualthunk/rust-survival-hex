@@ -313,6 +313,7 @@ impl TacticalMode {
                 for elem in tactical_event_handler::animation_elements_for_new_event(&self.display_world_view, event_wrapper, resources) {
                     self.add_animation_element(elem)
                 }
+                self.gui.animation_elements_for_new_event(&self.display_world_view, event_wrapper, resources);
             };
         }
     }
@@ -337,6 +338,9 @@ impl TacticalMode {
             mouse_game_pos,
             mouse_cart_vec: CartVec::new(mouse_game_pos.x / self.tile_radius, mouse_game_pos.y / self.tile_radius),
             player_faction_active: self.display_world_view.world_data::<TurnData>().active_faction == self.player_faction,
+            view_matrix: self.camera.matrix(self.viewport),
+            viewport: self.viewport,
+
         }
     }
 

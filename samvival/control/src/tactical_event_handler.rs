@@ -33,7 +33,7 @@ use std::f64::consts;
 use std::collections::HashMap;
 use serde::de::DeserializeOwned;
 use graphics::FontSize;
-use common::prelude::RichString;
+use common::prelude::ExtendedString;
 
 pub fn animation_elements_for_new_event(world_view: &WorldView, wrapper: &GameEventWrapper<GameEvent>, resources: &mut GraphicsResources) -> Vec<Box<AnimationElement>> {
     if wrapper.is_starting() {

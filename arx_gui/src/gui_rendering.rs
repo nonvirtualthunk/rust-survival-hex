@@ -255,6 +255,11 @@ impl GUI {
                 let effective_internal_dim = self.gui_dim_to_pixel(internal_state.inner_dimensions + v2(margin_ux * 2.0, margin_ux * 2.0)); // + v2(margin_px * 2.0, margin_px * 2.0);
                 trace!(target: "gui_redraw_quads", "Drawing at {:?}, {:?} with dimensions {:?}, {:?}", internal_state.position, pixel_offset, internal_state.dimensions, effective_dim);
 
+                let color_multiplier = match internal_state.widget_state {
+                    WidgetState::Button { pressed } if pressed => Color::new(0.5, 0.5, 0.54, 1.0),
+                    _ => Color::new(1.0, 1.0, 1.0, 1.0)
+                };
+
                 if effective_dim.x > 0.0 && effective_dim.y > 0.0 {
                     match widget.widget_type {
                         WidgetType::Text { font, ref text, font_size, ref wrap } => {
@@ -282,15 +287,11 @@ impl GUI {
                         WidgetType::Image { ref image } => {
                             internal_state.draw_list.add_quad(
                                 Quad::new(image.clone(), inner_pixel_offset - v2(0.0, effective_internal_dim.y))
-                                    .color(widget.color)
+                                    .color(widget.color * color_multiplier)
                                     .size(effective_internal_dim)
                             );
                         }
                         WidgetType::Window { ref image, ref segment } => {
-                            let color_multiplier = match internal_state.widget_state {
-                                WidgetState::Button { pressed } if pressed => Color::new(0.5, 0.5, 0.54, 1.0),
-                                _ => Color::new(1.0, 1.0, 1.0, 1.0)
-                            };
 
                             if widget.border.width > 0 {
                                 let border_start = pixel_offset - v2(0.0, effective_dim.y);

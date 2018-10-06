@@ -1,4 +1,5 @@
 use common::prelude::*;
+use common::string::*;
 use game::prelude::*;
 use game::core::Reduceable;
 use scenario::Scenario;
@@ -200,6 +201,8 @@ impl Scenario for FirstEverScenario {
             logic::movement::place_entity_in_world(world, spawner, AxialCoord::new(10, 0));
 
             world.add_event(GameEvent::WorldStart);
+
+            world.add_event(GameEvent::DialogSpoken { speaker : spearman, text : RichString::new().with_appended("Test text", RichStringStyle::Plain), requires_confirmation : true })
         }
 
         raw_world

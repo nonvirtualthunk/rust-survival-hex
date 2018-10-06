@@ -25,6 +25,7 @@ extern crate string_interner;
 extern crate ron;
 extern crate bincode;
 extern crate dirs;
+extern crate regex;
 
 pub mod hex;
 pub use hex::*;

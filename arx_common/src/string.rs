@@ -12,6 +12,7 @@ use serde::Deserialize;
 use serde::de::Visitor;
 use serde;
 use string_interner::Symbol;
+use color::Color;
 
 //lazy_static! {
 //    static ref INTERNER : Mutex<StringInterner<Sym>> = Mutex::new(StringInterner::<Sym>::new());
@@ -105,3 +106,62 @@ impl <'de> Deserialize<'de> for InternedString {
 //        write!(f, "{}", string)
 //    }
 //}
+
+
+#[derive(Clone,Copy,PartialEq,Eq,Debug,Serialize,Deserialize)]
+pub struct RichStringStyle {
+    pub bold : bool,
+    pub color : Color
+}
+#[allow(non_upper_case_globals)]
+impl RichStringStyle {
+    const BoldStruct : RichStringStyle = RichStringStyle { bold : true, color : Color([0.0,0.0,0.0,1.0]) };
+    const PlainStruct : RichStringStyle = RichStringStyle { bold : false, color : Color([1.0,1.0,1.0,1.01])};
+
+    pub const Bold : &'static RichStringStyle = &RichStringStyle::BoldStruct;
+    pub const Plain : &'static RichStringStyle = &RichStringStyle::PlainStruct;
+}
+
+#[derive(Clone,PartialEq,Eq,Debug,Serialize,Deserialize)]
+pub struct RichStringSection {
+    pub string : String,
+    pub style : RichStringStyle
+}
+
+#[derive(Clone,PartialEq,Eq,Debug,Serialize,Deserialize)]
+pub struct RichString {
+    sections : Vec<RichStringSection>
+}
+
+impl RichString {
+    pub fn new () -> RichString { RichString { sections : Vec::new() } }
+
+    pub fn sections(&self) -> &[RichStringSection] { &self.sections }
+
+    pub fn append<S : Into<String>>(&mut self, string : S, style : &RichStringStyle) -> &mut Self {
+        self.sections.push(RichStringSection {
+            string : string.into(),
+            style : style.clone()
+        });
+        self
+    }
+
+    pub fn with_appended<S : Into<String>>(mut self, string : S, style : &RichStringStyle) -> Self {
+        self.append(string, style);
+        self
+    }
+
+    pub fn as_plain_string(&self) -> String {
+        self.sections.map(|s| s.string.clone()).join("")
+    }
+
+//    pub fn from(raw_string : &str) -> RichString {
+//        use regex;
+//        let pattern = regex::Regex::new(r"(+>\(.*?\)|->).*?").unwrap();
+//        for raw_section in pattern.find_iter().map(|m| m.text) {
+//            if raw_section.starts_with("+>(") {
+//                raw_section.split
+//            }
+//        }
+//    }
+}

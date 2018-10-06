@@ -61,6 +61,10 @@ use action_ui_handlers::player_action_handler::PlayerActionHandler;
 use action_ui_handlers::harvest_handler::HarvestHandler;
 use game::logic::item;
 use std::collections::HashSet;
+use game::prelude::GameEventWrapper;
+use graphics::AnimationElement;
+use graphics::WaitAnimationElement;
+use gui::character_dialog_widget::CharacterSpeechWidget;
 
 #[derive(PartialEq,Clone,Copy)]
 pub enum AuxiliaryWindows {
@@ -84,6 +88,7 @@ pub struct TacticalGui {
     open_auxiliary_windows : Vec<AuxiliaryWindows>,
     escape_menu : EscapeMenu,
     player_action_handlers : Vec<Box<PlayerActionHandler>>,
+    speech_widgets : Vec<CharacterSpeechWidget>,
 }
 
 
@@ -137,6 +142,7 @@ impl TacticalGui {
             escape_menu : EscapeMenu::new(gui, &main_area),
             main_area,
             player_action_handlers,
+            speech_widgets : Vec::new(),
         }
     }
 
@@ -264,8 +270,10 @@ impl TacticalGui {
 
         let selected_action = self.selected_player_action(world_view, &game_state);
 
+        let mut control = ControlContext { event_bus : &mut self.event_bus };
+        self.speech_widgets.iter_mut().for_each(|w| w.update(world_view, gui, &game_state, &mut control));
+
         if let Some(selected) = game_state.selected_character {
-            let mut control = ControlContext { event_bus : &mut self.event_bus };
 
             self.main_area.set_width(Sizing::DeltaOfParent(-40.ux())).reapply(gui);
             self.character_info_widget.update(&world_view, gui, &game_state, &mut control);
@@ -404,6 +412,9 @@ impl TacticalGui {
                             logic::item::unequip_item(world, *item, *equip_on, true);
                         }
                     },
+                    TacticalEvents::SpeechDialogDismissed(character, wid) => {
+                        self.speech_widgets.retain(|w| w.id() != *wid);
+                    },
                     _ => {}
                 }
             }
@@ -434,5 +445,21 @@ impl TacticalGui {
 
     pub fn toggle_escape_menu(&mut self, gui : &mut GUI) {
         self.escape_menu.toggle_showing().reapply(gui)
+    }
+
+
+    pub fn animation_elements_for_new_event(&mut self, world_view: &WorldView, wrapper: &GameEventWrapper<GameEvent>, resources: &mut GraphicsResources) -> Vec<Box<AnimationElement>> {
+        use gui::character_dialog_widget::CharacterSpeechWidget;
+        match wrapper.if_starting() {
+            Some(GameEvent::DialogSpoken { speaker, requires_confirmation, text }) => {
+                let widget = CharacterSpeechWidget::new(*speaker, text.clone(), *requires_confirmation)
+                    .parent(&self.main_area);
+
+                self.speech_widgets.push(widget);
+
+                vec![box WaitAnimationElement::new(1.0)]
+            },
+            _ => vec![]
+        }
     }
 }

@@ -1,4 +1,5 @@
 use game::prelude::*;
+use common::string::RichString;
 use common::hex::*;
 use entities::combat::AttackRef;
 use entities::combat::DamageType;
@@ -36,7 +37,7 @@ pub enum GameEvent {
     ActionTaken { entity : Entity, action : Action },
     EntityHarvested { harvester : Entity, harvestable : Entity, harvested_from: Entity, resource : Entity, amount : Option<i32> },
     EntityCreated { entity : Entity },
-
+    DialogSpoken { speaker : Entity, text : RichString, requires_confirmation : bool },
 
     EffectRegistered,
     Default

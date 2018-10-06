@@ -28,6 +28,7 @@ string-interner = { version = "0.7.0", features = ["serde"] }
 ron = "*"
 bincode = "*"
 dirs = "1.0.3"
+regex = "*"
 
 
 [dependencies.vecmath]

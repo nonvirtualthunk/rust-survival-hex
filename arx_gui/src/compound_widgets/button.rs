@@ -40,8 +40,10 @@ impl Button {
         }
     }
     fn create_body(image: ImageIdentifier, segment : ImageSegmentation) -> Widget {
-        Widget::new(
-            WidgetType::Window { image: Some(image), segment })
+        Button::create_custom_body(WidgetType::Window { image: Some(image), segment })
+    }
+    fn create_custom_body(widget_type : WidgetType) -> Widget {
+        Widget::new(widget_type)
             .color(Color::white())
             .border_width(2)
             .border_color(Color::black())
@@ -64,9 +66,8 @@ impl Button {
     }
 
     pub fn image_button(image: ImageIdentifier) -> Widget {
-        // TODO: make this use derived sizing, have derived sizing work with image widgets and default to the literal size of the image
-        Button::create_body(image, ImageSegmentation::None)
-            .size(Sizing::constant(10.ux()), Sizing::constant(10.ux()))
+        Button::create_custom_body(WidgetType::image(image))
+            .size(Sizing::derived(), Sizing::derived())
     }
 
     pub fn new<S>(text: S) -> Button where S: Into<String> {

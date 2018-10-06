@@ -257,3 +257,25 @@ impl AnimationElement for ImageAnimationElement {
         self.blocking_duration.unwrap_or(self.duration)
     }
 }
+
+
+
+#[derive(Debug)]
+pub struct WaitAnimationElement {
+    pub duration: f64,
+}
+impl WaitAnimationElement {
+    pub fn new(duration : f64) -> WaitAnimationElement {
+        WaitAnimationElement { duration }
+    }
+}
+
+impl AnimationElement for WaitAnimationElement {
+    fn draw(&self, _view: &mut WorldView, _pcnt_elapsed: f64) -> DrawList {
+        DrawList::none()
+    }
+
+    fn raw_duration(&self) -> f64 {
+        self.duration
+    }
+}

@@ -61,6 +61,7 @@ pub mod recipe_selection_widget;
 pub mod crafting_widget;
 
 pub mod item_display_widget;
+pub mod character_dialog_widget;
 
 use std::fs::File;
 pub fn open_save_file(create: bool) -> Option<File> {

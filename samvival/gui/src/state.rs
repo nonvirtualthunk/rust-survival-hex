@@ -3,6 +3,8 @@ use control_events::TacticalEvents;
 use common::hex::*;
 use game::prelude::*;
 use common::EventBus;
+use vecmath::Matrix2x3;
+use piston_window::Viewport;
 
 #[derive(Clone)]
 pub struct GameState {
@@ -16,7 +18,9 @@ pub struct GameState {
     pub player_faction_active: bool,
     pub mouse_pixel_pos: Vec2f,
     pub mouse_game_pos: Vec2f,
-    pub mouse_cart_vec: CartVec
+    pub mouse_cart_vec: CartVec,
+    pub view_matrix: Matrix2x3<f64>,
+    pub viewport: Viewport,
 }
 impl GameState {
     pub fn mouse_cart_vec(&self) -> CartVec { self.mouse_cart_vec }

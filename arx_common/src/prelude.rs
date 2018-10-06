@@ -122,11 +122,11 @@ impl ToStringWithSign for f32 {
     }
 }
 
-pub trait RichString {
+pub trait ExtendedString {
     fn capitalized(&self) -> String;
 }
 
-impl RichString for String {
+impl ExtendedString for String {
     fn capitalized(&self) -> String {
         if self.is_empty() {
             self.clone()
@@ -140,7 +140,7 @@ impl RichString for String {
     }
 }
 
-impl RichString for Str {
+impl ExtendedString for Str {
     fn capitalized(&self) -> String {
         if self.is_empty() {
             strf(self)
